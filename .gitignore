@@ -1,0 +1,16 @@
+build/
+build-*/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+*.o
+*.so
+*.a
+
+# editors / OS
+*.swp
+.DS_Store
+.vscode/
+.idea/
+
+# NOTE: .beads/ is intentionally NOT ignored.
