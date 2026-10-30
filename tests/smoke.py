@@ -13,7 +13,7 @@ for major in [18,23]:
   before=run('-S',str(src),'-o','-')
   after=run('-load-pass-plugin='+plugin,'-passes=bennett','-bennett-pre-link','-bennett-dialect=wrong','-S',str(src),'-o','-')
   assert before==after,major
-  bad=subprocess.run([tool,'-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.6','-disable-output',str(src)],text=True,capture_output=True)
+  bad=subprocess.run([tool,'-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.7','-disable-output',str(src)],text=True,capture_output=True)
   assert bad.returncode!=0 and 'BD-E-MARKER-DEFINED' in bad.stderr
   print(f'LLVM {major}: pre-link inert; post-link plugin loaded and diagnosed reserved definition')
   src.write_text('''
@@ -35,7 +35,7 @@ define void @top() {
 }
 ''')
   report=Path(tmp)/'keys.json'
-  run('-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.6','-bennett-analysis-only','-bennett-report='+str(report),str(src),'-disable-output')
+  run('-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-report='+str(report),str(src),'-disable-output')
   import json
   keys=[x['candidates'][0]['key'] for x in json.loads(report.read_text())['regions']]
   assert keys[0]==keys[1], 'source symbol changed region identity'
@@ -56,12 +56,12 @@ define void @top() {
   c=Path(tmp)/'markers.c';c.write_text('#include "markers.h"\n'+'\n'.join(wrappers))
   ir=Path(tmp)/'markers.ll'
   subprocess.run([f'/usr/lib/llvm-{major}/bin/clang','-O0','-emit-llvm','-S',str(c),'-o',str(ir)],check=True)
-  run('-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.6','-bennett-analysis-only','-bennett-closed-unit',str(ir),'-disable-output')
+  run('-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-closed-unit',str(ir),'-disable-output')
   signatures=re.search(r'```llvm markers-ir\n(.*?)```',dialect_text(),re.S)[1]
   for _,name,params in re.findall(r'declare (\w+) @(__bennett_\w+)\(([^)]*)\)',signatures):
    types=[x.strip().split()[0] for x in params.split(',')]
    actual=[t+' '+('null' if t=='ptr' else '0.0' if t=='double' else '0') for t in types]
    src.write_text('declare i7 @'+name+'('+','.join(types)+')\ndefine void @test() { call i7 @'+name+'('+','.join(actual)+')\nret void }\n')
-   bad=subprocess.run([tool,'-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.6','-disable-output',str(src)],text=True,capture_output=True)
+   bad=subprocess.run([tool,'-load-pass-plugin='+plugin,'-passes=bennett','-bennett-dialect=0.2.7','-disable-output',str(src)],text=True,capture_output=True)
    assert bad.returncode!=0 and 'BD-E-MARKER-SIGNATURE' in bad.stderr,(major,name,bad.stderr)
   print(f'LLVM {major}: all 23 C marker signatures accepted; 23 malformed signatures diagnosed')

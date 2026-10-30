@@ -1,7 +1,7 @@
 # bennett-plugin
 
 The C++ LLVM module-pass plugin of the Bennett compiler core, built from one source
-for LLVM 18 and 23. Contracts: dialect 0.2.6 at ff249d5, ISA 0.8. The plugin is the
+for LLVM 18 and 23. Contracts: dialect 0.2.7 at 95c3cd3, ISA 0.8. The plugin is the
 only LLVM-linked component; the eventual scheduler integration is a binary edge.
 
 M1 is in progress: marker recognition, device analysis, provenance, region content

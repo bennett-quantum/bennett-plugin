@@ -1,6 +1,6 @@
 # Building and testing
 
-The source tree targets LLVM **18 and 23**, dialect **0.2.6** (ff249d5), ISA **0.8**.
+The source tree targets LLVM **18 and 23**, dialect **0.2.7** (95c3cd3), ISA **0.8**.
 Builds and tests are offline and headless. All scripts unset DISPLAY,
 WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS and BROWSER and use this repo's `.tmp`.
 No LLVM graphical view pass is used.
@@ -19,12 +19,12 @@ verified, while the CMake superbuild still needs an actual configure/build check
 
 ```
 /usr/lib/llvm-18/bin/opt -load-pass-plugin=build/libbennett-plugin-18.so \
-  -passes='lto<O3>,bennett' -bennett-dialect=0.2.6 -bennett-out=.tmp/out input.bc -o host.bc
+  -passes='lto<O3>,bennett' -bennett-dialect=0.2.7 -bennett-out=.tmp/out input.bc -o host.bc
 ```
 
 The plugin registers only an explicit module pass, with no front-end/pre-link
 extension callback. `-bennett-pre-link` makes an explicit pre-link invocation inert,
-including version checks. Identity is `bennett`, `dialect-0.2.6;isa-0.8`.
+including version checks. Identity is `bennett`, `dialect-0.2.7;isa-0.8`.
 
 Development interfaces (no whole-program production conformance claim):
 

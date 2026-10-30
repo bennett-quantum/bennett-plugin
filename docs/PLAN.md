@@ -1,6 +1,6 @@
 # Implementation plan
 
-Contract: dialect **0.2.6**, commit **ff249d597f767f8034176bbb6c0f86dea3b90270**;
+Contract: dialect **0.2.7**, commit **95c3cd332f5f72c07fd5f2515f328deaa40c08b9**;
 ISA **0.8**. The full draft string is the compatibility unit. Published contracts,
 fixtures and executable black boxes are the only sibling dependencies.
 
