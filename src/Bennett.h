@@ -70,6 +70,7 @@ public:
   void checkRegions();
   llvm::json::Object report();
 };
+void normaliseScalar(llvm::Function &);
 void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,
                  llvm::StringRef out, unsigned stackCells);
 } // namespace bennett

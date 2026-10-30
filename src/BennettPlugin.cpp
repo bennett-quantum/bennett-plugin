@@ -11,6 +11,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include <cstdlib>
 using namespace llvm;
 namespace {
@@ -19,6 +21,7 @@ cl::opt<std::string> Dialect("bennett-dialect",
 cl::opt<std::string> ISA("bennett-isa", cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
 cl::opt<std::string> Report("bennett-report");
+cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
 cl::opt<bool> AnalysisOnly(
     "bennett-analysis-only",
     cl::desc("Non-production S1-S5 report; emits no device object"));
@@ -249,11 +252,11 @@ static void recognise(Module &m) {
   // Effect lies use the full S2 call graph later, including region edges.
 }
 static void checkVersion(Module &m) {
-  if (Dialect != "0.2.6" || ISA != "0.8")
-    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.6 / ISA 0.8");
+  if (Dialect != "0.2.7" || ISA != "0.8")
+    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.7 / ISA 0.8");
   if (auto *md = m.getModuleFlag("bennett.dialect")) {
     auto *s = dyn_cast<MDString>(md);
-    if (!s || s->getString() != "0.2.6")
+    if (!s || s->getString() != "0.2.7")
       fail("BD-E-VERSION", "§19.9 module flag");
   }
 }
@@ -296,6 +299,11 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
+    if (NormaliseOnly) {
+      for (Function &f : m) if (!f.isDeclaration()) normaliseScalar(f);
+      errs() << "bennett: scalar normalisation test mode; full N0-N35/V1-V16 pending M2\n";
+      return PreservedAnalyses::none();
+    }
     Analysis a(m);
     a.run();
     a.checkHandles();
@@ -319,7 +327,15 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       auto *f = m.getFunction(Oracle);
       if (!f || f->isDeclaration())
         fail("input", "oracle function missing");
-      lowerScalar(m, *f, Shape, Output, StackCells);
+      ValueToValueMapTy map;
+      auto materialised = CloneModule(m, map);
+      auto *mf = cast<Function>(map[f]);
+      normaliseScalar(*mf);
+      lowerScalar(*materialised, *mf, Shape, Output, StackCells);
+      std::error_code ec;
+      raw_fd_ostream bc(Output + "/materialised.bc", ec);
+      if (ec) fail("output", ec.message());
+      WriteBitcodeToFile(*materialised, bc);
       return PreservedAnalyses::none();
     }
     for (Function &f : m)
@@ -344,7 +360,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
 };
 } // namespace bennett
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.6;isa-0.8",
+  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.7;isa-0.8",
           [](PassBuilder &pb) {
             pb.registerPipelineParsingCallback(
                 [](StringRef n, ModulePassManager &pm,

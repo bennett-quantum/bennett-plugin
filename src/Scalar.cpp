@@ -41,7 +41,12 @@ struct Scalar {
     if (t->isVoidTy())
       return 1;
     if (t->isFloatingPointTy())
-      unimplemented("§13 soft-float", 2, &f);
+      return t->getPrimitiveSizeInBits();
+    if (auto *st = dyn_cast<StructType>(t)) {
+      unsigned n = 0;
+      for (Type *field : st->elements()) n += width(field);
+      if (n && n <= 128) return n;
+    }
     unimplemented("§12.6/§12.7 vector/aggregate/wide scalar", 2, &f);
   }
   void dest(std::string n, unsigned w) {
@@ -64,6 +69,8 @@ struct Scalar {
     if (isa<UndefValue>(v) || isa<PoisonValue>(v) ||
         isa<ConstantPointerNull>(v))
       return constant(APInt(width(v->getType()), 0));
+    if (auto *c = dyn_cast<ConstantFP>(v))
+      return constant(c->getValueAPF().bitcastToAPInt());
     if (auto *c = dyn_cast<ConstantInt>(v))
       return constant(c->getValue());
     if (auto *c = dyn_cast<ConstantExpr>(v)) {
@@ -272,7 +279,29 @@ struct Scalar {
           continue;
         }
         if (auto *r = dyn_cast<ReturnInst>(&i)) {
-          auto v = r->getReturnValue() ? value(r->getReturnValue()) : "r";
+          Value *rv = r->getReturnValue();
+          std::string v = "r";
+          if (rv && rv->getType()->isAggregateType()) {
+            // §16.4: evaluate all flattened fields first, then pack without padding.
+            std::vector<std::pair<std::string,unsigned>> parts;
+            std::function<void(Constant *)> flatten = [&](Constant *c) {
+              if (auto *st = dyn_cast<StructType>(c->getType())) {
+                for (unsigned k = 0; k < st->getNumElements(); ++k) flatten(c->getAggregateElement(k));
+              } else if (auto *at = dyn_cast<ArrayType>(c->getType())) {
+                for (unsigned k = 0; k < at->getNumElements(); ++k) flatten(c->getAggregateElement(k));
+              } else parts.emplace_back(value(c),width(c->getType()));
+            };
+            auto *aggregate = dyn_cast<Constant>(rv);
+            if (!aggregate) unimplemented("§16.4 nonconstant aggregate return",2,r);
+            flatten(aggregate); unsigned packed = width(rv->getType()), offset = 0;
+            for (auto &part : parts) {
+              auto n = part.first;
+              if (part.second != packed) n = temp(packed,"lift.zext.i"+std::to_string(packed)+" "+n);
+              if (offset) { auto c = constant(APInt(packed,offset)); n = temp(packed,"lift.shl "+n+" "+c); }
+              v = offset ? temp(packed,"lift.or "+v+" "+n) : n;
+              offset += part.second;
+            }
+          } else if (rv) v = value(rv);
           lines.push_back("lift.ret " + v);
           continue;
         }

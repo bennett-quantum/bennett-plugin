@@ -436,7 +436,19 @@ void Analysis::bind(CallBase &c, Function *f) {
     if (i < c.arg_size()) {
       if (a.getType()->isAggregateType() || a.getType()->isVectorTy())
         copyFields(&a, c.getArgOperand(i));
-      else
+      else if (a.hasByValAttr()) {
+        // PT9: the callee copy is a distinct abstract object, not an alias.
+        changed |= values[&a].merge(atom(Atom::Ptr, &a));
+        auto src = get(c.getArgOperand(i));
+        uint64_t size = M.getDataLayout().getTypeAllocSize(a.getParamByValType()).getKnownMinValue();
+        auto snapshot = slots;
+        for (auto &p : src.atoms)
+          if (p.kind == Atom::Ptr)
+            for (auto &slot : snapshot)
+              if (slot.object == p.object && slot.stride == 0 && p.stride == 0 &&
+                  slot.offset >= p.offset && slot.offset + slot.bytes <= p.offset + size)
+                store(slot.value, atom(Atom::Ptr, &a, slot.offset - p.offset), slot.bytes, slot.filled);
+      } else
         changed |= values[&a].merge(get(c.getArgOperand(i)));
     }
     ++i;
@@ -549,6 +561,46 @@ void Analysis::copyFields(const Value *dst, const Value *src) {
 }
 bool Analysis::composite(Instruction &i) {
   const auto &dl = M.getDataLayout();
+  if (auto *c = dyn_cast<BitCastInst>(&i)) {
+    auto src = leaves(c->getOperand(0)->getType(), dl), dst = leaves(c->getType(), dl);
+    unsigned total = dl.getTypeSizeInBits(c->getType()).getFixedValue();
+    // Bitcast vector lanes are packed, with endian-dependent bit order.
+    for (auto &d : dst) {
+      unsigned dw = dl.getTypeSizeInBits(d.type).getFixedValue();
+      unsigned db = dl.isLittleEndian() ? d.offset * 8 : total - d.offset * 8 - dw;
+      AV result; std::set<APInt, bool(*)(const APInt &, const APInt &)> bits(
+          [](const APInt &a, const APInt &b) { return a.ult(b); });
+      bits.insert(APInt(dw, 0));
+      for (auto &l : src) {
+        unsigned sw = dl.getTypeSizeInBits(l.type).getFixedValue();
+        unsigned sb = dl.isLittleEndian() ? l.offset * 8 : total - l.offset * 8 - sw;
+        unsigned lo = std::max(sb, db), hi = std::min(sb + sw, db + dw);
+        if (lo >= hi) continue;
+        AV v = field(c->getOperand(0), l.path);
+        result.top |= v.top;
+        std::vector<APInt> parts;
+        for (auto &x : v.atoms) {
+          if (x.kind == Atom::Int)
+            parts.push_back(x.integer.lshr(lo - sb).zextOrTrunc(dw) & APInt::getLowBitsSet(dw, hi - lo));
+          else if (lo == sb && hi == sb + sw && sw == dw)
+            result.atoms.insert(x);
+          else {
+            result.top = true;
+            if (x.kind == Atom::Root) result.atoms.insert(x);
+          }
+        }
+        auto old = bits; bits.clear();
+        for (auto &a : old) for (auto &b : parts) {
+          bits.insert(a | b.shl(lo - db));
+          if (bits.size() > 4096) break;
+        }
+        if (bits.size() > 4096) { result.top = true; bits.clear(); }
+      }
+      if (!result.top) for (auto &x : bits) result.merge(integer(x));
+      setField(&i, d.path, result);
+    }
+    return true;
+  }
   if (auto *e = dyn_cast<ExtractValueInst>(&i)) {
     Path prefix(e->idx_begin(), e->idx_end());
     for (auto &l : leaves(i.getType(), dl)) {
@@ -724,7 +776,30 @@ void Analysis::step(Instruction &i) {
   AV a;
   if (composite(i))
     return;
-  if (isa<AllocaInst>(i))
+  if (auto *rmw = dyn_cast<AtomicRMWInst>(&i)) {
+    a = load(get(rmw->getPointerOperand()), rmw->getType());
+    AV next, operand = get(rmw->getValOperand()); next.top = a.top || operand.top;
+    for (auto &x : a.atoms) for (auto &y : operand.atoms)
+      if (x.kind == Atom::Int && y.kind == Atom::Int) {
+        APInt n = x.integer; const APInt &v = y.integer;
+        switch (rmw->getOperation()) {
+        case AtomicRMWInst::Xchg: n = v; break;
+        case AtomicRMWInst::Add: n += v; break;
+        case AtomicRMWInst::Sub: n -= v; break;
+        case AtomicRMWInst::And: n &= v; break;
+        case AtomicRMWInst::Nand: n = ~(n & v); break;
+        case AtomicRMWInst::Or: n |= v; break;
+        case AtomicRMWInst::Xor: n ^= v; break;
+        case AtomicRMWInst::Max: n = n.sgt(v) ? n : v; break;
+        case AtomicRMWInst::Min: n = n.slt(v) ? n : v; break;
+        case AtomicRMWInst::UMax: n = n.ugt(v) ? n : v; break;
+        case AtomicRMWInst::UMin: n = n.ult(v) ? n : v; break;
+        default: unimplemented("§5 PT12 atomic transfer", 1, rmw);
+        }
+        next.merge(integer(n));
+      }
+    store(next, get(rmw->getPointerOperand()), M.getDataLayout().getTypeStoreSize(rmw->getType()).getFixedValue());
+  } else if (isa<AllocaInst>(i))
     a = atom(Atom::Ptr, &i);
   else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
     auto base = get(g->getPointerOperand());
@@ -1028,28 +1103,6 @@ void Analysis::step(Instruction &i) {
       a.merge(integer(APInt(1, 1)));
     }
   }
-  if (a.top && i.getType()->isIntegerTy())
-    if (auto *md = i.getMetadata(LLVMContext::MD_range)) {
-      AV range;
-      bool bounded = true;
-      for (unsigned n = 0; n + 1 < md->getNumOperands(); n += 2) {
-        auto *lo = mdconst::dyn_extract<ConstantInt>(md->getOperand(n));
-        auto *hi = mdconst::dyn_extract<ConstantInt>(md->getOperand(n + 1));
-        if (!lo || !hi || lo->getValue().uge(hi->getValue()) ||
-            (hi->getValue() - lo->getValue()).ugt(4096)) {
-          bounded = false;
-          break;
-        }
-        for (APInt v = lo->getValue(); v != hi->getValue(); ++v)
-          range.merge(integer(v));
-      }
-      if (bounded) {
-        for (auto &x : a.atoms)
-          if (x.kind != Atom::Int)
-            range.atoms.insert(x);
-        a = range;
-      }
-    }
   changed |= values[&i].merge(a);
 }
 void Analysis::run() {
@@ -1063,8 +1116,18 @@ void Analysis::run() {
     for (Function &f : M)
       if (!f.isDeclaration()) {
         auto *cf = cast<Function>(map[&f]);
-        for (Instruction &instruction : instructions(*cf))
+#if LLVM_VERSION_MAJOR >= 19
+        for (Argument &arg : cf->args())
+          arg.removeAttr(Attribute::Range);
+#endif
+        for (Instruction &instruction : instructions(*cf)) {
           instruction.dropPoisonGeneratingFlags();
+          instruction.setMetadata(LLVMContext::MD_range, nullptr);
+#if LLVM_VERSION_MAJOR >= 19
+          if (auto *call = dyn_cast<CallBase>(&instruction))
+            call->removeRetAttr(Attribute::Range);
+#endif
+        }
         DominatorTree dt(*cf);
         SmallVector<AllocaInst *> promote;
         for (Instruction &i : instructions(*cf))
@@ -1441,7 +1504,7 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.6"},
+  return json::Object{{"dialect", "0.2.7"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"functions", std::move(funcs)},

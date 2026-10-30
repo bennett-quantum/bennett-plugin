@@ -15,6 +15,7 @@ def main():
   name=fields.get('example','')
   if name.startswith(('recog-','attr-','handle-','region-','pt')) or name in ['version-flag','julia-jlplt','effect-lie']:
    if a.case and name not in a.case:continue
+   if 'majors' in fields and str(a.major) not in fields['majors'].split(','):continue
    if not fields.get('verdict','').startswith(('accept','reject','blocked')): continue
    used=set(re.findall(r'@(__bennett_\w+)',body)); declared=set(re.findall(r'(?:declare|define) [^@\n]+@([^ (]+)',body))
    body+='\n'+'\n'.join(l for l in decls.splitlines() if re.search(r'@([^ (]+)',l)[1] in used-declared)
@@ -23,7 +24,7 @@ def main():
  with tempfile.TemporaryDirectory(dir=R/'.tmp') as t:
   for name,body,want in cases:
    f=Path(t)/(name+'.ll'); f.write_text(body); report=Path(t)/'report.json'
-   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.6','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
+   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
    try:x=subprocess.run(cmd,capture_output=True,text=True,errors="replace",timeout=60)
    except subprocess.TimeoutExpired:
     failures.append((name,want,124,'timeout'));continue
@@ -31,6 +32,8 @@ def main():
    if ok and x.returncode==0 and report.exists():
     data=json.loads(report.read_text())
     if name=='pt6-byte-width':ok=any(v['value']=='%n' and v['atoms']==['INT(257)'] and not v['top'] for v in data['values'])
+    if name in ['pt5-range','pt5-range-load']:ok=any(v['value']=='%w' and set(v['atoms'])=={'INT(1)','INT(3)'} and not v['top'] for v in data['values'])
+    if name=='pt2-wrap':ok=any(v['value']=='%p' and v['atoms']==['PTR(@tab,0,0)'] and not v['top'] for v in data['values']) and [c['name'] for c in data['regions'][0]['candidates']]==['body']
     if name=='pt6-subrange':ok=any(v['value']=='%n' and v['top'] for v in data['values'])
    if not ok: failures.append((name,want,x.returncode,x.stderr[-1500:]))
  print(json.dumps({'major':a.major,'cases':len(cases),'passed':len(cases)-len(failures),'failures':failures},indent=2))
