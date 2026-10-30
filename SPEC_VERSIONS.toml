@@ -1,6 +1,8 @@
-# Spec versions this repo targets (published contracts only).
-status = "skeleton"
-
+status = "milestone-1-in-progress"
+dialect = "0.2.6"
+isa = "0.8"
 [specs]
-"bennett-dialect-spec" = "0.3"
-"bennett-isa-spec" = "0.3"
+"bennett-dialect-spec" = "0.2.6"
+"bennett-isa-spec" = "0.8"
+[commits]
+"bennett-dialect-spec" = "ff249d597f767f8034176bbb6c0f86dea3b90270"

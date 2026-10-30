@@ -21,3 +21,6 @@ compile_commands.json
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+.tmp/
+__pycache__/

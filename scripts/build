@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Offline dual-major build. Uses CMake when present, llvm-config otherwise."""
+import concurrent.futures, os, shutil, subprocess
+from pathlib import Path
+R=Path(__file__).resolve().parents[1]
+for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']: os.environ.pop(key,None)
+(R/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(R/'.tmp')
+if shutil.which('cmake'):
+ subprocess.run(['cmake','-S',str(R),'-B',str(R/'build')],check=True)
+ subprocess.run(['cmake','--build',str(R/'build'),'-j','4'],check=True)
+else:
+ print('cmake unavailable: offline llvm-config build (CMake configuration unverified)',flush=True)
+ def build(major):
+  tool=Path(f'/usr/lib/llvm-{major}/bin')
+  flags=subprocess.check_output([str(tool/'llvm-config'),'--cxxflags'],text=True).split()
+  dest=R/f'build/llvm{major}';dest.mkdir(parents=True,exist_ok=True)
+  objs=[]
+  for src in sorted((R/'src').glob('*.cpp')):
+   obj=dest/(src.stem+'.o');objs.append(str(obj))
+   if not obj.exists() or max(src.stat().st_mtime,(R/'src/Bennett.h').stat().st_mtime)>obj.stat().st_mtime:
+    subprocess.run(['g++',*flags,'-std=c++17','-fPIC','-g','-O0','-c',str(src),'-o',str(obj)],check=True)
+  subprocess.run(['g++','-shared',*objs,'-o',str(R/f'build/libbennett-plugin-{major}.so')],check=True)
+ with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:list(pool.map(build,[18,23]))
