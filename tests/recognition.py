@@ -2,11 +2,12 @@
 """DA/DB/DC regression tests: published examples, never checker implementation."""
 import argparse, json, os, re, subprocess, tempfile
 from pathlib import Path
+from contracts import dialect_text
 R = Path(__file__).resolve().parents[1]
 def main():
  p=argparse.ArgumentParser(); p.add_argument('--major',type=int,required=True); p.add_argument('--case',action='append'); a=p.parse_args()
  tool=Path(f'/usr/lib/llvm-{a.major}/bin/opt'); plugin=R/f'build/libbennett-plugin-{a.major}.so'
- spec=(R.parent/'bennett-dialect-spec/spec/Bennett-Dialect-Spec.md').read_text()
+ spec=dialect_text()
  decls=re.search(r'```llvm markers-ir\n(.*?)```',spec,re.S)[1]
  cases=[]
  for attrs,body in re.findall(r'```llvm ([^\n]*)\n(.*?)```',spec,re.S):

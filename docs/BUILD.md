@@ -76,3 +76,8 @@ currently checks content keys across the plugin, not semantic equivalence across
 stock optimisation pipelines. Rustc/Julia frontend envelopes and clang full-LTO
 links are outstanding; reports explicitly state this reduced verification coverage.
 The milestone is not complete until these are covered as requested.
+
+Contract drift is detected independently of corpus results. The tests read the
+pinned spec via git show; the corpus driver materialises pinned cases/controls
+beneath .tmp/contracts and still runs them after upstream HEAD moves, then fails
+with a drift report. It never silently changes SPEC_VERSIONS.toml.

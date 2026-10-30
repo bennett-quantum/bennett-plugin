@@ -2,13 +2,16 @@
 """Compare independently generated scalar objects with published object fixtures."""
 import argparse,json,os,re,subprocess
 from pathlib import Path
+from contracts import dialect_text
 R=Path(__file__).resolve().parents[1]
 SPEC=R.parent/'bennett-dialect-spec/spec/Bennett-Dialect-Spec.md'
 REF=R.parent/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
-def run(cmd):return subprocess.run(list(map(str,cmd)),text=True,capture_output=True,timeout=60)
+def run(cmd):
+ try:return subprocess.run(list(map(str,cmd)),text=True,capture_output=True,timeout=60)
+ except subprocess.TimeoutExpired:return subprocess.CompletedProcess(cmd,124,'','timeout after 60 seconds')
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);p.add_argument('--step-check',action='store_true');a=p.parse_args()
- spec=SPEC.read_text();objects=dict(re.findall(r'```isa object=([^\n ]+)\n(.*?)```',spec,re.S))
+ spec=dialect_text();objects=dict(re.findall(r'```isa object=([^\n ]+)\n(.*?)```',spec,re.S))
  maps=dict(re.findall(r'```text linkmap=([^\n ]+)\n(.*?)```',spec,re.S))
  runs=dict(re.findall(r'```text run=([^\n ]+)\n(.*?)```',spec,re.S))
  results=[]
@@ -44,7 +47,12 @@ def main():
    z=run([REF,'step-check',obj,'ref','--exhaustive','--max-bits','16','--budget',budgets[name]])
    executions.append({'step_check':True,'ok':z.returncode==0,'output':z.stdout+z.stderr})
   row['runs']=executions;results.append(row)
- report={'major':a.major,'objects':results,'passed':sum(x.get('check',False) and x.get('fixture_equal',False) and all(y['ok'] for y in x.get('runs',[])) for x in results)}
+ cdir=R/f'.tmp/scalars/{a.major}/c-inc8';cdir.mkdir(parents=True,exist_ok=True)
+ csrc=cdir/'inc8.c';csrc.write_text('unsigned char inc8(unsigned char x) { return (unsigned char)(x + 1); }\n')
+ cll=cdir/'inc8.ll';cc=run([f'/usr/lib/llvm-{a.major}/bin/clang','-O3','-emit-llvm','-S',csrc,'-o',cll])
+ lower=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=default<O3>,bennett','-bennett-dialect=0.2.6','-bennett-oracle=inc8','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-scalar-stack=7','-bennett-out='+str(cdir),'-disable-output',cll]) if cc.returncode==0 else cc
+ c_ok=lower.returncode==0 and (cdir/'ref.bennett').read_text().strip()==objects['inc8'].strip()
+ report={'major':a.major,'c_inc8_equal':c_ok,'objects':results,'passed':sum(x.get('check',False) and x.get('fixture_equal',False) and all(y['ok'] for y in x.get('runs',[])) for x in results)}
  (R/f'.tmp/scalars-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
- return report['passed']!=len(results)
+ return report['passed']!=len(results) or not c_ok
 if __name__=='__main__':raise SystemExit(main())

@@ -4,6 +4,9 @@ Contract: dialect **0.2.6**, commit **ff249d597f767f8034176bbb6c0f86dea3b90270**
 ISA **0.8**. The full draft string is the compatibility unit. Published contracts,
 fixtures and executable black boxes are the only sibling dependencies.
 
+M1 acceptance is still open; [PROGRESS.md](PROGRESS.md) distinguishes verified
+slices from outstanding obligations and records the final pinned corpus matrix.
+
 ## Architecture
 
 One source tree, separate LLVM-major build directories and shared objects. The explicit

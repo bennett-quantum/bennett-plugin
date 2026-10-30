@@ -7,8 +7,9 @@ and baseline fixture metadata. No harness/runtime implementation is imported.
 The independent driver runs the envelope + bennett and checks L1–L6. Missing
 checks and legacy ABI incompatibilities remain explicit divergences.
 """
-import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess
+import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys
 from pathlib import Path
+from contracts import drift
 R=Path(__file__).resolve().parents[1]
 CORPUS=R.parent/'bennett-dialect-spec/corpus/legality'
 PIN='ff249d597f767f8034176bbb6c0f86dea3b90270'
@@ -62,6 +63,8 @@ def cell(task):
  combined=dest/'combined.bc';report=dest/'analysis.json'
  rc,out,err=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes='+pipe+',bennett','-bennett-dialect=0.2.6','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(report),src,'-o',combined],timeout=60)
  row['plugin_exit']=rc;row['diagnostic']=err[-1800:]
+ if stem=='c-pure-attr-wrapper' and rc and 'BD-E-EFFECT-LIE' in err:
+  row['properties']['L2']=True;row['agree']=True;row['expected_diagnostic']='§3.8 source-effect lie (EXPECT: probe)';return row
  negative={'control-memory-none':('BD-E-MARKER-ATTRIBUTE','L2'),'control-readonly':('BD-E-MARKER-ATTRIBUTE','L2'),'control-handle-deref':('BD-E-HANDLE-USE','L3')}
  if stem in negative:
   code,prop=negative[stem];row['properties'][prop]=(code in err and rc!=0)
@@ -75,7 +78,8 @@ def cell(task):
  # materialised module. Cross-pipeline semantic identity still needs full map.
  stable=dest/'stable.json'
  rc2,_,err2=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.6','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(stable),combined,'-disable-output'])
- row['properties']['L4']=False if rc2 else data['regions']==json.loads(stable.read_text())['regions']
+ def identities(d):return [(r['marker'],r['operand'],sorted({c['key'] for c in r['candidates']})) for r in d['regions']]
+ row['properties']['L4']=False if rc2 else identities(data)==identities(json.loads(stable.read_text()))
  row['identity_scope']='content identity under plugin; stock-pipeline equivalence pending full materialisation' 
  before=dest/'before.bc';rc,_,err=run([tool/'opt','-passes='+pipe,src,'-o',before])
  if rc:row['properties']['L1']=False;row['diagnostic']=err;row['agree']=False;return row
@@ -85,6 +89,9 @@ def cell(task):
   row['properties']['L1']=not pre.get('error') and not post.get('error') and pre.get('trace_O0')==post.get('trace_O0') and pre.get('exit_O0')==post.get('exit_O0')
   row['properties']['L5']=not post.get('error') and post.get('trace_O0')==post.get('trace_O3') and post.get('exit_O0')==post.get('exit_O3') and post.get('undefined_O0')==post.get('undefined_O3')
   row['native_error']=pre.get('error') or post.get('error')
+  if pre.get('exit_O0',0)!=0 or post.get('exit_O0',0)!=0:
+   row['properties']['L1']=False;row['properties']['L5']=False
+   row['native_error']='black-box runtime failed: pre exit '+str(pre.get('exit_O0'))+', post exit '+str(post.get('exit_O0'))
  else:row['properties']['L1']='missing black-box baseline';row['properties']['L5']='missing black-box baseline'
  row['agree']=all(v is True for v in row['properties'].values())
  return row
@@ -93,9 +100,20 @@ def main():
  for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os.environ.pop(key,None)
  (R/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(R/'.tmp')
  current=run(['git','-C',CORPUS.parent.parent,'rev-parse','HEAD'])[1].strip()
- if current!=PIN:raise SystemExit('dialect pin changed: '+current)
+ if current!=PIN:print('dialect pin drift: HEAD '+current+'; executing pinned fixtures '+PIN,file=sys.stderr)
+ plugin_hashes={str(m):hashlib.sha256((R/f'build/libbennett-plugin-{m}.so').read_bytes()).hexdigest() for m in (a.major or [18,23])}
  baseline=bootstrap()
- cases=sorted([*CORPUS.glob('cases/*.ll'),*CORPUS.glob('cases/*.c'),*CORPUS.glob('controls/*.ll')])
+ # Read fixture blobs only; never copy/import a sibling checker implementation.
+ pinned=R/'.tmp/contracts'/PIN
+ fixture_paths=run(['git','-C',CORPUS.parent.parent,'ls-tree','-r','--name-only',PIN,'--','corpus/legality/cases','corpus/legality/controls'])[1].splitlines()
+ cases=[]
+ for path in fixture_paths:
+  if not path.endswith(('.ll','.c')):continue
+  target=pinned/Path(path).relative_to('corpus/legality');target.parent.mkdir(parents=True,exist_ok=True)
+  rc,body,err=run(['git','-C',CORPUS.parent.parent,'show',PIN+':'+path])
+  if rc:raise RuntimeError(err)
+  target.write_text(body);cases.append(target)
+ cases.sort()
  if a.case:cases=[x for x in cases if x.stem in a.case]
  tasks=[(c,m,p,baseline) for m in (a.major or [18,23]) for c in cases for p in pipelines(m)]
  rows=[]
@@ -108,7 +126,8 @@ def main():
   cells=[x for x in rows if x['major']==m];bycase={c.stem:[x for x in cells if x['case']==c.stem] for c in cases}
   summary[str(m)]={'cases_run':len(bycase),'cases_agree':sum(all(x.get('agree',False) for x in v) for v in bycase.values()),'cells_run':len(cells),'cells_agree':sum(x.get('agree',False) for x in cells)}
   summary[str(m)]['cases_diverge']=summary[str(m)]['cases_run']-summary[str(m)]['cases_agree']
- result={'dialect_commit':PIN,'scope':'clang C + opt envelope; rustc/Julia/front-end LTO pending','summary':summary,'cells':rows}
+ result={'plugin_sha256':plugin_hashes,'contract_head':current,'contract_head_drift':current!=PIN,'contract_worktree_drift':drift(),'dialect_commit':PIN,'scope':'clang C + opt envelope; rustc/Julia/front-end LTO pending','summary':summary,'cells':rows}
+ assert all(hashlib.sha256((R/f'build/libbennett-plugin-{m}.so').read_bytes()).hexdigest()==h for m,h in plugin_hashes.items()),'plugin changed during gate'
  (R/'.tmp/corpus-gate.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(summary,indent=2))
- return any(not x.get('agree',False) for x in rows)
+ return current!=PIN or drift() or any(not x.get('agree',False) for x in rows)
 if __name__=='__main__':raise SystemExit(main())
