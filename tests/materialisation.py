@@ -15,7 +15,11 @@ def main():
   d=R/f'.tmp/materialisation/{a.major}/{name}';d.mkdir(parents=True,exist_ok=True);src=d/'in.ll';src.write_text(pairs['in'][name]);out=d/'out.ll'
   cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.7','-bennett-normalise-only','-S',str(src),'-o',str(out)]
   x=subprocess.run(cmd,capture_output=True,text=True);actual=out.read_text() if x.returncode==0 else '';want=instructions(pairs['out'][name]);got=instructions(actual);ok=x.returncode==0 and got==want
-  if name=='n-flags':ok=ok and all(s not in '\n'.join(l for l in actual.splitlines() if not l.startswith('declare')) for s in [' noundef',' nonnull','willreturn','mustprogress','memory(argmem:'])
+  if name=='n-flags':
+   definition=re.search(r'define [^\n]+',actual)[0] if actual else ''
+   group=re.search(r'#(\d+)',definition)
+   attrs=re.search(r'attributes #'+group[1]+r' = \{([^}]+)\}',actual)[1] if group else ''
+   ok=ok and all(s not in definition+attrs for s in [' noundef',' nonnull','willreturn','mustprogress','memory('])
   rows.append({'case':name,'ok':ok,'error':x.stderr.strip() if x.returncode else '' if ok else {'want':want,'got':got}})
  result={'major':a.major,'cases':len(rows),'passed':sum(x['ok'] for x in rows),'results':rows};(R/f'.tmp/materialisation-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return any(not x['ok'] for x in rows)
 if __name__=='__main__':raise SystemExit(main())

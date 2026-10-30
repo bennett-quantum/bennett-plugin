@@ -62,6 +62,7 @@ class Analysis {
 public:
   explicit Analysis(llvm::Module &m) : M(m) {}
   AV get(const llvm::Value *);
+  AV read(llvm::Value *, uint64_t, llvm::Type *);
   std::set<llvm::Function *> candidates(llvm::Value *,
                                         llvm::FunctionType *type = nullptr);
   std::map<llvm::Function *, std::set<std::string>> tiers;

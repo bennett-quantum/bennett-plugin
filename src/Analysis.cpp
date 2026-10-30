@@ -327,6 +327,11 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
     next:;
     }
 }
+AV Analysis::read(Value *base, uint64_t offset, Type *t) {
+  AV p=get(base), shifted;shifted.top=p.top;
+  for(auto x:p.atoms) {if(x.kind==Atom::Ptr)x.offset+=offset;shifted.atoms.insert(x);}
+  return load(shifted,t);
+}
 AV Analysis::load(const AV &p, Type *t) {
   AV r;
   uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();

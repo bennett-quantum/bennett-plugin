@@ -3,6 +3,7 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SHA256.h"
@@ -33,6 +34,7 @@ struct Scalar {
   std::map<const Value *, std::string> names;
   std::vector<std::string> regs, lines;
   unsigned constants = 0, temps = 0, expressions = 0;
+  std::map<const GlobalVariable *, std::string> globals;
   unsigned width(Type *t) {
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
       return t->getIntegerBitWidth();
@@ -69,6 +71,11 @@ struct Scalar {
     if (isa<UndefValue>(v) || isa<PoisonValue>(v) ||
         isa<ConstantPointerNull>(v))
       return constant(APInt(width(v->getType()), 0));
+    if (auto *g = dyn_cast<GlobalVariable>(v)) {
+      if (!globals.count(g)) unimplemented("§19.5 comparison global layout",2,g);
+      std::string n = "c" + std::to_string(constants++);
+      dest(n,width(g->getType())); lines.push_back(n+" = lift.addr @"+globals[g]); return n;
+    }
     if (auto *c = dyn_cast<ConstantFP>(v))
       return constant(c->getValueAPF().bitcastToAPInt());
     if (auto *c = dyn_cast<ConstantInt>(v))
@@ -320,8 +327,20 @@ struct Scalar {
           }
           unimplemented("§14 calls", 2, call);
         }
-        if (isa<LoadInst>(i) || isa<StoreInst>(i) || isa<AllocaInst>(i))
-          unimplemented("§17.1/§17.3 memory", 2, &i);
+        if (auto *l = dyn_cast<LoadInst>(&i)) {
+          unsigned w = width(l->getType());
+          if (w % 8) unimplemented("§12 N22 nonbyte load",2,l);
+          auto p = value(l->getPointerOperand());lines.push_back("lift.boundscheck "+p+" "+std::to_string(w/8));
+          dest(names[l],w);lines.push_back(names[l]+" = lift.load.i"+std::to_string(w)+" "+p);continue;
+        }
+        if (auto *st = dyn_cast<StoreInst>(&i)) {
+          auto p=value(st->getPointerOperand()),v=value(st->getValueOperand());
+          unsigned w=width(st->getValueOperand()->getType());
+          if(w%8)unimplemented("§12 N22 nonbyte store",2,st);
+          lines.push_back("lift.boundscheck "+p+" "+std::to_string(w/8));
+          lines.push_back("lift.store.i"+std::to_string(w)+" "+p+" "+v);continue;
+        }
+        if (isa<AllocaInst>(i)) unimplemented("§17.3 shadow stack",2,&i);
         if (i.getType()->isFPOrFPVectorTy())
           unimplemented("§13 soft-float", 2, &i);
         std::string row;
@@ -441,11 +460,40 @@ struct Scalar {
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells) {
   Scalar s{m, f};
+  std::set<const GlobalVariable *> used;
+  std::set<const Value *> seen;
+  std::function<void(const Value *)> visit = [&](const Value *v) {
+    if (!seen.insert(v).second) return;
+    if (auto *g=dyn_cast<GlobalVariable>(v)) {
+      used.insert(g); if(g->hasInitializer())visit(g->getInitializer());return;
+    }
+    if (isa<Function>(v)) return;
+    if(auto *u=dyn_cast<User>(v))for(Value *a:u->operands())visit(a);
+  };
+  for(Instruction &i:instructions(f))for(Value *v:i.operands())visit(v);
+  for(Instruction &i:instructions(f)) {
+    Value *p=nullptr;
+    if(auto *l=dyn_cast<LoadInst>(&i))p=l->getPointerOperand();
+    if(auto *st=dyn_cast<StoreInst>(&i))p=st->getPointerOperand();
+    if(p && !isa<GlobalVariable>(getUnderlyingObject(p)))
+      unimplemented("§8.5 entry-state replay / §17.3 shadow-stack memory",2,&i);
+  }
+  // A mutable global written outside this closure needs caller-entry replay.
+  // Until M2 that dependency must fail, rather than silently reset its bytes.
+  for(Function &g:m)if(&g!=&f)
+    for(Instruction &i:instructions(g)) {
+      if(auto *st=dyn_cast<StoreInst>(&i))
+        if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
+          unimplemented("§8.5 mutable global entry-state replay",2,&i);
+    }
+  unsigned gn=0;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
   unsigned ret = s.width(f.getReturnType());
   std::string d = desc.str();
   auto semi = d.find(';');
   std::string bindings = d.substr(0, semi);
   std::string target = semi == std::string::npos ? "" : d.substr(semi + 1);
+  if (!target.empty() && !std::regex_match(target,std::regex(R"(tgt=(null|[0-9]+))")))
+    unimplemented("§8.3 device descriptor bindings",2,&f);
   bool discard = d == "tgt=null" || target == "tgt=null";
   unsigned tgt = ret;
   if (StringRef(target).starts_with("tgt=")) {
@@ -528,27 +576,64 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     ++sc;
   unsigned pw = m.getDataLayout().getPointerSizeInBits();
   std::string prefix = "isa=0.8\nptr_width=" + std::to_string(pw) + "\n";
-  std::string lh = sha(prefix + lsig + "\n" + lproc + "\n");
-  std::string canonical = wrapper;
-  auto pos = canonical.find("@L1", canonical.find('\n'));
-  canonical.replace(pos, 3, "@" + lh);
-  std::string leaves = "layout A_tab 0\nlayout H 12\nlayout S_cells " +
-                       std::to_string(sc) +
-                       "\nlayout heap_base 4096\nlayout heap_limit_max "
-                       "0\nlayout null_size 4096\nlayout ptr_width " +
-                       std::to_string(pw) + "\n";
-  std::string oh =
-      sha(prefix + osig + "\n" + canonical + "\n" + leaves + lh + "\n");
-  std::string symbols =
-      "{\"0\":{\"interface_hash\":\"" + oh +
-      "\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":" + osig +
-      "},\"1\":{\"interface_hash\":\"" + lh +
-      "\",\"kind\":\"lproc\",\"name\":\"L1\",\"signature\":" + lsig + "}}";
-  std::string layout =
-      "{\"A_tab\":0,\"H\":12,\"S_cells\":" + std::to_string(sc) +
-      ",\"globals\":{},\"heap_base\":4096,\"heap_limit_max\":0,\"interface_"
-      "regions\":{\"ref\":{}},\"null_size\":4096,\"ptr_width\":" +
-      std::to_string(pw) + "}";
+  // M1 standalone comparison layout: globals in link/module order, data at
+  // 4096, heap at the next page, no heap allocations. Driver-supplied layouts M4.
+  std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
+  uint64_t base=4096;
+  for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {
+    if(!g.hasInitializer())unimplemented("§19.5 undefined data image",2,&g);
+    auto &dl=m.getDataLayout();uint64_t size=dl.getTypeAllocSize(g.getValueType()).getFixedValue();
+    base=alignTo(base,dl.getPreferredAlign(&g));
+    std::vector<uint8_t> bytes(size,0);
+    std::function<void(Constant *,uint64_t)> image=[&](Constant *c,uint64_t off) {
+      Type *t=c->getType();
+      if(c->isNullValue())return;
+      if(isa<UndefValue>(c)||isa<PoisonValue>(c))return;
+      if(auto *st=dyn_cast<StructType>(t)) {auto *sl=dl.getStructLayout(st);for(unsigned k=0;k<st->getNumElements();++k)image(c->getAggregateElement(k),off+sl->getElementOffset(k));return;}
+      if(auto *at=dyn_cast<ArrayType>(t)) {for(unsigned k=0;k<at->getNumElements();++k)image(c->getAggregateElement(k),off+k*dl.getTypeAllocSize(at->getElementType()).getFixedValue());return;}
+      APInt bits(1,0);
+      if(auto *n=dyn_cast<ConstantInt>(c))bits=n->getValue();
+      else if(auto *n=dyn_cast<ConstantFP>(c))bits=n->getValueAPF().bitcastToAPInt();
+      else unimplemented("§19.5 pointer/vector data relocation",2,c);
+      unsigned n=dl.getTypeStoreSize(t).getFixedValue();bits=bits.zextOrTrunc(n*8);
+      for(unsigned k=0;k<n;++k)bytes[off+k]=bits.lshr((dl.isLittleEndian()?k:n-1-k)*8).getLimitedValue()&255;
+    };
+    image(g.getInitializer(),0);std::string hex=toHex(ArrayRef<uint8_t>(bytes),true),name=s.globals[&g];
+    data[name]=hex;
+    dataSigs[name]="{\"abi\":\"0.8\",\"kind\":\"data\",\"size\":"+std::to_string(size)+",\"tier\":\"-\"}";
+    dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
+    globalLeaves[name]="{\"base\":"+std::to_string(base)+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
+    base+=size;
+  }
+  uint64_t heap=alignTo(base,uint64_t(4096));unsigned h=0,at=0;
+  while((uint64_t(1)<<h)<heap)++h;
+  while((uint64_t(1)<<at)<data.size())++at;
+  std::string images,globalLayout,globalHashLeaves,dataSection,refs;
+  for(auto &e:data) {
+    images+="data "+e.first+" "+e.second+"\n";
+    if(!globalLayout.empty())globalLayout+=",";
+    globalLayout+="\""+e.first+"\":"+globalLeaves[e.first];
+    globalHashLeaves+="layout globals."+e.first+" "+globalLeaves[e.first]+"\n";
+    dataSection+=e.first+" "+e.second+"\n";
+  }
+  // Symbol references contribute hashes in first-reference order, independently
+  // of lexicographic data/layout leaf order.
+  std::string canonicalL;std::set<std::string> referenced;
+  std::regex token(R"(@G[0-9]+\b)");size_t last=0;
+  for(std::sregex_iterator it(lproc.begin(),lproc.end(),token),end;it!=end;++it) {
+    std::string n=it->str().substr(1);if(referenced.insert(n).second)refs+=dataHashes[n]+"\n";
+    canonicalL+=lproc.substr(last,it->position()-last)+"@"+dataHashes[n];last=it->position()+it->length();
+  }
+  canonicalL+=lproc.substr(last);
+  std::string lh=sha(prefix+lsig+"\n"+canonicalL+"\n"+images+globalHashLeaves+refs);
+  std::string canonical=wrapper;auto pos=canonical.find("@L1",canonical.find('\n'));canonical.replace(pos,3,"@"+lh);
+  std::string leaves="layout A_tab "+std::to_string(at)+"\nlayout H "+std::to_string(h)+"\nlayout S_cells "+std::to_string(sc)+"\n"+globalHashLeaves+
+    "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max 0\nlayout null_size 4096\nlayout ptr_width "+std::to_string(pw)+"\n";
+  std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+lh+"\n");
+  std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"},\"1\":{\"interface_hash\":\""+lh+"\",\"kind\":\"lproc\",\"name\":\"L1\",\"signature\":"+lsig+"}";
+  unsigned si=2;for(auto &e:data)symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+dataHashes[e.first]+"\",\"kind\":\"data\",\"name\":\""+e.first+"\",\"signature\":"+dataSigs[e.first]+"}";
+  symbols+="}";
+  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":0,\"interface_regions\":{\"ref\":{}},\"null_size\":4096,\"ptr_width\":"+std::to_string(pw)+"}";
   if (auto ec = sys::fs::create_directories(out))
     fail("output", ec.message());
   SmallString<256> path(out);
@@ -562,7 +647,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     << pw << "\n\nsection symbols\n"
     << symbols << "\n\nsection functions\n"
     << wrapper << "\n"
-    << lproc << "\n\nsection layout\n"
+    << lproc << (dataSection.empty() ? "" : "\n\nsection data\n" + StringRef(dataSection).rtrim().str()) << "\n\nsection layout\n"
     << layout << "\n";
   errs() << "bennett: scalar reference object " << path << "\n";
 }

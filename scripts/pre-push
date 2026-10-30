@@ -6,8 +6,12 @@ export TMPDIR="$root/.tmp"
 mkdir -p "$TMPDIR"
 "$root/scripts/build"
 python3 "$root/tests/smoke.py"
+python3 "$root/tests/gate_policy.py"
 for major in 18 23; do
   python3 "$root/tests/recognition.py" --major "$major"
+  python3 "$root/tests/analysis_edges.py" --major "$major"
+  python3 "$root/tests/materialisation.py" --major "$major"
   python3 "$root/tests/scalars.py" --major "$major"
+  python3 "$root/tests/descriptors.py" --major "$major"
 done
 python3 "$root/tests/corpus_gate.py"

@@ -21,6 +21,7 @@ cl::opt<std::string> Dialect("bennett-dialect",
 cl::opt<std::string> ISA("bennett-isa", cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
 cl::opt<std::string> Report("bennett-report");
+cl::opt<bool> DescriptorReference("bennett-descriptor-reference", cl::desc("Non-production reference objects from statically resolved marker descriptors"));
 cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
 cl::opt<bool> AnalysisOnly(
     "bennett-analysis-only",
@@ -336,6 +337,59 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       raw_fd_ostream bc(Output + "/materialised.bc", ec);
       if (ec) fail("output", ec.message());
       WriteBitcodeToFile(*materialised, bc);
+      return PreservedAnalyses::none();
+    }
+    if (DescriptorReference) {
+      unsigned objects=0;
+      for(Function &caller:m)for(Instruction &i:instructions(caller))
+        if(auto *c=dyn_cast<CallBase>(&i))
+          if(auto *marker=c->getCalledFunction();marker && marker->getName()=="__bennett_oracle") {
+            Value *desc=c->getArgOperand(2);
+            auto integer=[&](AV v)->uint64_t {
+              if(v.top || v.atoms.size()!=1 || v.atoms.begin()->kind!=Atom::Int)
+                unimplemented("§8.4 non-singleton descriptor shape",2,c);
+              return v.atoms.begin()->integer.getLimitedValue();
+            };
+            auto u32=Type::getInt32Ty(m.getContext());auto ptr=PointerType::get(m.getContext(),0);
+            auto *h=StructType::get(m.getContext(),{u32,u32,u32,u32,ptr,ptr});
+            auto *b=StructType::get(m.getContext(),{u32,u32,ptr,Type::getInt64Ty(m.getContext()),Type::getInt64Ty(m.getContext())});
+            auto *hl=m.getDataLayout().getStructLayout(h),*bl=m.getDataLayout().getStructLayout(b);
+            auto field=[&](uint64_t off,Type *t) {return a.read(desc,off,t);};
+            if(integer(field(0,u32))!=2 || integer(field(12,u32))!=0 || integer(field(8,u32))!=0)
+              unimplemented("§8.1/§8.3 descriptor header/device dispatch",2,c);
+            unsigned params=integer(field(4,u32));
+            auto qwidth=[&](AV q)->unsigned {
+              if(q.top || q.atoms.size()!=1 || q.atoms.begin()->kind!=Atom::Root)
+                unimplemented("§6.5 descriptor register dispatch",3,c);
+              auto *alloc=dyn_cast<CallBase>(q.atoms.begin()->object);
+              if(!alloc)unimplemented("§6.6 boundary descriptor register",3,c);
+              return integer(a.get(alloc->getArgOperand(1)));
+            };
+            auto target=field(hl->getElementOffset(4),ptr), fault=field(hl->getElementOffset(5),ptr);
+            if(qwidth(fault)!=4)unimplemented("§8.2 T-SIZE fault dispatch",3,c);
+            bool discard=!target.top && target.atoms.size()==1 && target.atoms.begin()->kind==Atom::Int && target.atoms.begin()->integer.isZero();
+            unsigned tgt=discard?0:qwidth(target);
+            auto candidates=a.candidates(c->getArgOperand(0));
+            for(Function *f:candidates) {
+              if(params!=f->arg_size())unimplemented("§8.2 flattened descriptor arity",2,c);
+              std::string shape;unsigned j=0;
+              for(Argument &param:f->args()) {
+                uint64_t off=hl->getSizeInBytes()+j*bl->getSizeInBytes();
+                unsigned kind=integer(field(off,u32)),mode=integer(field(off+bl->getElementOffset(1),u32));
+                if(j++)shape+=",";
+                if(kind==1 && mode<=1)shape+="IN("+std::to_string(qwidth(field(off+bl->getElementOffset(2),ptr)))+","+(mode?"sext":"zext")+")";
+                else if(kind==2) {
+                  unsigned w=param.getType()->isPointerTy()?m.getDataLayout().getPointerTypeSizeInBits(param.getType()):param.getType()->getPrimitiveSizeInBits().getFixedValue();
+                  shape+="ARG("+std::to_string(w)+")";
+                } else unimplemented("§8.4 MEM_IN/OUT/INOUT descriptor dispatch",2,c);
+              }
+              shape+=";tgt="+(discard?std::string("null"):std::to_string(tgt));
+              ValueToValueMapTy map;auto clone=CloneModule(m,map);auto *mf=cast<Function>(map[f]);normaliseScalar(*mf);
+              lowerScalar(*clone,*mf,shape,Output+"/oracle-"+std::to_string(objects++),StackCells);
+            }
+          }
+      if(!objects)fail("input","descriptor-reference found no oracle shape");
+      errs()<<"bennett: descriptor reference objects only; CC launches remain unimplemented: §17.4 (milestone 3)\n";
       return PreservedAnalyses::none();
     }
     for (Function &f : m)

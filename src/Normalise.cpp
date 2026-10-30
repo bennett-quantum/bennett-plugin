@@ -2,6 +2,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/Config/llvm-config.h"
 using namespace llvm;
 namespace bennett {
@@ -62,6 +63,15 @@ void normaliseScalar(Function &f) {
   };
   for (Instruction *i : work) if (i)
     for (Use &u : i->operands()) if (auto *c=dyn_cast<Constant>(u.get())) u.set(zero(c));
+  std::set<GlobalVariable *> globals; std::set<Value *> seen;
+  std::function<void(Value *)> data=[&](Value *v) {
+    if(!seen.insert(v).second)return;
+    if(auto *g=dyn_cast<GlobalVariable>(v)) {globals.insert(g);if(g->hasInitializer())data(g->getInitializer());return;}
+    if(isa<Function>(v))return;
+    if(auto *u=dyn_cast<User>(v))for(Value *x:u->operands())data(x);
+  };
+  for(Instruction *i:work)if(i)for(Value *v:i->operands())data(v);
+  for(auto *g:globals)if(g->hasInitializer())g->setInitializer(zero(g->getInitializer()));
   // N8.
   for (Instruction *&i : work) if (auto *z=dyn_cast_or_null<FreezeInst>(i)) {z->replaceAllUsesWith(z->getOperand(0));z->eraseFromParent();i=nullptr;}
   // N9, scalar atomics. LLVM's single-thread lowering is represented explicitly.

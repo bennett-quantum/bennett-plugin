@@ -16,17 +16,23 @@ def main():
  runs=dict(re.findall(r'```text run=([^\n ]+)\n(.*?)```',spec,re.S))
  results=[]
  for tag,body in re.findall(r'```llvm (lift=[^\n]+)\n(.*?)```',spec,re.S):
-  fields=dict(re.findall(r'([\w]+)=([^ ]+)',tag));name=fields['lift']
-  # Scalar fixtures only; memory/effects/FP/indirectbr are scheduled mechanics.
-  if name not in ['oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate']:continue
+  fields={k:v.strip(chr(34)) for k,v in re.findall(r'([\w]+)=([^ ]+)',tag)};name=fields['lift']
+  # Enumerate every published lift, including explicitly unavailable mechanics.
+  supported=name in ['oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand']
   dest=R/f'.tmp/scalars/{a.major}/{name}';dest.mkdir(parents=True,exist_ok=True)
-  src=dest/'input.ll';src.write_text(body+('\ndeclare void @__bennett_nz_fault(i64)\n' if '@__bennett_nz_fault' in body else ''))
+  primitives={'__bennett_nz_fault':'void @__bennett_nz_fault(i64)','__bennett_nz_alloc':'ptr @__bennett_nz_alloc(i64)','__bennett_nz_free':'void @__bennett_nz_free(ptr)'}
+  for n,sig in primitives.items():
+   if '@'+n in body and not re.search(r'(?:define|declare) [^\n]*@'+n+r'\(',body):body+='\ndeclare '+sig+'\n'
+  src=dest/'input.ll';src.write_text(body)
   stack=re.search(r'stack (?:max |max=|)(\d+)',maps.get(name,''))
   if not stack:stack=re.search(r'stack\s+(\d+)',maps.get(name,''))
   cells=int(stack[1]) if stack else 32
   cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.7','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+fields['desc'],'-bennett-scalar-stack='+str(cells),'-bennett-out='+str(dest),'-disable-output',str(src)]
   x=run(cmd);row={'name':name,'lowered':x.returncode==0}
-  if x.returncode:row['error']=x.stderr[-1500:];results.append(row);continue
+  if x.returncode:
+   row['error']=x.stderr[-1500:]
+   row['deferred']=not supported and 'unimplemented:' in x.stderr and 'milestone 2' in x.stderr
+   results.append(row);continue
   obj=dest/'ref.bennett';check=run([REF,'check',obj]);row['check']=check.returncode==0;row['check_output']=check.stdout+check.stderr
   hashes=run([REF,'hash',obj]);row['hashes']=hashes.stdout.strip()
   row['fixture_equal']=obj.read_text().strip()==objects[name].strip()
@@ -52,7 +58,7 @@ def main():
  cll=cdir/'inc8.ll';cc=run([f'/usr/lib/llvm-{a.major}/bin/clang','-O3','-emit-llvm','-S',csrc,'-o',cll])
  lower=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=default<O3>,bennett','-bennett-dialect=0.2.7','-bennett-oracle=inc8','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-scalar-stack=7','-bennett-out='+str(cdir),'-disable-output',cll]) if cc.returncode==0 else cc
  c_ok=lower.returncode==0 and (cdir/'ref.bennett').read_text().strip()==objects['inc8'].strip()
- report={'major':a.major,'c_inc8_equal':c_ok,'objects':results,'passed':sum(x.get('check',False) and x.get('fixture_equal',False) and all(y['ok'] for y in x.get('runs',[])) for x in results)}
+ report={'major':a.major,'c_inc8_equal':c_ok,'objects':results,'deferred':[x['name'] for x in results if x.get('deferred')], 'passed':sum(x.get('check',False) and x.get('fixture_equal',False) and all(y['ok'] for y in x.get('runs',[])) for x in results)}
  (R/f'.tmp/scalars-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
- return report['passed']!=len(results) or not c_ok
+ return report['passed']+len(report['deferred'])!=len(results) or not c_ok
 if __name__=='__main__':raise SystemExit(main())
