@@ -93,3 +93,33 @@ Only §22.1 codes may reject. Future mechanics remain promised, not disallowed.
 These messages must never be confused with implemented blocked compilation: §1.6
 requires actual objects with precise blocker traps and exit 3. M3 supplies bounded
 realisations; until then the compiler reports unavailable lowering explicitly.
+
+## M1b delivery and acceptance boundary (2026-10-30)
+
+Verified against dialect 0.2.7/95c3cd3: both llvm-config builds; 63/64 applicable
+recognition witnesses (18/23); PT5 erased-range sets, byval copy isolation,
+integer packed-bit/nand transfer witnesses; four scalar materialisation fixtures;
+11 byte-exact ISA objects including FP carriers/aggregate packing and atomic-nand;
+static descriptor-derived inc8 reference objects. The gate is 66/63/1/2/0
+(run/agree/deferred/blocked/diverge) on each major. None of these partial interfaces
+claims a production compile or full reference-analysis conformance.
+
+M1 acceptance remains open for the analysis/materialised-key audit and the
+production descriptor/CC-launch path documented in PROGRESS. Pull forward the
+scalar part of M3 CC emission to close that path; a test-only descriptor extractor
+is not its completion. CMake remains unverified (bp-ahz); full frontend/legality
+materialised comparisons remain open. No requirement was dropped to make the gate
+exit zero.
+
+**Explicit M2 gate deferral:** `fp-rot-fastmath-reassoc`, §13/§17.7 deterministic
+FP arithmetic helpers, i128 conversion carrier and linked call closure. M1's
+bit-exact FP carriers/constant packing do not implement these arithmetic mechanics.
+M2 also executes the nine still-unavailable lift fixtures listed with §16 rows
+in PROGRESS. Retain the staged 0.2.7 budget selection/final identities and frozen
+capacities when implementing §9.2; no budget-table implementation is claimed now.
+
+**Upstream gate blocker:** `spec-sem2-adj`, `spec-sem2-compute`, bp-c2i /
+b-dialect-spec-566. Same opaque runtime exits 87 at ABI 0.2, zero with a local
+v0 call probe, without using the plugin on both majors/codegen levels. They stay
+separately counted/printed on every gate run. Any additional failed property or
+changed exit is a real divergence. Canonical G0/G1 wording ambiguity is bp-p26.

@@ -1,32 +1,39 @@
 {
-  "dialect_commit": "ff249d597f767f8034176bbb6c0f86dea3b90270",
+  "dialect_commit": "95c3cd332f5f72c07fd5f2515f328deaa40c08b9",
   "contract_head": "95c3cd332f5f72c07fd5f2515f328deaa40c08b9",
-  "contract_head_drift": true,
+  "contract_head_drift": false,
+  "contract_worktree_drift": false,
   "plugin_sha256": {
-    "18": "94eff4b903eff41d1b920c5e1cc808e5caac1072394f75356847e93ead187af1",
-    "23": "9f62e9f92e82222c01302937d1a3864c8af4dee22fc2e5d9af2d8ae1537e5c5c"
+    "18": "7e94882365943e0741d149f7b34719c383e351ae9a22b330b9bdde8593bd6cbc",
+    "23": "f7936a0d57b921c4e2b0e8152331b3197e856e8c46205553b48415b13e3ea5ca"
   },
   "corpus_scope": "clang C + opt envelope; rustc/Julia/front-end LTO pending",
   "corpus_summary": {
     "18": {
       "cases_run": 66,
-      "cases_agree": 63,
       "cells_run": 924,
       "cells_agree": 892,
-      "cases_diverge": 3
+      "cases_agree": 63,
+      "cases_deferred": 1,
+      "cases_blocked": 2,
+      "cases_diverge": 0
     },
     "23": {
       "cases_run": 66,
-      "cases_agree": 63,
       "cells_run": 792,
       "cells_agree": 764,
-      "cases_diverge": 3
+      "cases_agree": 63,
+      "cases_deferred": 1,
+      "cases_blocked": 2,
+      "cases_diverge": 0
     }
   },
-  "divergences": [
+  "pre_push_exit": 0,
+  "non_agreeing": [
     {
       "major": 18,
       "case": "fp-rot-fastmath-reassoc",
+      "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)",
       "properties": {
         "L5": [
           "default<O0>",
@@ -34,11 +41,18 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 0,
+        "pre_O3": 0,
+        "post_O0": 0,
+        "post_O3": 0
       }
     },
     {
       "major": 18,
       "case": "spec-sem2-adj",
+      "classification": "blocked-upstream: bp-c2i (upstream b-dialect-spec-566)",
       "properties": {
         "L1": [
           "default<O0>",
@@ -72,11 +86,18 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 87,
+        "pre_O3": 87,
+        "post_O0": 87,
+        "post_O3": 87
       }
     },
     {
       "major": 18,
       "case": "spec-sem2-compute",
+      "classification": "blocked-upstream: bp-c2i (upstream b-dialect-spec-566)",
       "properties": {
         "L1": [
           "default<O0>",
@@ -110,11 +131,18 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 87,
+        "pre_O3": 87,
+        "post_O0": 87,
+        "post_O3": 87
       }
     },
     {
       "major": 23,
       "case": "fp-rot-fastmath-reassoc",
+      "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)",
       "properties": {
         "L5": [
           "default<O0>",
@@ -122,11 +150,18 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 0,
+        "pre_O3": 0,
+        "post_O0": 0,
+        "post_O3": 0
       }
     },
     {
       "major": 23,
       "case": "spec-sem2-adj",
+      "classification": "blocked-upstream: bp-c2i (upstream b-dialect-spec-566)",
       "properties": {
         "L1": [
           "default<O0>",
@@ -156,11 +191,18 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 87,
+        "pre_O3": 87,
+        "post_O0": 87,
+        "post_O3": 87
       }
     },
     {
       "major": 23,
       "case": "spec-sem2-compute",
+      "classification": "blocked-upstream: bp-c2i (upstream b-dialect-spec-566)",
       "properties": {
         "L1": [
           "default<O0>",
@@ -190,43 +232,168 @@
           "strip-nondebug",
           "mergefunc"
         ]
+      },
+      "native_exits": {
+        "pre_O0": 87,
+        "pre_O3": 87,
+        "post_O0": 87,
+        "post_O3": 87
       }
     }
   ],
+  "divergences": [],
   "recognition": {
     "18": {
       "major": 18,
-      "cases": 61,
-      "passed": 61,
+      "cases": 63,
+      "passed": 63,
       "failures": []
     },
     "23": {
       "major": 23,
-      "cases": 61,
-      "passed": 61,
+      "cases": 64,
+      "passed": 64,
       "failures": []
+    }
+  },
+  "analysis_edges": {
+    "18": {
+      "major": 18,
+      "cases": 4,
+      "passed": 4,
+      "results": [
+        {
+          "case": "byval",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "packed",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "atomic",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "host-tiers",
+          "ok": true,
+          "diagnostic": ""
+        }
+      ]
+    },
+    "23": {
+      "major": 23,
+      "cases": 4,
+      "passed": 4,
+      "results": [
+        {
+          "case": "byval",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "packed",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "atomic",
+          "ok": true,
+          "diagnostic": ""
+        },
+        {
+          "case": "host-tiers",
+          "ok": true,
+          "diagnostic": ""
+        }
+      ]
+    }
+  },
+  "materialisation": {
+    "18": {
+      "major": 18,
+      "cases": 4,
+      "passed": 4,
+      "results": [
+        {
+          "case": "n-flags",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-shift",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-query",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-atomic-nand",
+          "ok": true,
+          "error": ""
+        }
+      ]
+    },
+    "23": {
+      "major": 23,
+      "cases": 4,
+      "passed": 4,
+      "results": [
+        {
+          "case": "n-flags",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-shift",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-query",
+          "ok": true,
+          "error": ""
+        },
+        {
+          "case": "n-atomic-nand",
+          "ok": true,
+          "error": ""
+        }
+      ]
+    }
+  },
+  "descriptors": {
+    "18": {
+      "major": 18,
+      "descriptor_inc8_equal": true,
+      "production_unimplemented": true,
+      "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/descriptors/18/oracle-0/ref.bennett\nbennett: descriptor reference objects only; CC launches remain unimplemented: \u00a717.4 (milestone 3)\n"
+    },
+    "23": {
+      "major": 23,
+      "descriptor_inc8_equal": true,
+      "production_unimplemented": true,
+      "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/descriptors/23/oracle-0/ref.bennett\nbennett: descriptor reference objects only; CC launches remain unimplemented: \u00a717.4 (milestone 3)\n"
     }
   },
   "scalar": {
     "18": {
-      "fixtures_passed": 9,
+      "fixtures_passed": 11,
+      "fixtures_attempted": 20,
       "c_inc8_equal": true,
       "objects": [
         {
           "name": "oracle-empty-output",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "b5755ea206e8c3607294260c17a2f01de8ac93325d89103e5856bfcc319770c3",
-          "symbols": {
-            "L1": {
-              "closure_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab",
-              "interface_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab"
-            },
-            "ref": {
-              "closure_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c",
-              "interface_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -252,23 +419,24 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":0,\"steps\":4}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab",
+              "interface_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab"
+            },
+            "ref": {
+              "closure_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c",
+              "interface_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c"
+            }
+          }
         },
         {
           "name": "oracle-empty-fault",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "9921c79836b9be667edaa6aa162127237ac99c5256c3973b03479cae2bd3f559",
-          "symbols": {
-            "L1": {
-              "closure_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734",
-              "interface_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734"
-            },
-            "ref": {
-              "closure_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181",
-              "interface_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -282,13 +450,32 @@
               "ok": true,
               "output": "{\"code\":4,\"payload\":0,\"steps\":2}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734",
+              "interface_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734"
+            },
+            "ref": {
+              "closure_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181",
+              "interface_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181"
+            }
+          }
         },
         {
           "name": "oracle-discard-return",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "0217762689e4944d8d959a516b95c335d6ea688e8ccad2fd7f87f7ccaab70eb8",
+          "runs": [
+            {
+              "input": "",
+              "budget": "100,0,32,1",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":0,\"steps\":5}"
+            }
+          ],
           "symbols": {
             "L1": {
               "closure_hash": "93148924fea7849935c56ab70a77664be9218db8f9b1e501b9353e1e86fd1ee2",
@@ -298,31 +485,43 @@
               "closure_hash": "622ca26e17519d6e64af5f64f8e0f9c3d9af6c5d36a97740de5d6cbc2b2f62f3",
               "interface_hash": "622ca26e17519d6e64af5f64f8e0f9c3d9af6c5d36a97740de5d6cbc2b2f62f3"
             }
-          },
+          }
+        },
+        {
+          "name": "atomic-nand",
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "7f965b4ed836ce1a8507f5169321791b4e533f0cb7f3f78c0c64b251789a5407",
           "runs": [
             {
               "input": "",
-              "budget": "100,0,32,1",
+              "budget": "100,0,32,8",
               "ok": true,
-              "output": "{\"code\":0,\"payload\":0,\"steps\":5}"
+              "output": "{\"code\":0,\"payload\":63,\"steps\":16}"
             }
-          ]
+          ],
+          "symbols": {
+            "G0": {
+              "closure_hash": "304a4b79978c26ac786890a8596cb309efa7eaa4fd35475b1f585bb7242b6223",
+              "interface_hash": "304a4b79978c26ac786890a8596cb309efa7eaa4fd35475b1f585bb7242b6223"
+            },
+            "L1": {
+              "closure_hash": "37da3ed6706f5e352993eb1a339434688c1a543df28b33b85e1fc411e789058f",
+              "interface_hash": "37da3ed6706f5e352993eb1a339434688c1a543df28b33b85e1fc411e789058f"
+            },
+            "ref": {
+              "closure_hash": "c55111b84ee5e99801d9947547fcec2dbaf65dd0d76d4f8d61eb22f501c6da85",
+              "interface_hash": "c55111b84ee5e99801d9947547fcec2dbaf65dd0d76d4f8d61eb22f501c6da85"
+            }
+          }
         },
         {
           "name": "pointer-as270",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "2c731bbcbf282cfd0119bc42feb53efcf624cdf1fa60942c0a9199222a8fa6bc",
-          "symbols": {
-            "L1": {
-              "closure_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362",
-              "interface_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362"
-            },
-            "ref": {
-              "closure_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a",
-              "interface_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -336,23 +535,24 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":1,\"steps\":5}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362",
+              "interface_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362"
+            },
+            "ref": {
+              "closure_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a",
+              "interface_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a"
+            }
+          }
         },
         {
           "name": "gep-index-obj",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "364640c0f4a947a93dc7d85db13ce68eba270ed435a1e6ee950e9b2a35542bcb",
-          "symbols": {
-            "L1": {
-              "closure_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f",
-              "interface_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f"
-            },
-            "ref": {
-              "closure_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534",
-              "interface_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -366,13 +566,32 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":8589934591,\"steps\":13}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f",
+              "interface_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f"
+            },
+            "ref": {
+              "closure_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534",
+              "interface_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534"
+            }
+          }
         },
         {
           "name": "gep-index-const",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "7e465780032222ca1d36c3a37295ad4ca9a86ee3f571db69c65f760688fb30e2",
+          "runs": [
+            {
+              "input": "",
+              "budget": "100,0,32,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":4294967296,\"steps\":9}"
+            }
+          ],
           "symbols": {
             "L1": {
               "closure_hash": "78ac77e0893585c119f90dc6ff7f2c9c65ba82d7593c770fa8c4a91996e360a1",
@@ -382,31 +601,14 @@
               "closure_hash": "591f1b48288e000c626c349165ead9ff9158c05c472c9c569bfec3dac42de091",
               "interface_hash": "591f1b48288e000c626c349165ead9ff9158c05c472c9c569bfec3dac42de091"
             }
-          },
-          "runs": [
-            {
-              "input": "",
-              "budget": "100,0,32,8",
-              "ok": true,
-              "output": "{\"code\":0,\"payload\":4294967296,\"steps\":9}"
-            }
-          ]
+          }
         },
         {
           "name": "inc8",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7",
-          "symbols": {
-            "L1": {
-              "closure_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e",
-              "interface_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e"
-            },
-            "ref": {
-              "closure_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a",
-              "interface_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a"
-            }
-          },
           "runs": [
             {
               "input": "0",
@@ -444,23 +646,24 @@
               "ok": true,
               "output": "{\"code\":3,\"payload\":0,\"steps\":1}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e",
+              "interface_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e"
+            },
+            "ref": {
+              "closure_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a",
+              "interface_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a"
+            }
+          }
         },
         {
           "name": "add2",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "a9660ece18422bc64557cb19f02d980339b44fa77b572e81dbc543716606f5d1",
-          "symbols": {
-            "L1": {
-              "closure_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285",
-              "interface_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285"
-            },
-            "ref": {
-              "closure_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a",
-              "interface_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a"
-            }
-          },
           "runs": [
             {
               "input": "200,100",
@@ -486,23 +689,24 @@
               "ok": true,
               "output": "{\"code\":3,\"payload\":0,\"steps\":1}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285",
+              "interface_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285"
+            },
+            "ref": {
+              "closure_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a",
+              "interface_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a"
+            }
+          }
         },
         {
           "name": "switch5",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "1adefd004c93443ff7814b939dc85dd609104ada65d54e5b98398f1448208280",
-          "symbols": {
-            "L1": {
-              "closure_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c",
-              "interface_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c"
-            },
-            "ref": {
-              "closure_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80",
-              "interface_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80"
-            }
-          },
           "runs": [
             {
               "input": "0",
@@ -552,29 +756,112 @@
               "ok": true,
               "output": "{\"code\":1,\"payload\":0,\"steps\":17}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c",
+              "interface_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c"
+            },
+            "ref": {
+              "closure_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80",
+              "interface_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80"
+            }
+          }
+        },
+        {
+          "name": "fp-aggregate",
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "1b06c23f4f195a7f8b6c2cc556c8f50495ddd7c395b55c1754dc54c980b7ce5a",
+          "runs": [
+            {
+              "input": "0x3ff0000000000000",
+              "budget": "100,0,32,1",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":1099511627521,\"steps\":10}"
+            }
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "4b221ed922ead2aba9c13f022d52a8505f7d11d7d384e2ea2803d25aafa96291",
+              "interface_hash": "4b221ed922ead2aba9c13f022d52a8505f7d11d7d384e2ea2803d25aafa96291"
+            },
+            "ref": {
+              "closure_hash": "1139edfe71a34500be515f3ff61380020ab781c254339eafbad172a94e095d69",
+              "interface_hash": "1139edfe71a34500be515f3ff61380020ab781c254339eafbad172a94e095d69"
+            }
+          }
+        }
+      ],
+      "deferred": [
+        {
+          "name": "binding-out-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 9, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-clock-read",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.3 device descriptor bindings (milestone 2) at define internal i8 @f() {\n  %c = load i64, ptr @__bennett_dev_clock_c, align 8\n  %n = add i64 %c, 1\n  store i64 %n, ptr @__bennett_dev_clock_c, align 8\n  %r = trunc i64 %c to i8\n  ret i8 %r\n}\n\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-block-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %r = load i8, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-console-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 120, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "entry-replay-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 mutable global entry-state replay (milestone 2) at   store i8 %v, ptr @g, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "indirectbr-two-blocks",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a716.4 scalar row (milestone 2) at   indirectbr ptr %dest, [label %one, label %two]\n",
+          "deferred": true
+        },
+        {
+          "name": "rung4-mini",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %n8 = load i8, ptr %p1, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "rung8-mini",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78 descriptor shape (milestone 2) at define internal i8 @mc() {\n  call void @__bennett_dev_entropy_read(ptr @buf, i64 1)\n  %b = load i8, ptr @buf, align 1\n  %c = icmp ult i8 %b, 77\n  %r = zext i1 %c to i8\n  ret i8 %r\n}\n\n",
+          "deferred": true
+        },
+        {
+          "name": "listsum",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 %i, ptr %node, align 1\n",
+          "deferred": true
         }
       ]
     },
     "23": {
-      "fixtures_passed": 9,
+      "fixtures_passed": 11,
+      "fixtures_attempted": 20,
       "c_inc8_equal": true,
       "objects": [
         {
           "name": "oracle-empty-output",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "b5755ea206e8c3607294260c17a2f01de8ac93325d89103e5856bfcc319770c3",
-          "symbols": {
-            "L1": {
-              "closure_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab",
-              "interface_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab"
-            },
-            "ref": {
-              "closure_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c",
-              "interface_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -600,23 +887,24 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":0,\"steps\":4}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab",
+              "interface_hash": "d74988a3bf5c3b43886ffbb7281e0af07cef1289e88f8eb878e5ea02cf3218ab"
+            },
+            "ref": {
+              "closure_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c",
+              "interface_hash": "358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c"
+            }
+          }
         },
         {
           "name": "oracle-empty-fault",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "9921c79836b9be667edaa6aa162127237ac99c5256c3973b03479cae2bd3f559",
-          "symbols": {
-            "L1": {
-              "closure_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734",
-              "interface_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734"
-            },
-            "ref": {
-              "closure_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181",
-              "interface_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -630,13 +918,32 @@
               "ok": true,
               "output": "{\"code\":4,\"payload\":0,\"steps\":2}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734",
+              "interface_hash": "4f9849a1cfa5faa00eb1247f3d3e3b7b43f5bf7f357eb3dd49d2904a613a2734"
+            },
+            "ref": {
+              "closure_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181",
+              "interface_hash": "863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181"
+            }
+          }
         },
         {
           "name": "oracle-discard-return",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "0217762689e4944d8d959a516b95c335d6ea688e8ccad2fd7f87f7ccaab70eb8",
+          "runs": [
+            {
+              "input": "",
+              "budget": "100,0,32,1",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":0,\"steps\":5}"
+            }
+          ],
           "symbols": {
             "L1": {
               "closure_hash": "93148924fea7849935c56ab70a77664be9218db8f9b1e501b9353e1e86fd1ee2",
@@ -646,31 +953,43 @@
               "closure_hash": "622ca26e17519d6e64af5f64f8e0f9c3d9af6c5d36a97740de5d6cbc2b2f62f3",
               "interface_hash": "622ca26e17519d6e64af5f64f8e0f9c3d9af6c5d36a97740de5d6cbc2b2f62f3"
             }
-          },
+          }
+        },
+        {
+          "name": "atomic-nand",
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "7f965b4ed836ce1a8507f5169321791b4e533f0cb7f3f78c0c64b251789a5407",
           "runs": [
             {
               "input": "",
-              "budget": "100,0,32,1",
+              "budget": "100,0,32,8",
               "ok": true,
-              "output": "{\"code\":0,\"payload\":0,\"steps\":5}"
+              "output": "{\"code\":0,\"payload\":63,\"steps\":16}"
             }
-          ]
+          ],
+          "symbols": {
+            "G0": {
+              "closure_hash": "304a4b79978c26ac786890a8596cb309efa7eaa4fd35475b1f585bb7242b6223",
+              "interface_hash": "304a4b79978c26ac786890a8596cb309efa7eaa4fd35475b1f585bb7242b6223"
+            },
+            "L1": {
+              "closure_hash": "37da3ed6706f5e352993eb1a339434688c1a543df28b33b85e1fc411e789058f",
+              "interface_hash": "37da3ed6706f5e352993eb1a339434688c1a543df28b33b85e1fc411e789058f"
+            },
+            "ref": {
+              "closure_hash": "c55111b84ee5e99801d9947547fcec2dbaf65dd0d76d4f8d61eb22f501c6da85",
+              "interface_hash": "c55111b84ee5e99801d9947547fcec2dbaf65dd0d76d4f8d61eb22f501c6da85"
+            }
+          }
         },
         {
           "name": "pointer-as270",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "2c731bbcbf282cfd0119bc42feb53efcf624cdf1fa60942c0a9199222a8fa6bc",
-          "symbols": {
-            "L1": {
-              "closure_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362",
-              "interface_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362"
-            },
-            "ref": {
-              "closure_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a",
-              "interface_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -684,23 +1003,24 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":1,\"steps\":5}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362",
+              "interface_hash": "e4cf50635b3e40980e54b7dce05a39f7811c436b3d52b6288604cf85fdc34362"
+            },
+            "ref": {
+              "closure_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a",
+              "interface_hash": "62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a"
+            }
+          }
         },
         {
           "name": "gep-index-obj",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "364640c0f4a947a93dc7d85db13ce68eba270ed435a1e6ee950e9b2a35542bcb",
-          "symbols": {
-            "L1": {
-              "closure_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f",
-              "interface_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f"
-            },
-            "ref": {
-              "closure_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534",
-              "interface_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534"
-            }
-          },
           "runs": [
             {
               "input": "",
@@ -714,13 +1034,32 @@
               "ok": true,
               "output": "{\"code\":0,\"payload\":8589934591,\"steps\":13}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f",
+              "interface_hash": "20ccf8632651eb6effb4b23865120948a42513b5b757a5bc822d230101e0697f"
+            },
+            "ref": {
+              "closure_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534",
+              "interface_hash": "5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534"
+            }
+          }
         },
         {
           "name": "gep-index-const",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "7e465780032222ca1d36c3a37295ad4ca9a86ee3f571db69c65f760688fb30e2",
+          "runs": [
+            {
+              "input": "",
+              "budget": "100,0,32,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":4294967296,\"steps\":9}"
+            }
+          ],
           "symbols": {
             "L1": {
               "closure_hash": "78ac77e0893585c119f90dc6ff7f2c9c65ba82d7593c770fa8c4a91996e360a1",
@@ -730,31 +1069,14 @@
               "closure_hash": "591f1b48288e000c626c349165ead9ff9158c05c472c9c569bfec3dac42de091",
               "interface_hash": "591f1b48288e000c626c349165ead9ff9158c05c472c9c569bfec3dac42de091"
             }
-          },
-          "runs": [
-            {
-              "input": "",
-              "budget": "100,0,32,8",
-              "ok": true,
-              "output": "{\"code\":0,\"payload\":4294967296,\"steps\":9}"
-            }
-          ]
+          }
         },
         {
           "name": "inc8",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7",
-          "symbols": {
-            "L1": {
-              "closure_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e",
-              "interface_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e"
-            },
-            "ref": {
-              "closure_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a",
-              "interface_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a"
-            }
-          },
           "runs": [
             {
               "input": "0",
@@ -792,23 +1114,24 @@
               "ok": true,
               "output": "{\"code\":3,\"payload\":0,\"steps\":1}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e",
+              "interface_hash": "a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e"
+            },
+            "ref": {
+              "closure_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a",
+              "interface_hash": "151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a"
+            }
+          }
         },
         {
           "name": "add2",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "a9660ece18422bc64557cb19f02d980339b44fa77b572e81dbc543716606f5d1",
-          "symbols": {
-            "L1": {
-              "closure_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285",
-              "interface_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285"
-            },
-            "ref": {
-              "closure_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a",
-              "interface_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a"
-            }
-          },
           "runs": [
             {
               "input": "200,100",
@@ -834,23 +1157,24 @@
               "ok": true,
               "output": "{\"code\":3,\"payload\":0,\"steps\":1}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285",
+              "interface_hash": "ad2332d5edae1d26b1c946a0d9f033c10c6e493be11c44ef5f910f548b3b2285"
+            },
+            "ref": {
+              "closure_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a",
+              "interface_hash": "5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a"
+            }
+          }
         },
         {
           "name": "switch5",
           "check": true,
           "fixture_equal": true,
+          "hash_fixture_equal": true,
           "object_hash": "1adefd004c93443ff7814b939dc85dd609104ada65d54e5b98398f1448208280",
-          "symbols": {
-            "L1": {
-              "closure_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c",
-              "interface_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c"
-            },
-            "ref": {
-              "closure_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80",
-              "interface_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80"
-            }
-          },
           "runs": [
             {
               "input": "0",
@@ -900,11 +1224,168 @@
               "ok": true,
               "output": "{\"code\":1,\"payload\":0,\"steps\":17}"
             }
-          ]
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c",
+              "interface_hash": "84e502d9807b1947e93d4314fab40f65bcb2a3f42735daa08cd05c8cd15ccf2c"
+            },
+            "ref": {
+              "closure_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80",
+              "interface_hash": "0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80"
+            }
+          }
+        },
+        {
+          "name": "fp-aggregate",
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "1b06c23f4f195a7f8b6c2cc556c8f50495ddd7c395b55c1754dc54c980b7ce5a",
+          "runs": [
+            {
+              "input": "0x3ff0000000000000",
+              "budget": "100,0,32,1",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":1099511627521,\"steps\":10}"
+            }
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "4b221ed922ead2aba9c13f022d52a8505f7d11d7d384e2ea2803d25aafa96291",
+              "interface_hash": "4b221ed922ead2aba9c13f022d52a8505f7d11d7d384e2ea2803d25aafa96291"
+            },
+            "ref": {
+              "closure_hash": "1139edfe71a34500be515f3ff61380020ab781c254339eafbad172a94e095d69",
+              "interface_hash": "1139edfe71a34500be515f3ff61380020ab781c254339eafbad172a94e095d69"
+            }
+          }
+        }
+      ],
+      "deferred": [
+        {
+          "name": "binding-out-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 9, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-clock-read",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.3 device descriptor bindings (milestone 2) at define internal i8 @f() {\n  %c = load i64, ptr @__bennett_dev_clock_c, align 8\n  %n = add i64 %c, 1\n  store i64 %n, ptr @__bennett_dev_clock_c, align 8\n  %r = trunc i64 %c to i8\n  ret i8 %r\n}\n\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-block-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %r = load i8, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "binding-console-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 120, ptr %p, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "entry-replay-byte",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 mutable global entry-state replay (milestone 2) at   store i8 %v, ptr @g, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "indirectbr-two-blocks",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a716.4 scalar row (milestone 2) at   indirectbr ptr %dest, [label %one, label %two]\n",
+          "deferred": true
+        },
+        {
+          "name": "rung4-mini",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %n8 = load i8, ptr %p1, align 1\n",
+          "deferred": true
+        },
+        {
+          "name": "rung8-mini",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78 descriptor shape (milestone 2) at define internal i8 @mc() {\n  call void @__bennett_dev_entropy_read(ptr @buf, i64 1)\n  %b = load i8, ptr @buf, align 1\n  %c = icmp ult i8 %b, 77\n  %r = zext i1 %c to i8\n  ret i8 %r\n}\n\n",
+          "deferred": true
+        },
+        {
+          "name": "listsum",
+          "lowered": false,
+          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 %i, ptr %node, align 1\n",
+          "deferred": true
         }
       ]
     }
   },
+  "runtime_abi_probe": [
+    {
+      "case": "spec-sem2-adj",
+      "major": 18,
+      "plugin_used": false,
+      "change": "local probe only: remove ABI 0.2 budget argument; use ABI v0 declaration; same opaque runtime binary",
+      "current": {
+        "exit_O0": 87,
+        "exit_O3": 87,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nFAULT host-segv\n"
+      },
+      "legacy": {
+        "exit_O0": 0,
+        "exit_O3": 0,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 0\nIN 1\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 1\nIN 2\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 2\nIN 3\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 3\n"
+      }
+    },
+    {
+      "case": "spec-sem2-adj",
+      "major": 23,
+      "plugin_used": false,
+      "change": "local probe only: remove ABI 0.2 budget argument; use ABI v0 declaration; same opaque runtime binary",
+      "current": {
+        "exit_O0": 87,
+        "exit_O3": 87,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nFAULT host-segv\n"
+      },
+      "legacy": {
+        "exit_O0": 0,
+        "exit_O3": 0,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 0\nIN 1\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 1\nIN 2\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 2\nIN 3\nQALLOC H0 0 1\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nADJ F\nGATE 2 H0 0\nGATE 3 H0 0\nGATE 5 H0 0\nEND ADJ\nQFREE H0\nRET 3\n"
+      }
+    },
+    {
+      "case": "spec-sem2-compute",
+      "major": 18,
+      "plugin_used": false,
+      "change": "local probe only: remove ABI 0.2 budget argument; use ABI v0 declaration; same opaque runtime binary",
+      "current": {
+        "exit_O0": 87,
+        "exit_O3": 87,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nFAULT host-segv\n"
+      },
+      "legacy": {
+        "exit_O0": 0,
+        "exit_O3": 0,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 0\nIN 1\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 1\nIN 2\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 2\nIN 3\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 3\n"
+      }
+    },
+    {
+      "case": "spec-sem2-compute",
+      "major": 23,
+      "plugin_used": false,
+      "change": "local probe only: remove ABI 0.2 budget argument; use ABI v0 declaration; same opaque runtime binary",
+      "current": {
+        "exit_O0": 87,
+        "exit_O3": 87,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nFAULT host-segv\n"
+      },
+      "legacy": {
+        "exit_O0": 0,
+        "exit_O3": 0,
+        "trace_O0": "IN 0\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 0\nIN 1\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 1\nIN 2\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 2\nIN 3\nQALLOC H0 0 1\nQALLOC H1 0 1\nGATE 2 H0 0\nCOMPUTE F F\nGATE2 1 H0 0 H1 0\nGATE 7 H1 0\nGATE2 1 H0 0 H1 0\nEND COMPUTE\nGATE 2 H0 0\nGATE 1 H0 0\nQFREE H1\nQFREE H0\nRET 3\n"
+      }
+    }
+  ],
   "step_checks": {
     "inc8": {
       "cases": 256,
@@ -923,11 +1404,39 @@
       "target_fault": "XOR delivery is independent of their entry values"
     }
   },
+  "step_check_provenance": "Previous pass: same byte-identical inc8/switch5 objects; not re-run in M1b. add2 exhaustive exceeded 60s.",
+  "red_green": {
+    "pin_gate": "raw 0.2.7 pin: 66/63/3 per major before classification; retained .tmp/gate-repin-red.json",
+    "PT5": "value-set assertion failed on pt5-range-load on both majors, then {1,3} passed",
+    "analysis_edges": "before fix 1/4 passed; after fix 4/4 on each major",
+    "materialisation": "before interface 0/4; after scalar N-rule implementation 4/4 on each major",
+    "scalar": "fp-aggregate failed unsupported aggregate/FP carrier, atomic-nand failed unsupported memory; both now reproduce complete published object/hash/run",
+    "descriptors": "missing descriptor-reference option failed; derived inc8 object now byte-identical on both majors",
+    "gate_policy": "missing classify API failed; seven policy assertions now pass, including new-failure and changed-exit mutations",
+    "all_lifts": "attempting all lifts exposed silent device-shape fallback; now explicit \u00a78.3 unimplemented M2"
+  },
+  "spec_corpus_scalar_inventory": {
+    "spec-sem-adj": "quantum action; M3",
+    "spec-sem-compute": "quantum action; M3",
+    "spec-sem-ctrl": "quantum action; M3",
+    "spec-sem2-adj": "quantum action; M3; trace blocked bp-c2i",
+    "spec-sem2-compute": "quantum action; M3; trace blocked bp-c2i",
+    "spec-sem2-ctrl": "quantum action; M3",
+    "scalar_oracle_cases": []
+  },
+  "objects_without_lift": {
+    "arena-o1": "\u00a710 TDL / \u00a716.2 hidden arena pointer and \u00a716.4 memory; M3",
+    "entry-stack": "\u00a78.5/\u00a717.3 replay-adoption fixed linked runtime microvector; \u00a716.4 load/store/alloc/direct calls; M2"
+  },
   "limits": [
-    "CMake unavailable: dual-major direct builds verified; superbuild unverified",
-    "L4 only checks content identity across the plugin, not cross-stock-pipeline materialised equivalence",
-    "L1 compares optimised pre/post plugin; full \u00a712 materialisation and production objects remain incomplete",
-    "Descriptor-driven whole-program oracle/CC lowering, full reference analysis edge cases and complete \u00a719.9 outputs remain open",
-    "Optional add2 exhaustive step-check exceeded 60 seconds; its object/check/hash and all stated run vectors pass"
+    "M1 remains open: production descriptor/CC launch/object path and complete \u00a719.9 outputs are not implemented; descriptor-reference emits reference objects only.",
+    "CMake is absent; llvm-config/g++ builds pass both majors; CMake superbuild remains unverified (bp-ahz).",
+    "L4 checks key stability across the plugin, not full cross-pipeline materialised equivalence; full \u00a712 normalisation and independent residual validation remain open.",
+    "M1 reference-analysis audit remains open: general modular PT2 images, subbyte lane packing/composite ops, full atomic/cmpxchg rules, exact host/boundary/generation-sensitive tier seeding.",
+    "FP carriers/constant aggregate packing are mapped; FP arithmetic is not \u00a713-materialised. fp-rot-fastmath-reassoc requires i128 conversion/soft-float helper closure/native comparison linking: deferred M2.",
+    "Standalone scalar global layout is the documented fixture layout (data from 4096, heap at next page); general comparison-link layout and caller-entry memory replay remain unavailable.",
+    "All 20 published lift blocks attempted: 11 checked exactly, 9 explicitly unavailable M2. Two object-only integration microvectors are separately inventoried.",
+    "Clang C plus opt envelope only; rustc/Julia/full frontend-LTO coverage remains open.",
+    "No full conformance, blocked status-3 object generation, or production accept verdict is claimed."
   ]
 }
