@@ -18,7 +18,7 @@ struct Scalar {
  Module &m;Function &f;
  std::map<const Value *,std::string> names;
  std::vector<std::string> regs,lines;
- unsigned constants=0,temps=0;
+ unsigned constants=0,temps=0,expressions=0;
  unsigned width(Type *t){
   if(t->isIntegerTy()&&t->getIntegerBitWidth()<=128)return t->getIntegerBitWidth();
   if(t->isPointerTy())return m.getDataLayout().getPointerTypeSizeInBits(t);
@@ -33,7 +33,12 @@ struct Scalar {
   if(isa<UndefValue>(v)||isa<PoisonValue>(v)||isa<ConstantPointerNull>(v))return constant(APInt(width(v->getType()),0));
   if(auto *c=dyn_cast<ConstantInt>(v))return constant(c->getValue());
   if(auto *c=dyn_cast<ConstantExpr>(v)) {
-   if(c->getOpcode()==Instruction::GetElementPtr)return gep(cast<GEPOperator>(c),"");
+   if(c->getOpcode()==Instruction::GetElementPtr)return gep(cast<GEPOperator>(c),"expr"+std::to_string(expressions++));
+   if(c->isCast()) {
+    auto a=value(c->getOperand(0));unsigned from=width(c->getOperand(0)->getType()),to=width(c->getType());
+    if(from==to)return a;
+    return temp(to,std::string(from<to?"lift.zext.i":"lift.trunc.i")+std::to_string(to)+" "+a);
+   }
    unimplemented("§16.4 constant expression",2,v);
   }
   if(names.count(v))return names[v];
@@ -72,8 +77,50 @@ APInt off(i,0);
  std::string body(){
   unsigned k=0;for(Argument &a:f.args())names[&a]="a"+std::to_string(k++);
   k=0;for(Instruction &i:instructions(f))if(!i.getType()->isVoidTy())names[&i]="v"+std::to_string(k++);
-  if(f.size()!=1)unimplemented("§16.4 branches/phi/switch",2,&f);
-  for(Instruction &i:instructions(f)) {
+  std::map<BasicBlock *,unsigned> blockIndex; k=0;for(BasicBlock &b:f)blockIndex[&b]=k++;
+  auto blockName=[&](BasicBlock *b){return std::string("^b")+std::to_string(blockIndex[b]);};
+  auto moves=[&](BasicBlock *from,BasicBlock *to) {
+   std::vector<std::string> dst,src;
+   for(PHINode &phi:to->phis()){dst.push_back(names[&phi]);src.push_back(value(phi.getIncomingValueForBlock(from)));dest(names[&phi],width(phi.getType()));}
+   if(!dst.empty())lines.push_back("("+join(dst)+") = lift.parmov ("+join(src)+")");
+  };
+  for(BasicBlock &bb:f) {
+  lines.push_back(blockName(&bb)+"():");
+  std::set<BasicBlock *> edgeBlocks;
+  auto target=[&](BasicBlock *b){if(b->phis().empty())return blockName(b);edgeBlocks.insert(b);return blockName(&bb)+".e"+std::to_string(blockIndex[b]);};
+  for(Instruction &i:bb) {
+   if(isa<PHINode>(i))continue;
+   if(auto *br=dyn_cast<BranchInst>(&i)) {
+    if(br->isUnconditional()||br->getSuccessor(0)==br->getSuccessor(1)){moves(&bb,br->getSuccessor(0));lines.push_back("qjump "+blockName(br->getSuccessor(0)));}
+    else {auto cond=value(br->getCondition());auto yes=target(br->getSuccessor(0)),no=target(br->getSuccessor(1));lines.push_back("qbranch "+cond+" "+yes+" "+no);}continue;
+   }
+   if(auto *sw=dyn_cast<SwitchInst>(&i)) {
+    std::string cond=value(sw->getCondition()),fallback=target(sw->getDefaultDest());
+    std::vector<std::pair<APInt,std::string>> keys;
+    for(auto c:sw->cases())keys.emplace_back(c.getCaseValue()->getValue(),target(c.getCaseSuccessor()));
+    std::sort(keys.begin(),keys.end(),[](auto &a,auto &b){return a.first.ult(b.first);});
+    // Allocate compare blocks in creation order; emit rows in that same order.
+    std::vector<std::string> ids={blockName(&bb)};std::vector<std::vector<std::string>> chunks(1);
+    auto newBlock=[&](){unsigned n=ids.size();ids.push_back(blockName(&bb)+".s"+std::to_string(n));chunks.emplace_back();return n;};
+    std::function<void(int,int,unsigned)> tree=[&](int lo,int hi,unsigned cur){
+     size_t begin=lines.size();
+     if(hi<lo)lines.push_back("qjump "+fallback);
+     else if(hi-lo+1<=3){
+      for(int j=lo;j<=hi;++j){auto c=constant(keys[j].first);auto t=temp(1,"lift.icmp.eq "+cond+" "+c);
+       unsigned next=j<hi?newBlock():0;lines.push_back("qbranch "+t+" "+keys[j].second+" "+(j<hi?ids[next]:fallback));
+       chunks[cur].insert(chunks[cur].end(),lines.begin()+begin,lines.end());lines.resize(begin);cur=next;
+      }return;
+     }else {int mid=(lo+hi)/2;auto c=constant(keys[mid].first);auto t=temp(1,"lift.icmp.ult "+cond+" "+c);unsigned l=newBlock(),r=newBlock();
+      lines.push_back("qbranch "+t+" "+ids[l]+" "+ids[r]);chunks[cur].insert(chunks[cur].end(),lines.begin()+begin,lines.end());lines.resize(begin);
+      tree(lo,mid-1,l);tree(mid,hi,r);return;}
+     chunks[cur].insert(chunks[cur].end(),lines.begin()+begin,lines.end());lines.resize(begin);
+    };
+    // Destinations must be numbered by output text order, not DFS recursion order.
+    // Build shape above, then remap constants/temps by first appearance below.
+    tree(0,(int)keys.size()-1,0);
+    for(unsigned n=0;n<chunks.size();++n){if(n)lines.push_back(ids[n]+"():");lines.insert(lines.end(),chunks[n].begin(),chunks[n].end());}
+    continue;
+   }
    if(auto *g=dyn_cast<GetElementPtrInst>(&i)){gep(cast<GEPOperator>(g),names[&i]);continue;}
    if(auto *r=dyn_cast<ReturnInst>(&i)){auto v=r->getReturnValue()?value(r->getReturnValue()):"r";lines.push_back("lift.ret "+v);continue;}
    if(isa<UnreachableInst>(i)){lines.push_back("fault 4");continue;}
@@ -106,10 +153,24 @@ APInt off(i,0);
    else unimplemented("§16.4 scalar row",2,&i);
    dest(names[&i],width(i.getType()));lines.push_back(names[&i]+" = "+row);
   }
+  std::vector<BasicBlock *> sortedEdges(edgeBlocks.begin(),edgeBlocks.end());
+  std::sort(sortedEdges.begin(),sortedEdges.end(),[&](auto *a,auto *b){return blockIndex[a]<blockIndex[b];});
+  for(auto *b:sortedEdges){lines.push_back(blockName(&bb)+".e"+std::to_string(blockIndex[b])+"():");moves(&bb,b);lines.push_back("qjump "+blockName(b));}
+  }
+  // Canonical first-destination order also renumbers compare-tree rows emitted
+  // in creation order. Phi destinations are listed only once.
+  std::map<std::string,unsigned> widths;for(auto &r:regs){auto at=r.find(":reg[");widths[r.substr(0,at)]=std::stoul(r.substr(at+5));}
+  std::map<std::string,std::string> renames;unsigned cn=0,tn=0;
+  for(auto &line:lines){auto eq=line.find(" = ");if(eq==std::string::npos)continue;auto dst=line.substr(0,eq);if(dst.size()>1&&(dst[0]=='c'||dst[0]=='t')&&std::isdigit(dst[1])&&!renames.count(dst))renames[dst]=std::string(1,dst[0])+std::to_string(dst[0]=='c'?cn++:tn++);}
+  std::vector<std::string> finalRegs;std::set<std::string> declared;
+  for(auto &line:lines){std::string replaced;std::regex token(R"(\b[ct][0-9]+\b)");size_t last=0;
+   for(std::sregex_iterator it(line.begin(),line.end(),token),end;it!=end;++it){replaced+=line.substr(last,it->position()-last);replaced+=renames.count(it->str())?renames[it->str()]:it->str();last=it->position()+it->length();}replaced+=line.substr(last);line=replaced;
+   auto eq=line.find(" = ");if(eq!=std::string::npos){std::string dst=line.substr(0,eq);std::regex loc(R"([A-Za-z]+[0-9]+)");for(std::sregex_iterator it(dst.begin(),dst.end(),loc),end;it!=end;++it){auto n=it->str();if(!declared.insert(n).second)continue;unsigned w=widths[n];for(auto &r:renames)if(r.second==n){w=widths[r.first];break;}finalRegs.push_back(n+":reg["+std::to_string(w)+"]");}}}
+  regs=finalRegs;
   std::vector<std::string> params;for(Argument &a:f.args())params.push_back(names[&a]+":reg["+std::to_string(width(a.getType()))+"]");
   std::string b="lproc @L1 ("+join(params)+") (r:reg["+std::to_string(width(f.getReturnType()))+"]) () () ()\n";
   if(!regs.empty())b+="regs { "+join(regs)+" }\n";
-  b+="^b0():\n"+join(lines,"\n");return b;
+  b+=join(lines,"\n");return b;
  }
 };
 void lowerScalar(Module &m,Function &f,StringRef desc,StringRef out,unsigned stackCells) {

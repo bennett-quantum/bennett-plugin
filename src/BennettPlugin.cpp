@@ -19,6 +19,7 @@ cl::opt<std::string> ISA("bennett-isa",cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
 cl::opt<std::string> Report("bennett-report");
 cl::opt<bool> AnalysisOnly("bennett-analysis-only",cl::desc("Non-production S1-S5 report; emits no device object"));
+cl::opt<bool> LegalityAudit("bennett-legality-audit",cl::desc("Test-only §21.1 legacy spike ABI; requires analysis-only"));
 cl::opt<bool> Prelink("bennett-pre-link",cl::desc("Explicit pre-link phase: do nothing"));
 cl::opt<bool> Closed("bennett-closed-unit");
 cl::opt<std::string> Oracle("bennett-oracle");
@@ -33,9 +34,10 @@ namespace bennett {
 [[noreturn]] void unimplemented(StringRef sec,unsigned n,const Value *v) {
  fail("unimplemented",(sec+" (milestone "+Twine(n)+")").str(),v);
 }
+bool auditLegality(){return LegalityAudit;}
 const std::map<std::string,std::string> &markers() {
  // Compact types: v=void, p=ptr AS0, b=i1, w=i32, n=i64, d=double.
- static const std::map<std::string,std::string> names={
+ static std::map<std::string,std::string> names={
  {"__bennett_qalloc","pnn"},{"__bennett_qborrow","pnn"},
  {"__bennett_qfree","vp"},{"__bennett_gate","vwpn"},
  {"__bennett_gate2","vwpnpn"},{"__bennett_gate3","vwpnpnpn"},
@@ -48,16 +50,17 @@ const std::map<std::string,std::string> &markers() {
  {"__bennett_effect_console_write","vpn"},{"__bennett_effect_clock_read","vp"},
  {"__bennett_effect_entropy_read","vpn"},{"__bennett_effect_block_read","vnp"},
  {"__bennett_effect_block_write","vnp"}};
+ if(LegalityAudit)names["__bennett_ctrl_v"]="vnpnn";
  return names;
 }
 std::vector<unsigned> regionOperands(StringRef n) {
- if(n=="__bennett_ctrl") return {2};
+ if(n=="__bennett_ctrl"||n=="__bennett_ctrl_v") return {2};
  if(n=="__bennett_compute"||n=="__bennett_inplace") return {0,1};
  if(n=="__bennett_adj"||n=="__bennett_reversible"||n=="__bennett_oracle")return {0};
  return {};
 }
 std::vector<unsigned> handleOperands(StringRef n) {
- if(n=="__bennett_qfree"||n=="__bennett_measure"||n=="__bennett_qprep"||n=="__bennett_ctrl")return {0};
+ if(n=="__bennett_qfree"||n=="__bennett_measure"||n=="__bennett_qprep"||n=="__bennett_ctrl"||n=="__bennett_ctrl_v")return {0};
  if(n=="__bennett_gate"||n=="__bennett_rot")return {1};
  if(n=="__bennett_gate2")return {1,3};
  if(n=="__bennett_gate3")return {1,3,5};
@@ -77,7 +80,7 @@ static FunctionType *signature(LLVMContext &c,const std::string &s,bool var=fals
 static void attributes(AttributeList attrs,const Value *v) {
  for(unsigned idx:attrs.indexes()) for(Attribute a:attrs.getAttributes(idx)) {
   if(a.isStringAttribute())continue;
-  StringRef n=a.getKindAsString();
+  StringRef n=Attribute::getNameFromAttrKind(a.getKindAsEnum());
   bool fn=idx==AttributeList::FunctionIndex;
   static const std::set<std::string> functionAttrs={"nounwind","nonlazybind","uwtable","strictfp","cold","hot","nomerge","noinline","convergent","builtin","nobuiltin","optsize","minsize","optnone"};
   static const std::set<std::string> valueAttrs={"noundef","nonnull","range","zeroext","signext"};
@@ -105,13 +108,22 @@ static void recognise(Module &m) {
   }
  for(Function &f:m) if(auto it=markers().find(f.getName().str());it!=markers().end()) {
   auto *expected=signature(m.getContext(),it->second);
+  bool variadicProbe=LegalityAudit&&f.getName()=="__bennett_ctrl_v";
+  if(LegalityAudit){
+   static const std::map<std::string,std::string> legacy={{"__bennett_ctrl","vnpnn"},{"__bennett_adj","vpp"},{"__bennett_compute","vppp"},{"__bennett_reversible","vpnp"},{"__bennett_inplace","vppp"},{"__bennett_ctrl_v","vnpnn"}};
+   auto it=legacy.find(f.getName().str());if(it!=legacy.end()){
+    // The spike control begins with ptr, i64, ptr, i64.
+    auto sig=it->second;if(f.getName()=="__bennett_ctrl")sig="vpnpnp";if(variadicProbe)sig="vpnpn";
+    auto *old=signature(m.getContext(),sig,variadicProbe);if(f.getFunctionType()==old)expected=old;
+   }
+  }
   bool kr=f.isVarArg()&&f.arg_empty()&&f.getReturnType()==expected->getReturnType();
   for(User *u:f.users())if(auto *cb=dyn_cast<CallBase>(u)) {
    if((f.getFunctionType()!=expected&&!kr)||
     (cb->getFunctionType()!=expected&&!(kr&&cb->getFunctionType()==signature(m.getContext(),it->second,true)))||
-    cb->arg_size()!=expected->getNumParams()||cb->getCallingConv()!=CallingConv::C||
+    (!variadicProbe&&cb->arg_size()!=expected->getNumParams())||(variadicProbe&&cb->arg_size()<expected->getNumParams())||cb->getCallingConv()!=CallingConv::C||
     f.getCallingConv()!=CallingConv::C||cb->hasOperandBundles())fail("BD-E-MARKER-SIGNATURE","§3.5",cb);
-   for(unsigned i=0;i<cb->arg_size();++i)if(cb->getArgOperand(i)->getType()!=expected->getParamType(i))
+   for(unsigned i=0;i<expected->getNumParams();++i)if(cb->getArgOperand(i)->getType()!=expected->getParamType(i))
     fail("BD-E-MARKER-SIGNATURE","§3.5 argument type",cb);
   }
  }
@@ -143,9 +155,22 @@ static void checkVersion(Module &m) {
   if(!s||s->getString()!="0.2.6")fail("BD-E-VERSION","§19.9 module flag");
  }
 }
+static void checkOperands(Module &m) {
+ unsigned classes=0;if(auto *md=dyn_cast_or_null<MDNode>(m.getModuleFlag("bennett.classes")))classes=md->getNumOperands();
+ for(Function &f:m)for(Instruction &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction()) {
+  auto n=g->getName();unsigned max=0;
+  if(n=="__bennett_gate")max=8;else if(n=="__bennett_gate2"||n=="__bennett_rot")max=3;else if(n=="__bennett_gate3")max=1;
+  if(max)if(auto *op=dyn_cast<ConstantInt>(c->getArgOperand(0));op&&(op->isZero()||op->getValue().ugt(max)))fail("BD-E-OPERAND","§3.4 operation code",c);
+  if(n=="__bennett_qalloc"||n=="__bennett_qborrow") {
+   if(auto *cls=dyn_cast<ConstantInt>(c->getArgOperand(0));cls&&cls->getValue().ugt(classes))fail("BD-E-OPERAND","§3.4 class",c);
+   if(auto *width=dyn_cast<ConstantInt>(c->getArgOperand(1));width&&width->isZero())fail("BD-E-OPERAND","§3.4 width zero",c);
+  }
+ }
+}
 struct BennettPass:PassInfoMixin<BennettPass> {
  PreservedAnalyses run(Module &m,ModuleAnalysisManager &) {
   if(Prelink)return PreservedAnalyses::all();
+  if(LegalityAudit&&!AnalysisOnly)fail("test mode","legality-audit requires analysis-only; never production");
   recognise(m);checkVersion(m);
   Analysis a(m);a.run();a.checkHandles();a.checkRegions();
   if(!Report.empty()) {
@@ -153,10 +178,15 @@ struct BennettPass:PassInfoMixin<BennettPass> {
    o<<formatv("{0:2}\n",json::Value(a.report()));
   }
   if(AnalysisOnly) {errs()<<"bennett: analysis-only: S1-S5 complete; no production artefact\n";return PreservedAnalyses::none();}
+  checkOperands(m);
   if(Output.empty())fail("output","§19.9 -bennett-out is required");
   if(!Oracle.empty()) {
    auto *f=m.getFunction(Oracle);if(!f||f->isDeclaration())fail("input","oracle function missing");
    lowerScalar(m,*f,Shape,Output,StackCells);return PreservedAnalyses::none();
+  }
+  for(Function &f:m)if(a.tiers[&f].count("R"))fail("unimplemented","§25.1 BLK-5 (blocked: bp-is0)",&f);
+  for(Function &f:m)for(Instruction &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g&&(g->getName()=="__bennett_qalloc"||g->getName()=="__bennett_qborrow")) {
+   auto width=a.get(c->getArgOperand(1));if(width.top)fail("unimplemented","§25.1 BLK-1 (blocked: bp-2tw)",c);
   }
   for(Function &f:m)if(a.tiers[&f].count("CC"))unimplemented("§17.4 CC/marker event lowering",3,&f);
   return PreservedAnalyses::none();

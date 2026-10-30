@@ -29,7 +29,7 @@ bool AV::merge(const AV &v) {
  bool change=false;
  if(v.top&&!top){top=true;change=true;}
  for(auto &a:v.atoms)if(!(top&&a.kind==Atom::Int))change|=atoms.insert(a).second;
- unsigned n=0;for(auto &a:atoms)n+=a.kind==Atom::Int;
+ unsigned n=0;if(atoms.size()>4096)for(auto &a:atoms)n+=a.kind==Atom::Int;
  if(n>4096){top=true;change=true;}
  if(top)for(auto i=atoms.begin();i!=atoms.end();)if(i->kind==Atom::Int)i=atoms.erase(i);else ++i;
  return change;
@@ -81,6 +81,7 @@ std::string regionKey(Function *f) {
 }
 AV Analysis::get(const Value *v) {
  if(auto *c=dyn_cast<ConstantInt>(v))return integer(c->getValue());
+ if(isa<ConstantFP>(v)){AV a;a.top=true;return a;}
  if(isa<ConstantPointerNull>(v))return integer(APInt(M.getDataLayout().getPointerSizeInBits(),0));
  if(auto *f=dyn_cast<Function>(v))return atom(Atom::Fn,f);
  if(auto *g=dyn_cast<GlobalVariable>(v))return atom(Atom::Ptr,g);
@@ -116,10 +117,10 @@ static bool overlaps(const Atom &p,const Slot &s,uint64_t size) {
  for(int64_t d=-(int64_t)size+1;d<(int64_t)s.bytes;++d)if((p.offset-s.offset-d)%stride==0)return true;
  return false;
 }
-void Analysis::store(const AV &v,const AV &p,uint64_t size) {
+void Analysis::store(const AV &v,const AV &p,uint64_t size,bool filled) {
  for(auto &a:p.atoms)if(a.kind==Atom::Ptr) {
-  for(auto &s:slots)if(s.object==a.object&&s.offset==a.offset&&s.stride==a.stride&&s.bytes==size){changed|=s.value.merge(v);goto next;}
-  slots.push_back({a.object,a.offset,a.stride,size,v});changed=true;
+  for(auto &s:slots)if(s.object==a.object&&s.offset==a.offset&&s.stride==a.stride&&s.bytes==size&&s.filled==filled){changed|=s.value.merge(v);goto next;}
+  slots.push_back({a.object,a.offset,a.stride,size,v,filled});changed=true;
   next:;
  }
 }
@@ -130,6 +131,11 @@ AV Analysis::load(const AV &p,Type *t) {
   if(!a.object){r.top=true;continue;}
   bool partial=false;
   for(auto &s:slots)if(overlaps(a,s,size)) {
+   if(s.filled&&a.stride==0&&s.stride==0&&a.offset>=s.offset&&a.offset+(int64_t)size<=s.offset+(int64_t)s.bytes&&t->isIntegerTy()) {
+    AV decoded;decoded.top=s.value.top;
+    for(auto &x:s.value.atoms)if(x.kind==Atom::Int){APInt bits(t->getIntegerBitWidth(),0);for(unsigned b=0;b<size;++b)bits|=x.integer.zextOrTrunc(bits.getBitWidth()).shl(b*8);decoded.merge(integer(bits));}
+    r.merge(decoded);continue;
+   }
    bool exact=a.stride==0&&s.stride==0&&a.offset==s.offset&&size==s.bytes;
    bool sameClass=size==s.bytes&&((a.offset-s.offset)%(int64_t)size==0)&&
      (a.stride==0||a.stride%(int64_t)size==0)&&(s.stride==0||s.stride%(int64_t)size==0);
@@ -162,16 +168,91 @@ std::set<Function *> Analysis::candidates(Value *v,FunctionType *type) {
 void Analysis::bind(CallBase &c,Function *f) {
  if(!f||f->isDeclaration())return;
  edges[c.getFunction()].insert(f);
- unsigned i=0;for(Argument &a:f->args()){if(i<c.arg_size())changed|=values[&a].merge(get(c.getArgOperand(i)));++i;}
- for(BasicBlock &b:*f)if(auto *r=dyn_cast<ReturnInst>(b.getTerminator()))if(r->getReturnValue())changed|=values[&c].merge(get(r->getReturnValue()));
+ unsigned i=0;for(Argument &a:f->args()){if(i<c.arg_size()){if(a.getType()->isAggregateType()||a.getType()->isVectorTy())copyFields(&a,c.getArgOperand(i));else changed|=values[&a].merge(get(c.getArgOperand(i)));}++i;}
+ for(BasicBlock &b:*f)if(auto *r=dyn_cast<ReturnInst>(b.getTerminator()))if(r->getReturnValue()){if(c.getType()->isAggregateType()||c.getType()->isVectorTy())copyFields(&c,r->getReturnValue());else changed|=values[&c].merge(get(r->getReturnValue()));}
 }
 static bool allocation(const Function *f) {
  if(!f)return false;
  static const std::set<std::string> names={"malloc","calloc","realloc","aligned_alloc","posix_memalign","memalign","strdup","strndup","_Znwm","_Znam","_ZnwmRKSt9nothrow_t","_ZnamRKSt9nothrow_t","_ZnwmSt11align_val_t","_ZnamSt11align_val_t","__rust_alloc","__rust_alloc_zeroed","__rust_realloc","julia.gc_alloc_obj","ijl_gc_alloc_typed","jl_gc_alloc","ijl_gc_small_alloc","ijl_gc_big_alloc","__bennett_nz_alloc"};
  return names.count(f->getName().str())||f->hasFnAttribute(Attribute::AllocSize)||f->hasFnAttribute(Attribute::AllocKind);
 }
+struct Leaf { std::vector<unsigned> path; uint64_t offset; Type *type; };
+static std::vector<Leaf> leaves(Type *t,const DataLayout &dl) {
+ std::vector<Leaf> result;
+ std::function<void(Type *,std::vector<unsigned>,uint64_t)> walk=[&](Type *ty,std::vector<unsigned> p,uint64_t offset){
+  if(auto *st=dyn_cast<StructType>(ty)){auto *layout=dl.getStructLayout(st);for(unsigned i=0;i<st->getNumElements();++i){auto q=p;q.push_back(i);walk(st->getElementType(i),q,offset+layout->getElementOffset(i));}}
+  else if(auto *at=dyn_cast<ArrayType>(ty)){for(unsigned i=0;i<at->getNumElements();++i){auto q=p;q.push_back(i);walk(at->getElementType(),q,offset+i*dl.getTypeAllocSize(at->getElementType()).getKnownMinValue());}}
+  else if(auto *vt=dyn_cast<FixedVectorType>(ty)){unsigned bits=dl.getTypeSizeInBits(vt->getElementType()).getKnownMinValue();for(unsigned i=0;i<vt->getNumElements();++i){auto q=p;q.push_back(i);walk(vt->getElementType(),q,offset+i*bits/8);}}
+  else result.push_back({p,offset,ty});
+ };walk(t,{},0);return result;
+}
+AV Analysis::field(const Value *v,const Path &path) {
+ if(path.empty())return get(v);
+ if(auto *c=dyn_cast<Constant>(v)){Constant *cur=const_cast<Constant *>(c);for(unsigned n:path){cur=cur->getAggregateElement(n);if(!cur){AV a;a.top=true;return a;}}return get(cur);}
+ return fields[{v,path}];
+}
+void Analysis::setField(const Value *v,const Path &path,const AV &a){if(path.empty())changed|=values[v].merge(a);else changed|=fields[{v,path}].merge(a);changed|=values[v].merge(a);}
+void Analysis::copyFields(const Value *dst,const Value *src){for(auto &l:leaves(dst->getType(),M.getDataLayout()))setField(dst,l.path,field(src,l.path));}
+bool Analysis::composite(Instruction &i) {
+ const auto &dl=M.getDataLayout();
+ if(auto *e=dyn_cast<ExtractValueInst>(&i)) {
+  Path prefix(e->idx_begin(),e->idx_end());for(auto &l:leaves(i.getType(),dl)){auto p=prefix;p.insert(p.end(),l.path.begin(),l.path.end());setField(&i,l.path,field(e->getAggregateOperand(),p));}return true;
+ }
+ if(auto *e=dyn_cast<InsertValueInst>(&i)) {
+  Path prefix(e->idx_begin(),e->idx_end());
+  for(auto &l:leaves(i.getType(),dl)){bool inserted=l.path.size()>=prefix.size()&&std::equal(prefix.begin(),prefix.end(),l.path.begin());
+   Path sub=inserted?Path(l.path.begin()+prefix.size(),l.path.end()):l.path;
+   setField(&i,l.path,field(inserted?e->getInsertedValueOperand():e->getAggregateOperand(),sub));}return true;
+ }
+ if(auto *e=dyn_cast<ExtractElementInst>(&i)) {
+  auto idx=get(e->getIndexOperand());auto *vt=cast<FixedVectorType>(e->getVectorOperand()->getType());
+  for(unsigned k=0;k<vt->getNumElements();++k){bool possible=idx.top;for(auto &x:idx.atoms)possible|=x.kind==Atom::Int&&x.integer==k;if(possible)setField(&i,{},field(e->getVectorOperand(),{k}));}return true;
+ }
+ if(auto *e=dyn_cast<InsertElementInst>(&i)) {
+  auto idx=get(e->getOperand(2));unsigned n=cast<FixedVectorType>(i.getType())->getNumElements();
+  for(unsigned k=0;k<n;++k){bool possible=idx.top,other=idx.top;for(auto &x:idx.atoms)if(x.kind==Atom::Int){possible|=x.integer==k;other|=x.integer!=k;}
+   if(other)setField(&i,{k},field(e->getOperand(0),{k}));if(possible)setField(&i,{k},get(e->getOperand(1)));}return true;
+ }
+ if(auto *sh=dyn_cast<ShuffleVectorInst>(&i)) {
+  auto mask=sh->getShuffleMask();unsigned n=cast<FixedVectorType>(sh->getOperand(0)->getType())->getNumElements();
+  for(unsigned k=0;k<mask.size();++k){int j=mask[k];if(j<0)setField(&i,{k},integer(APInt(dl.getTypeSizeInBits(cast<VectorType>(i.getType())->getElementType()).getKnownMinValue(),0)));
+   else setField(&i,{k},field(sh->getOperand(j>=n?1:0),{(unsigned)j%n}));}return true;
+ }
+ if(auto *st=dyn_cast<StoreInst>(&i);st&&(st->getValueOperand()->getType()->isAggregateType()||st->getValueOperand()->getType()->isVectorTy())) {
+  auto ptr=get(st->getPointerOperand());
+  for(auto &l:leaves(st->getValueOperand()->getType(),dl)){AV p;for(auto x:ptr.atoms){if(x.kind==Atom::Ptr)x.offset+=l.offset;p.atoms.insert(x);}p.top=ptr.top;store(field(st->getValueOperand(),l.path),p,dl.getTypeStoreSize(l.type).getKnownMinValue());}return true;
+ }
+ if(!(i.getType()->isAggregateType()||i.getType()->isVectorTy()))return false;
+ if(auto *l=dyn_cast<LoadInst>(&i)) {
+  auto ptr=get(l->getPointerOperand());for(auto &leaf:leaves(i.getType(),dl)){AV p;for(auto x:ptr.atoms){if(x.kind==Atom::Ptr)x.offset+=leaf.offset;p.atoms.insert(x);}p.top=ptr.top;setField(&i,leaf.path,load(p,leaf.type));}return true;
+ }
+ if(auto *p=dyn_cast<PHINode>(&i)){for(Value *v:p->incoming_values())copyFields(&i,v);return true;}
+ if(auto *s=dyn_cast<SelectInst>(&i)){copyFields(&i,s->getTrueValue());copyFields(&i,s->getFalseValue());return true;}
+ if(isa<FreezeInst>(i)){copyFields(&i,i.getOperand(0));return true;}
+ if(auto *c=dyn_cast<BitCastInst>(&i)) {
+  auto src=leaves(c->getOperand(0)->getType(),dl),dst=leaves(c->getType(),dl);
+  if(src.size()==dst.size()){for(unsigned k=0;k<src.size();++k)if(dl.getTypeSizeInBits(src[k].type)!=dl.getTypeSizeInBits(dst[k].type))unimplemented("§5 PT10 vector bit resegmentation",1,c);
+   for(unsigned k=0;k<src.size();++k)setField(&i,dst[k].path,field(c->getOperand(0),src[k].path));return true;}
+  unimplemented("§5 PT10 vector bit resegmentation",1,c);
+ }
+ if(isa<CallBase>(i))return false; // PT9 binds leaf paths below.
+ unimplemented("§5 PT10 composite operation",1,&i);
+}
+// Solve additive integer cycles directly. Flow-insensitive PT3/PT5/PT7 includes
+// every iteration, even when a source branch bounds executions. An additive cycle
+// with period >4096 therefore reaches normative TOP; this is exact acceleration,
+// not a precision-changing widening.
+static bool longAdditiveCycle(Value *value,Value *source) {
+ auto *b=dyn_cast<BinaryOperator>(value);if(!b||!b->getType()->isIntegerTy())return false;
+ if(b->getOpcode()!=Instruction::Add&&b->getOpcode()!=Instruction::Sub)return false;
+ ConstantInt *c=nullptr;
+ if(b->getOperand(0)==source)c=dyn_cast<ConstantInt>(b->getOperand(1));
+ else if(b->getOpcode()==Instruction::Add&&b->getOperand(1)==source)c=dyn_cast<ConstantInt>(b->getOperand(0));
+ return c&&!c->isZero()&&c->getBitWidth()-c->getValue().countr_zero()>12;
+}
 void Analysis::step(Instruction &i) {
  AV a;
+ if(composite(i))return;
  if(isa<AllocaInst>(i))a=atom(Atom::Ptr,&i);
  else if(auto *g=dyn_cast<GetElementPtrInst>(&i)) {
   auto base=get(g->getPointerOperand());
@@ -194,9 +275,15 @@ APInt off(bits,0);
   AV r;for(auto p:a.atoms){if(p.kind==Atom::Ptr)p.offset+=off.getSExtValue();r.atoms.insert(p);}r.top=a.top;a=r;
  }else if(auto *l=dyn_cast<LoadInst>(&i))a=load(get(l->getPointerOperand()),l->getType());
  else if(auto *s=dyn_cast<StoreInst>(&i)) {
-  if(s->getValueOperand()->getType()->isAggregateType()||s->getValueOperand()->getType()->isVectorTy())unimplemented("§5 PT7 aggregate/vector memory",2,s);
-  store(get(s->getValueOperand()),get(s->getPointerOperand()),M.getDataLayout().getTypeStoreSize(s->getValueOperand()->getType()).getKnownMinValue());
- }else if(auto *p=dyn_cast<PHINode>(&i))for(Value *v:p->incoming_values())a.merge(get(v));
+  
+  AV written=get(s->getValueOperand());
+  if(auto *b=dyn_cast<BinaryOperator>(s->getValueOperand()))for(Value *operand:b->operands())
+   if(auto *l=dyn_cast<LoadInst>(operand);l&&l->getPointerOperand()==s->getPointerOperand()&&longAdditiveCycle(b,l)&&!get(l).atoms.empty())written.top=true;
+  store(written,get(s->getPointerOperand()),M.getDataLayout().getTypeStoreSize(s->getValueOperand()->getType()).getKnownMinValue());
+ }else if(auto *p=dyn_cast<PHINode>(&i)) {
+  for(Value *v:p->incoming_values())a.merge(get(v));
+  if(!a.atoms.empty())for(Value *v:p->incoming_values())if(longAdditiveCycle(v,p))a.top=true;
+ }
  else if(auto *s=dyn_cast<SelectInst>(&i)){a=get(s->getTrueValue());a.merge(get(s->getFalseValue()));}
  else if(auto *c=dyn_cast<CastInst>(&i)) {
   a=get(c->getOperand(0));
@@ -214,25 +301,29 @@ APInt off(bits,0);
    AV src=get(mem->getSource()),dst=get(mem->getDest());auto *len=dyn_cast<ConstantInt>(mem->getLength());
    auto snapshot=slots;
    for(auto s:snapshot)for(auto &p:src.atoms)if(p.kind==Atom::Ptr&&p.object==s.object)for(auto &d:dst.atoms)if(d.kind==Atom::Ptr){
-    if(len&&p.stride==0&&d.stride==0&&s.stride==0&&s.offset>=p.offset&&s.offset+(int64_t)s.bytes<=p.offset+(int64_t)len->getZExtValue())store(s.value,atom(Atom::Ptr,d.object,d.offset+s.offset-p.offset),s.bytes);
+    if(len&&p.stride==0&&d.stride==0&&s.stride==0&&s.offset>=p.offset&&s.offset+(int64_t)s.bytes<=p.offset+(int64_t)len->getZExtValue())store(s.value,atom(Atom::Ptr,d.object,d.offset+s.offset-p.offset),s.bytes,s.filled);
     else if(!len||overlaps(p,s,len->getZExtValue())){AV partial;partial.top=true;for(auto &x:s.value.atoms)if(x.kind==Atom::Root)partial.atoms.insert(x);store(partial,atom(Atom::Ptr,d.object,d.offset,-1),s.bytes);}
    }
-  }else if(isa<MemSetInst>(c))unimplemented("§5 PT8 byte fills",2,c);
+  }else if(auto *fill=dyn_cast<MemSetInst>(c)) {
+   auto *len=dyn_cast<ConstantInt>(fill->getLength());auto p=get(fill->getDest());
+   if(len&&len->getValue().getActiveBits()<63)store(get(fill->getValue()),p,len->getZExtValue(),true);
+   else {AV top;top.top=true;AV dst;for(auto x:p.atoms){if(x.kind==Atom::Ptr)x.stride=-1;dst.atoms.insert(x);}store(top,dst,1);}
+  }
   else if(allocation(f)){a=atom(Atom::Ptr,c);if(n=="posix_memalign"){store(a,get(c->getArgOperand(0)),M.getDataLayout().getPointerSize());a.top=true;}}
   else if(f&&!f->isDeclaration())bind(*c,f);
   else if(!f) {for(auto *g:candidates(c->getCalledOperand(),c->getFunctionType()))bind(*c,g);}
   else if(!markers().count(n.str())&&!f->isIntrinsic()) {
    a.top=true;
-   for(Value *v:c->args())for(auto &p:get(v).atoms)if(p.kind==Atom::Ptr) {
-    AV top;top.top=true;store(top,atom(Atom::Ptr,p.object,0,-1),1);
-   }
+   std::set<const Value *> reachable;for(Value *v:c->args())for(auto &p:get(v).atoms)if(p.kind==Atom::Ptr)reachable.insert(p.object);
+   bool more=true;while(more){more=false;for(auto &slot:slots)if(reachable.count(slot.object))for(auto &p:slot.value.atoms)if(p.kind==Atom::Ptr)more|=reachable.insert(p.object).second;}
+   for(auto *obj:reachable){AV top;top.top=true;store(top,atom(Atom::Ptr,obj,0,-1),1);}
   }
   if(f&&markers().count(n.str()))for(unsigned pos:regionOperands(n)) {
    bool oracle=n=="__bennett_oracle"||n=="__bennett_inplace";
    auto *rt=FunctionType::get(Type::getVoidTy(M.getContext()),{PointerType::get(M.getContext(),0)},false);
    for(auto *g:candidates(c->getArgOperand(pos),oracle?nullptr:rt))if(!g->isDeclaration()) {
     // Region edges bind env, but do not inherit the caller tier.
-    if(!oracle&&g->arg_size()==1)changed|=values[&*g->arg_begin()].merge(get(c->getArgOperand(c->arg_size()-1)));
+    if(!oracle&&g->arg_size()==1)changed|=values[&*g->arg_begin()].merge(get(c->getArgOperand(n=="__bennett_ctrl_v"?4:c->arg_size()-1)));
    }
   }
  }else if(isa<BinaryOperator>(i)||isa<ICmpInst>(i)) {
@@ -266,7 +357,16 @@ APInt off(bits,0);
    }
   }
   done:;
- }else if(i.getType()->isVectorTy()||i.getType()->isAggregateType())unimplemented("§5 PT10 vector/aggregate lanes",2,&i);
+  if(isa<ICmpInst>(i)&&a.atoms.empty()&&(x.top||y.top||!x.atoms.empty()||!y.atoms.empty())){a.top=false;a.merge(integer(APInt(1,0)));a.merge(integer(APInt(1,1)));}
+ }
+ if(a.top&&i.getType()->isIntegerTy())if(auto *md=i.getMetadata(LLVMContext::MD_range)) {
+  AV range;bool bounded=true;
+  for(unsigned n=0;n+1<md->getNumOperands();n+=2){auto *lo=mdconst::dyn_extract<ConstantInt>(md->getOperand(n));auto *hi=mdconst::dyn_extract<ConstantInt>(md->getOperand(n+1));
+   if(!lo||!hi||lo->getValue().uge(hi->getValue())||(hi->getValue()-lo->getValue()).ugt(4096)){bounded=false;break;}
+   for(APInt v=lo->getValue();v!=hi->getValue();++v)range.merge(integer(v));
+  }
+  if(bounded){for(auto &x:a.atoms)if(x.kind!=Atom::Int)range.atoms.insert(x);a=range;}
+ }
  changed|=values[&i].merge(a);
 }
 void Analysis::run() {
@@ -284,7 +384,7 @@ void Analysis::run() {
  for(Function &f:M)for(Instruction &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())
   for(unsigned p:handleOperands(g->getName()))for(auto &x:get(c->getArgOperand(p)).atoms)if(x.kind==Atom::Root)live.insert(x.object);
  auto prune=[&](AV &v){for(auto it=v.atoms.begin();it!=v.atoms.end();)if(it->kind==Atom::Root&&isa<Argument>(it->object)&&!live.count(it->object))it=v.atoms.erase(it);else ++it;};
- for(auto &e:values)prune(e.second);for(auto &s:slots)prune(s.value);
+ for(auto &e:values)prune(e.second);for(auto &e:fields)prune(e.second);for(auto &s:slots)prune(s.value);
  // Tiers and graph are derived from the same fixed candidate/ROOT solution.
  std::map<Function *,std::set<Function *>> full=edges;
  for(Function &f:M)if(!f.isDeclaration()) {
@@ -311,16 +411,23 @@ void Analysis::checkHandles() {
  for(Function &f:M)for(Instruction &i:instructions(f)) {
   for(unsigned k=0;k<i.getNumOperands();++k) {
    Value *v=i.getOperand(k);if(!get(v).roots())continue;bool good=false;
-   if(isa<PHINode>(i)||isa<FreezeInst>(i)||isa<ReturnInst>(i))good=true;
+   if(isa<PHINode>(i)||isa<FreezeInst>(i)||isa<ReturnInst>(i)||isa<InsertValueInst>(i)||isa<ExtractValueInst>(i)||isa<ShuffleVectorInst>(i))good=true;
+   if(isa<InsertElementInst>(i))good=k!=2;
+   if(isa<ExtractElementInst>(i))good=k==0;
    if(isa<SelectInst>(i))good=k!=0;
    if(auto *c=dyn_cast<CastInst>(&i))good=(c->getOpcode()==Instruction::PtrToInt&&c->getType()->isIntegerTy(pw))||
     (c->getOpcode()==Instruction::IntToPtr&&c->getOperand(0)->getType()->isIntegerTy(pw))||
-    (c->getOpcode()==Instruction::BitCast&&M.getDataLayout().getTypeSizeInBits(c->getType())==pw);
+    (c->getOpcode()==Instruction::BitCast&&M.getDataLayout().getTypeSizeInBits(c->getType())==M.getDataLayout().getTypeSizeInBits(c->getOperand(0)->getType()));
    if(auto *cmp=dyn_cast<ICmpInst>(&i))good=cmp->isEquality()&&(get(cmp->getOperand(1-k)).roots()||isa<ConstantPointerNull>(cmp->getOperand(1-k))||PatternMatch::match(cmp->getOperand(1-k),PatternMatch::m_Zero()));
    if(auto *s=dyn_cast<StoreInst>(&i))good=k==0;
    if(auto *c=dyn_cast<CallBase>(&i)) {
     Function *g=resolve(c->getCalledOperand());
     good=g&&!g->isDeclaration()&&k<c->arg_size();
+    if(!g&&k<c->arg_size()) {
+     auto rr=candidates(c->getCalledOperand(),c->getFunctionType());good=!rr.empty();
+     for(auto *target:rr)good&=!target->isDeclaration();
+     if(!good)fail("BD-E-HANDLE-ESCAPE","§6.4 opaque indirect argument",c);
+    }
     if(g&&markers().count(g->getName().str()))for(unsigned p:handleOperands(g->getName()))good|=k==p;
     if(!good&&g&&g->isDeclaration()&&!markers().count(g->getName().str()))fail("BD-E-HANDLE-ESCAPE","§6.4 external argument",c);
    }
@@ -328,11 +435,12 @@ void Analysis::checkHandles() {
   }
   if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())for(unsigned p:handleOperands(g->getName()))if(!get(c->getArgOperand(p)).roots())fail("BD-E-HANDLE-UNTRACKED","§6.2",c);
   if(auto *l=dyn_cast<LoadInst>(&i);l&&get(l).roots()) {
-   if(!l->getType()->isPointerTy()&&!l->getType()->isIntegerTy(pw))fail("BD-E-HANDLE-USE","§6.2 partial handle read",l);
+   Type *lt=l->getType()->isVectorTy()?cast<VectorType>(l->getType())->getElementType():l->getType();
+   if(!lt->isPointerTy()&&!lt->isIntegerTy(pw))fail("BD-E-HANDLE-USE","§6.2 partial handle read",l);
    auto p=get(l->getPointerOperand());for(auto &x:p.atoms)for(auto &s:slots)if(s.value.roots()&&overlaps(x,s,M.getDataLayout().getTypeStoreSize(l->getType()).getKnownMinValue()))
-    if(s.bytes!=pw/8||(x.stride==0&&s.stride==0&&x.offset!=s.offset))fail("BD-E-HANDLE-USE","§6.2 overlapping read",l);
+    if(s.bytes!=pw/8||(x.stride==0&&s.stride==0&&(s.offset-x.offset)%(int64_t)(pw/8)!=0))fail("BD-E-HANDLE-USE","§6.2 overlapping read",l);
   }
-  if(auto *r=dyn_cast<ReturnInst>(&i);r&&r->getReturnValue()&&get(r->getReturnValue()).roots()&&!f.hasLocalLinkage())fail("BD-E-HANDLE-ESCAPE","§6.4 exported return",r);
+  if(auto *r=dyn_cast<ReturnInst>(&i);r&&r->getReturnValue()&&get(r->getReturnValue()).roots()&&!f.hasLocalLinkage()&&!tiers[&f].count("CC"))fail("BD-E-HANDLE-ESCAPE","§6.4 exported return",r);
  }
  for(auto &s:slots)if(!s.object&&s.value.roots())fail("BD-E-HANDLE-ESCAPE","§6.4 EXT slot");
  // Reachable pointee slots crossing opaque calls are also escapes.

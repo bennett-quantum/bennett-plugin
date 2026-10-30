@@ -9,6 +9,7 @@
 namespace bennett {
 [[noreturn]] void fail(llvm::StringRef code, llvm::StringRef section, const llvm::Value *at=nullptr);
 [[noreturn]] void unimplemented(llvm::StringRef section, unsigned milestone, const llvm::Value *at=nullptr);
+bool auditLegality();
 const std::map<std::string, std::string> &markers();
 std::vector<unsigned> regionOperands(llvm::StringRef name);
 std::vector<unsigned> handleOperands(llvm::StringRef name);
@@ -28,16 +29,22 @@ struct AV {
  bool merge(const AV &v);
  bool roots() const;
 };
-struct Slot { const llvm::Value *object; int64_t offset,stride; uint64_t bytes; AV value; };
+struct Slot { const llvm::Value *object; int64_t offset,stride; uint64_t bytes; AV value; bool filled=false; };
 class Analysis {
  llvm::Module &M;
  bool changed=false;
  std::map<const llvm::Value *,AV> values;
  std::vector<Slot> slots;
+ using Path = std::vector<unsigned>;
+ std::map<std::pair<const llvm::Value *,Path>,AV> fields;
+ AV field(const llvm::Value *,const Path &);
+ void setField(const llvm::Value *,const Path &,const AV &);
+ void copyFields(const llvm::Value *,const llvm::Value *);
+ bool composite(llvm::Instruction &);
  std::map<llvm::Function *, std::set<llvm::Function *>> edges;
  void seed(llvm::Constant *,const llvm::Value *,int64_t,llvm::Type *);
  void step(llvm::Instruction &);
- void store(const AV &,const AV &,uint64_t);
+ void store(const AV &,const AV &,uint64_t,bool filled=false);
  AV load(const AV &,llvm::Type *);
  void bind(llvm::CallBase &,llvm::Function *);
 public:
