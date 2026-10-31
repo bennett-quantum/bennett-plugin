@@ -661,6 +661,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if(auto *u=dyn_cast<User>(v))for(Value *a:u->operands())visit(a);
   };
   for(auto *g:closure) for(Instruction &i:instructions(g))for(Value *v:i.operands())visit(v);
+  bool entropyPositionUsed=used.count(m.getGlobalVariable("__bennett_dev_entropy_pos",true));
   auto deviceGlobal = [&](StringRef suffix) -> GlobalVariable * {
     auto *g = m.getGlobalVariable("__bennett_dev_" + suffix.str(), true);
     if (!g) g = new GlobalVariable(m, Type::getInt64Ty(m.getContext()),false,GlobalValue::InternalLinkage,
@@ -769,6 +770,9 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     memSigs.push_back("{\"A\":" + std::to_string(deviceSize) + ",\"W\":8,\"role\":\"in\"}");
     auto p = prologue("lift.addr @e0"); devStore("entropy_base", p);
     auto n = prologue("lift.const.i64 " + std::to_string(uint64_t(1) << deviceSize)); devStore("entropy_size", n);
+    // Preserve the already published plugin bytes of an unused model binding.
+    // A consuming closure (the §16.8 linked model) starts pos at its data image.
+    if(!entropyPositionUsed) {auto z=prologue("lift.const.i64 0");devStore("entropy_pos",z);}
 
   } else if (device == "BLOCK") {
     if (deviceSize > 54) fail("shape", "BLOCK extent exceeds address space");

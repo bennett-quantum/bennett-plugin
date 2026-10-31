@@ -32,4 +32,5 @@ for major in 18 23; do
   python3 "$root/tests/production_lifts.py" --major "$major" --case entry-replay-byte --case rung4-mini --case rung8-mini --case listsum --case shadow-n24
 done
 python3 "$root/tests/production_cross_major.py"
+python3 "$root/tests/prior_objects.py"
 python3 "$root/tests/corpus_gate.py"
