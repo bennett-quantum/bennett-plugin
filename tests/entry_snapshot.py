@@ -14,14 +14,14 @@ def source(region,setup,argument='0',mutation='',result=7,second=None):
  call='call void @__bennett_oracle(ptr @f, ptr null, ptr %desc)'
  return region+'\ndefine i64 @top(i64 %n) {\n%q = call ptr @__bennett_qalloc(i64 0, i64 8)\n%fault = call ptr @__bennett_qalloc(i64 0, i64 4)\n%desc = alloca [64 x i8], align 8\n'+setup+'\n'+descriptor(fields)+'\n'+call+'\n'+measure('a')+'\n'+call+'\n'+mutation+'\n'+call+'\n'+measure('b')+'\n'+call+'\ncall void @__bennett_qfree(ptr %fault)\ncall void @__bennett_qfree(ptr %q)\n%r = add i64 %ar7, %br7\nret i64 %r\n}\n'+DECL+'\ndeclare i1 @__bennett_measure(ptr, i64)\ndeclare ptr @__bennett_nz_alloc(i64)\ndeclare void @__bennett_nz_free(ptr)\n'
 
-def stack_witness(body,second,fault=0):
+def stack_witness(body,second,fault=0,first=7):
  # These deterministic witnesses clear the observed target/fault basis bits
  # with X, so each distinct metadata state needs only one expensive replay.
  # The global/heap witnesses separately exercise oracle involution pairs.
  call='call void @__bennett_oracle(ptr @f, ptr null, ptr @record)'
  parts=body.split(call);assert len(parts)==5
  clear=lambda q,n:'\n'.join(f'call void @__bennett_gate(i32 1, ptr %{q}, i64 {i})' for i in range(8) if n>>i&1)
- return parts[0]+call+parts[1]+clear('q',7)+parts[2]+call+parts[3]+clear('q',second)+'\n'+clear('fault',fault)+parts[4]
+ return parts[0]+call+parts[1]+clear('q',first)+parts[2]+call+parts[3]+clear('q',second)+'\n'+clear('fault',fault)+parts[4]
 
 def cases():
  yield 'global',source('@g = global i8 1\ndefine i8 @f(i64 %unused) { %v = load i8, ptr @g\n store i8 99, ptr @g\n ret i8 %v }','store i8 7, ptr @g',mutation='store i8 11, ptr @g'),[(0,18)]
@@ -37,6 +37,9 @@ def cases():
  many=first.replace('define i64 @top','define i64 @first')+second[begin:end].replace('define i64 @top','define i64 @second')
  yield 'several-entries',many,[(0,{'first':18,'second':30})]
  yield 'heap-history',source('define i8 @f(ptr %p) { %v = load i8, ptr %p\n store i8 99, ptr %p\n ret i8 %v }','%dead = call ptr @__bennett_nz_alloc(i64 3)\ncall void @__bennett_nz_free(ptr %dead)\n%zero = call ptr @__bennett_nz_alloc(i64 0)\n%p = call ptr @__bennett_nz_alloc(i64 %n)\nstore i8 7, ptr %p\n%addr = ptrtoint ptr %p to i64','%addr','store i8 11, ptr %p'),[(1,18),(5,18)]
+ address=source('define i8 @f(ptr %p) { %bits = ptrtoint ptr %p to i64\n%v = trunc i64 %bits to i8\nret i8 %v }',
+  '%dead = call ptr @__bennett_nz_alloc(i64 3)\ncall void @__bennett_nz_free(ptr %dead)\n%p = call ptr @__bennett_nz_alloc(i64 0)\n%addr = ptrtoint ptr %p to i64','%addr')
+ yield 'address-observation',address,[(0,6)]
  yield 'allocator-only',source('define i8 @f(i64 %unused) { %p = call ptr @__bennett_nz_alloc(i64 0)\n %addr = ptrtoint ptr %p to i64\n %v = trunc i64 %addr to i8\n ret i8 %v }','%p = call ptr @__bennett_nz_alloc(i64 %n)\ncall void @__bennett_nz_free(ptr %p)\n%z = call ptr @__bennett_nz_alloc(i64 0)',mutation='%later = call ptr @__bennett_nz_alloc(i64 2)'),[(0,6),(3,10)]
 
  # Logical table, dynamic allocation, save/restore and stack adoption all cross
@@ -66,6 +69,12 @@ def cases():
  at=dead.index('%br7 =');end=dead.index('\n',at);dead=dead[:end]+'\n'+observation+dead[end:]
  dead=dead.replace('%r = add i64 %ar7, %br7','%partial = add i64 %ar7, %br7\n%r = add i64 %partial, %code')
  yield 'dead-entry',dead,[(0,1792)]
+ saved=source('define i8 @f(i64 %expected) { %point = inttoptr i64 %expected to ptr\ncall void @__bennett_rt_ss_restore(ptr %point)\n%p = call ptr @__bennett_rt_ss_save()\n%x = ptrtoint ptr %p to i64\n%eq = icmp eq i64 %x, %expected\n%v = zext i1 %eq to i8\nret i8 %v }',
+  '%frame = call ptr @__bennett_rt_ss_push(i64 1, i64 1)\n%saved = call ptr @__bennett_rt_ss_save()\n%addr = ptrtoint ptr %saved to i64','%addr')
+ saved='@record = global [64 x i8] zeroinitializer, align 8\n'+saved.replace('%desc = alloca [64 x i8], align 8\n','').replace('%desc','@record')
+ saved+='\ndeclare ptr @__bennett_rt_ss_push(i64, i64)\ndeclare ptr @__bennett_rt_ss_save()\ndeclare void @__bennett_rt_ss_restore(ptr)\n'
+ yield 'save-state',stack_witness(saved,1,first=1),[(0,2)]
+
 
 
 
@@ -74,7 +83,7 @@ def main():
  for name,body,vectors in cases():
   if a.case and name not in a.case:continue
   d=R/f'.tmp/entry-snapshot/{a.major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True);ll=d/'input.ll';ll.write_text(body);out=d/'out'
-  heap,sstack=(48,24) if name in ('logical-stack','popped-frame','restored-allocation') else (0,0) if name in ('global','handle-input','several-entries') else (16,0)
+  heap,sstack=(48,24) if name in ('logical-stack','popped-frame','restored-allocation','save-state') else (0,0) if name in ('global','handle-input','several-entries') else (16,0)
   z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=1000000,{heap},4096,16,{sstack}','-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:continue
   row['check']=True;row['runs']=[]
@@ -84,6 +93,12 @@ def main():
    for n,expected in vectors:
     if isinstance(expected,dict):expected=expected[entry]
     z=run([REF,'run-program',obj,entry,'--args',','.join([str(n)]+[str(t['steps']) for t in tokens]),'--budget',f'10000000,{heap},4096,16']);v=json.loads(z.stdout) if z.returncode==0 else {};row['runs'].append({'entry':entry,'n':n,'result':v,'error':z.stderr,'ok':v.get('status')=='COMPLETED' and v.get('results')==[{'type':'i64','value':str(expected)}]})
+  if name=='address-observation':
+   # §8.5 expressly makes allocation-derived address observations an
+   # allocator-state dependency, even when the closure has no load or alloc.
+   reference=(out/'top/oracle-0/ref.bennett').read_text()
+   row['complete_history_interface']='s0:region[' in reference and 'lift.alloc' in reference and 'lift.free' in reference
+   row['check'] &= row['complete_history_interface']
   row['ok']=row['check'] and all(r['ok'] for r in row['runs']);print(name,row['ok'],flush=True)
  report={'major':a.major,'isa_ref':str(REF),'isa_ref_sha256':hashlib.sha256(REF.read_bytes()).hexdigest(),'cases':rows};(R/f'.tmp/entry-snapshot-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return not all(r.get('ok') for r in rows)
 if __name__=='__main__':raise SystemExit(main())

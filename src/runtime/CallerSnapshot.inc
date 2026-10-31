@@ -75,12 +75,12 @@
     std::set<Function *> seen;std::function<void(Function *)> visit=[&](Function *g) {
       if(!g || g->isDeclaration() || !seen.insert(g).second)return;
       for(auto &i:instructions(g)) {
-        dependency|=isa<AllocaInst>(i);
+        dependency|=isa<AllocaInst>(i) || isa<PtrToIntInst>(i);
         Value *p=nullptr;if(auto *l=dyn_cast<LoadInst>(&i))p=l->getPointerOperand();if(auto *st=dyn_cast<StoreInst>(&i))p=st->getPointerOperand();
         if(p) {auto *base=getUnderlyingObject(p);if(auto *global=dyn_cast<GlobalVariable>(base))dependency|=!global->isConstant() && (uncertainWrites || callerWrites.count(global));else dependency|=!privateInputs.count(base);}
 
         if(auto *c=dyn_cast<CallBase>(&i)) {
-          if(auto *t=c->getCalledFunction())dependency|=t->getName()=="__bennett_nz_alloc" || t->getName()=="__bennett_nz_free";
+          if(auto *t=c->getCalledFunction())dependency|=t->getName()=="__bennett_nz_alloc" || t->getName()=="__bennett_nz_free" || t->getName().starts_with("__bennett_rt_ss_");
           if(auto *target=c->getCalledFunction())visit(target);
           else for(auto *target:a.candidates(c->getCalledOperand(),c->getFunctionType()))visit(target);
         }
