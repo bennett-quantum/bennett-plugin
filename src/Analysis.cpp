@@ -1590,7 +1590,10 @@ void Analysis::run() {
       }
       for(auto *g:edges[f])changed|=host.insert(g).second;
       if(markersHere)changed|=entries.insert(f).second;
-      seedParameters(f,entries.count(f));
+      // A non-local launch boundary may only stash its handle for a later
+      // entry. Seed that candidate ROOT before solving the cross-entry memory
+      // paths; §6.6 pruning removes it unless it actually reaches a handle use.
+      seedParameters(f,entries.count(f) || !f->hasLocalLinkage());
     }
     for(Function &f:M)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
       if(auto *g=call->getCalledFunction())for(unsigned p:regionOperands(g->getName()))
