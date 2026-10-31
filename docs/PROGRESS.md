@@ -1,3 +1,154 @@
+# Fourth pass — 2026-10-31 (partial item 1; M1 acceptance open)
+
+Code/tests landed in **95fa83f**. Accepted dialect remains **0.2.10 @ 023f5a7**, ISA **0.8**. No re-pin,
+no new M2 deferral, no push. This pass extends item 1; it does **not** finish
+item 1 or claim delivery of items 2–3. Production descriptor/CC launches,
+host replacement and records remain unimplemented (bp-2zv). All eight missing
+lifts and both object-only vectors remain acceptance obligations.
+
+## New red→green evidence
+
+- Analysis edges: **12/12 → 17/17** per major. Pointer atomic xchg now
+  stores FN/ROOT operands; min/max use the unconditional N9/PT3 select union;
+  undefined shuffle masks select lane zero; runtime memmove/memset have the
+  same PT8 transfer as their intrinsic spellings.
+- Address images: **0/3 → 6/6** per major, including host-escape, pointer round-trip
+  and PT3 address-space-copy checks. Constant GEPs with a narrow index retain aligned low-bit wrap images
+  (I=8, alignment=16, +16 gives offsets 16 and -240). Narrow pointer
+  representations and widened pointer integers retain originating object `*`,
+  numerical EXT and top. Numerical EXT slots do not establish host escape.
+  This is a tested slice, not the full symbolic/residue image construction.
+- Published materialisation: **5 → 14** fixtures on LLVM 18, **5 → 15** on 23.
+  Added the N0 widenable lowering, N7/N15 lane chains, N9 cmpxchg/integer
+  min/max/wrap/usub, N11 faults, N12/count helpers and N26 memory helpers.
+  Expected instructions are parsed and printed by the same LLVM major without
+  optimisation, so i2 `2`/`-2` spellings compare as the same bit pattern.
+- Key regressions: **3 → 14** assertions on 18, **3 → 15** on 23. Keys match
+  independently published materialised closures for flags, shifts, lane chains,
+  count helpers, traps, memory helpers and atomics; H is preserved. N3 retains
+  `!bennett.rstep`; N14 recognises V7's existing guard instead of wrapping it again.
+- The independent **all-fixture key audit still fails: 18/49 (18), 19/50 (23)**.
+  These totals include four base assertions and all 45/46 applicable published
+  normalise pairs, not just selected scalar fixtures. Its exit is 1, recorded
+  separately from the legality regression gate. R-mode/platform requirements
+  are marked unsupported even if stripping would otherwise hide a difference.
+
+Commands for that acceptance audit (same headless prefix/TMPDIR as HANDOFF):
+`python3 tests/region_keys.py --major 18 --all-fixtures` and major 23.
+`tests/reference_images.py` is now part of pre-push. The full-fixture key audit
+is a deliberately incomplete acceptance audit; it is not called a passing gate.
+
+## General §4/§5 audit: every rule and its witness
+
+A witness establishes only its stated case. An open row is not an M2 deferral.
+
+| Rule | Witness in the executed suites | Audit result / remaining M1 work |
+|---|---|---|
+| §4.1 order and graph | recognition `unwind-invoke`, `effect-lie`; indirectbr object; region reports | S1–S5 slices exercised; full variant graph/order audit open |
+| §4.2 tiers | analysis `host-tiers`; `handle-host-param`, `handle-param-cross-entry` | ordinary H closure exercised; exact host/address/entry and generation/coherent seeding open |
+| §4.3 variants/shared globals | key `host_preserved`; smoke global-image key | H preserved; production device clones/shared global identity not complete |
+| §4.4 function addresses | `pointer-as270`, `indirectbr-two-blocks` objects | fixed-layout scalar cases exact; general comparison-link address integration open |
+| §4.5 calls out | `handle-to-external`; PT8 runtime helper tests | escape diagnostics/recognition exercised; production shim/hostcall/trap coverage records open |
+| §5.1 objects, atoms, K | zero stack/heap; byval; masked widths | tested object classes; complete allocation-family/representation audit open |
+| PT1 | `pt6-zero-stack`, `pt6-zero-heap`, `zero-symbolic-large` | zero extents and allocation-site witnesses pass |
+| PT2 | `pt2-wrap`, `PT2-low-index-wrap`, `PT2-numerical-not-host-escape` | constant narrow-index wrap fixed; finite multi-index, symbolic/residue and wide images/extent exits remain open |
+| PT3 | `pt3-pack257/256/unpack`; `subbyte`, `cartesian`, fixed-vscale pack | finite Cartesian geometry passes; general unknown bits/object/ROOT bitcast expansion remains open |
+| PT4 | `handle-int-roundtrip`, `handle-truncate`, `pt4-wide-wrap`, `PT4-narrow-address` | tested width-preserving/narrowing cases pass; all originating representations and constant-expression cases not exhausted |
+| PT5 | `pt5-int-wrap`, `pt5-range[-load]`, `PT5-widen-address` | finite/mask/range removal and widening fallback pass; full-width modular pointer arithmetic, commuted operands and symbolic images remain open |
+| PT6 | `pt6-unknown-address`, `pt6-byte-width`, `pt6-subrange`, zero tests | explicit top/interval/zero witnesses pass; full image/representation audit remains open |
+| PT7 | `byval`, `cmpxchg-success/failure`, aggregate recognition | unioned stores/fields exercised; general unknown-address/composite store audit open |
+| PT8 | `handle-memcpy`, `pt8-zero-copy`, `runtime-memmove`, `runtime-memset` | known whole/cropped zero copies and repeated-byte fills pass; general symbolic/partial copy audit open |
+| PT9 | `byval`, `pt12-root-return`, `handle-indirect` | direct/indirect bindings exercised; all composite call and recursive closures not exhausted |
+| PT10 | `shuffle-undef-mask`, `handle-aggregate`, `handle-vector-lane`, `pt10-lane-zero` | total lane/shuffle witnesses pass; full composite transport audit open |
+| PT11 | `handle-host-param`, `handle-param-cross-entry`, `host-tiers` | boundary root pruning exercised; exact host-used addresses versus device-only uses and leaf seeding open |
+| PT12 | `atomic-xchg-pointer`, `atomic-min-select`, `atomic`, cmpxchg pair, `pt12-root-return` | these fixed transfers pass; S2 wrap/usub/FP atomics and all undefined-callee effects remain open |
+| §5.3 value sets | `operand-phi-codes`, `operand-width-masked`, `pt5-range[-load]` | tested finite domains pass; full dispatch/descriptor shape audit open |
+| §5.4 consumers | region key/candidate reports; descriptor inc8 | tested report consumers pass; production read sets/arena/budget consumers remain open |
+
+## Materialised-key audit by normalisation/validator rule
+
+The independent residual validator V1–V16 is still unimplemented. Matching one
+key fixture does not establish that validator or every case of its N rule.
+
+| Rule | Witness / status |
+|---|---|
+| N0 | `n-lower-widenable` materialises exactly; source/normalised key mismatch is bp-tr5; other lowering families open |
+| N1 | `n-flags`, matching materialised key |
+| N2 | `n-flags`; full FP materialisation open |
+| N3 | `n-flags`, rstep preservation/difference assertion |
+| N4 | `n-flags`; complete ABI attribute audit open |
+| N5 | identity/no-effect intrinsic families implemented; exhaustive family witness suite open |
+| N6 | lifetime/invariant deletion implemented; exhaustive token-use witness suite open |
+| N7 | `n-undef`, constant lane cases; full aggregates/shuffle materialisation open |
+| N8 | freeze key equality and H preservation |
+| N9 | NAND/cmpxchg/wrap/usub materialisation and keys; FP rewrites open |
+| N10 | `n-query`; full query/dispatch mirror audit open |
+| N11 | `n-trap` exact/key; cond.loop open |
+| N12 | `n-defined-zero` exact/key |
+| N13 | replaced by N26 (memory helper witness) |
+| N14 | `n-shift` exact/key and repeated-pattern guard |
+| N15 | `n-constant-lane`, `n-dynamic-lane`, `n-narrow-lane` exact/key |
+| N16 | `n-fmuladd` key mismatch remains |
+| N17 | replaced by N32/N33, open |
+| N18 | replaced by §4.5, production call closure open |
+| N19 | N32 soft-float work remains open |
+| N20 | replaced by N24, open |
+| N21 | selected lane chains exact; `n-vector`, bitcast/VP/i24 key mismatches remain |
+| N22 | `n-wide-sub`, `n-wideint`, `n-wide-intrinsics` key mismatches remain |
+| N23 | `n-varargs` key mismatch remains |
+| N24 | `n-shadow-stack`, `n-budget-stage` key mismatches remain |
+| N25 | `n-byval-copy` key mismatch remains |
+| N26 | `n-memintrinsics` exact/key; full atomic/pattern/address-space family open |
+| N27 | `n-defined-zero` exact/key; `n-intrinsics` and wide helper ABI open |
+| N28 | `n-eh` key mismatch remains |
+| N29 | setjmp/longjmp: no completed materialised-key witness |
+| N30 | fibers: no completed materialised-key witness |
+| N31 | `n-asm` key mismatch remains |
+| N32 | `n-fcmp`, `n-fpconv-wide` key mismatches remain |
+| N33 | FP80/libm and all target-format key mismatches remain |
+| N34 | rstep preservation passes; `n-rstep-return` generation mode open |
+| N35 | `n-platform-mmio` platform mode open |
+| V1 | `n-flags` witness; validator open |
+| V2 | `n-flags`/rstep witnesses; validator open |
+| V3 | `n-flags` attributes witness; validator open |
+| V4 | count/trap/memory witnesses; full intrinsic residual validator open |
+| V5 | `n-undef` witness; validator open |
+| V6 | atomics/fence witness; FP atomic and validator open |
+| V7 | guarded `n-shift` witness; validator open |
+| V8 | dynamic/narrow lane witnesses; validator open |
+| V9 | `n-fcmp` missing; validator open |
+| V10 | FP80/libm missing; validator open |
+| V11 | shadow stack missing; validator open |
+| V12 | helper closure validation missing |
+| V13 | complete vector elimination missing |
+| V14 | wide limb elimination missing |
+| V15 | varargs/EH/sjlj elimination missing |
+| V16 | asm/target elimination missing |
+
+## Contract question and exact remaining acceptance
+
+New **bp-tr5** names the conflicting ordering: §7.2 says a forwarding thunk
+resolves to its call target, and an undefined candidate is F(8); the published
+`n-lower-widenable` is precisely such a thunk to a declared intrinsic. N0 instead
+materialises that function to `ret i1 true`, and §5.2 requires normalisation
+value effects before candidate sets freeze. Clarify the virtual materialisation /
+resolve ordering and preservation of source dispatch addresses. No arbitrary
+intrinsic exception or M2 classification was introduced.
+
+**M1 is incomplete.** Remaining: the open audit cases above, the 31 failed
+all-fixture key comparisons listed in verification.json (bp-3w4/bp-tr5), complete
+scalar production descriptors/CC launches/stubs/records (bp-2zv), and all ten
+missing example outputs below. The full gate remains a regression gate, not
+M1 acceptance. The existing sole corpus deferral is still
+`fp-rot-fastmath-reassoc`, M2 §13 / bp-7ni. No new source capability was removed.
+Grover over unmodified SQLite remains core.
+
+The third-pass record below supplies the unchanged 22-example inventory and
+published interface hashes. Fourth-pass verification.json records fresh gate,
+object/hash/vector results, both key audits and all 22 equality statuses.
+
+---
+
 # Third pass — 2026-10-31 (M1c; M1 acceptance still open)
 
 Accepted contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**;

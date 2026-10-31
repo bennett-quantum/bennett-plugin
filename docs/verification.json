@@ -1,6 +1,6 @@
 {
-  "recorded_at": "2026-10-31T13:10:26.972751+00:00",
-  "code_head": "745c8e307089049c323702046158b1fea41d7b98",
+  "recorded_at": "2026-10-31T13:35:23.921731+00:00",
+  "code_head": "95fa83f6f9640fa2fff85185b7a86cd833702580",
   "dialect": "0.2.10",
   "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
   "dialect_spec_sha256": "d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206",
@@ -10,39 +10,39 @@
   "contract_worktree_drift": true,
   "accepted_contract_drift": false,
   "plugin_sha256": {
-    "18": "194417c4d734426b6ad2885bd863c2096c88b366bef5ebd181030a21dc21535e",
-    "23": "75232545c696eb29f2d77661578f10bc8712c3f749a83db69a8a7521553640ce"
+    "18": "29459239830d88e38f4e1db663340c62b4e92d631b5f42b350fc7e1beeeec0d1",
+    "23": "d962512c0442c4517fd4073bdedafee910b1b6a65079ad94f68542b819308c51"
   },
   "pre_push_exit": 0,
   "before": {
-    "code_head": "07f942c",
-    "dialect_commit": "95c3cd332f5f72c07fd5f2515f328deaa40c08b9",
+    "code_head": "2d5f323",
+    "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "plugin_sha256": {
-      "18": "65586e83cc3633bd6c38686a9e75c51fe25557becfe428e795c4c5e897531271",
-      "23": "594416a99f2d8b6dc9298ceb601e1b0edbb86c9c8e834d18604f75a31caf6c3c"
+      "18": "194417c4d734426b6ad2885bd863c2096c88b366bef5ebd181030a21dc21535e",
+      "23": "75232545c696eb29f2d77661578f10bc8712c3f749a83db69a8a7521553640ce"
     },
     "corpus_summary": {
       "18": {
         "cases_run": 66,
         "cells_run": 924,
-        "cells_agree": 892,
-        "cases_agree": 63,
+        "cells_agree": 920,
+        "cases_agree": 65,
         "cases_deferred": 1,
-        "cases_blocked": 2,
+        "cases_blocked": 0,
         "cases_diverge": 0
       },
       "23": {
         "cases_run": 66,
         "cells_run": 792,
-        "cells_agree": 764,
-        "cases_agree": 63,
+        "cells_agree": 788,
+        "cases_agree": 65,
         "cases_deferred": 1,
-        "cases_blocked": 2,
+        "cases_blocked": 0,
         "cases_diverge": 0
       }
     },
-    "pre_push_exit": 1,
-    "reason": "accepted contract drift; isolated original-source rebuild"
+    "pre_push_exit": 0,
+    "reason": "Reproduced clean third-pass HEAD before fourth-pass implementation."
   },
   "corpus_summary": {
     "18": {
@@ -289,9 +289,34 @@
       },
       "analysis-edges": {
         "major": 18,
-        "cases": 12,
-        "passed": 12,
+        "cases": 17,
+        "passed": 17,
         "results": [
+          {
+            "case": "runtime-memmove",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "runtime-memset",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "atomic-xchg-pointer",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "atomic-min-select",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "shuffle-undef-mask",
+            "ok": true,
+            "diagnostic": ""
+          },
           {
             "case": "byval",
             "ok": true,
@@ -354,10 +379,144 @@
           }
         ]
       },
+      "reference-images": {
+        "major": 18,
+        "cases": 6,
+        "passed": 6,
+        "bead": "bp-3w4",
+        "results": [
+          {
+            "case": "PT3-address-space-copy",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "top": false
+            },
+            "actual": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "function": "top",
+              "top": false,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT4-object-roundtrip",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "top": false
+            },
+            "actual": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "function": "top",
+              "top": false,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT2-numerical-not-host-escape",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT2-low-index-wrap",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT4-narrow-address",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,-1)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,0,-1)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT5-widen-address",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,-1)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,0,-1)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          }
+        ]
+      },
       "materialisation": {
         "major": 18,
-        "cases": 5,
-        "passed": 5,
+        "cases": 14,
+        "passed": 14,
         "results": [
           {
             "case": "n-flags",
@@ -383,6 +542,51 @@
             "case": "n-constant-lane",
             "ok": true,
             "error": ""
+          },
+          {
+            "case": "n-lower-widenable",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-undef",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-defined-zero",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-dynamic-lane",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-narrow-lane",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-trap",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-memintrinsics",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-atomic",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-atomic-wrap",
+            "ok": true,
+            "error": ""
           }
         ]
       },
@@ -391,10 +595,164 @@
         "checks": {
           "flags": true,
           "freeze": true,
-          "host_preserved": true
+          "rstep_preserved": true,
+          "host_preserved": true,
+          "n-flags": true,
+          "n-shift": true,
+          "n-undef": true,
+          "n-defined-zero": true,
+          "n-dynamic-lane": true,
+          "n-narrow-lane": true,
+          "n-trap": true,
+          "n-memintrinsics": true,
+          "n-atomic": true,
+          "n-atomic-wrap": true
         },
-        "passed": 3,
-        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        "cases": 14,
+        "passed": 14,
+        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
+        "published_closures": [
+          {
+            "fixture": "n-flags",
+            "keys": [
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691",
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shift",
+            "keys": [
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4",
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-undef",
+            "keys": [
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1",
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-defined-zero",
+            "keys": [
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c",
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-dynamic-lane",
+            "keys": [
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478",
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-narrow-lane",
+            "keys": [
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e",
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-trap",
+            "keys": [
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35",
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-memintrinsics",
+            "keys": [
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc",
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic",
+            "keys": [
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892",
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "-nand",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-wrap",
+            "keys": [
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4",
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          }
+        ]
       },
       "descriptors": {
         "major": 18,
@@ -412,9 +770,34 @@
       },
       "analysis-edges": {
         "major": 23,
-        "cases": 12,
-        "passed": 12,
+        "cases": 17,
+        "passed": 17,
         "results": [
+          {
+            "case": "runtime-memmove",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "runtime-memset",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "atomic-xchg-pointer",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "atomic-min-select",
+            "ok": true,
+            "diagnostic": ""
+          },
+          {
+            "case": "shuffle-undef-mask",
+            "ok": true,
+            "diagnostic": ""
+          },
           {
             "case": "byval",
             "ok": true,
@@ -477,10 +860,144 @@
           }
         ]
       },
+      "reference-images": {
+        "major": 23,
+        "cases": 6,
+        "passed": 6,
+        "bead": "bp-3w4",
+        "results": [
+          {
+            "case": "PT3-address-space-copy",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "top": false
+            },
+            "actual": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "function": "top",
+              "top": false,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT4-object-roundtrip",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "top": false
+            },
+            "actual": {
+              "atoms": [
+                "PTR(@g,0,0)"
+              ],
+              "function": "top",
+              "top": false,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT2-numerical-not-host-escape",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT2-low-index-wrap",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,-240,0)",
+                "PTR(@g,16,0)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT4-narrow-address",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,-1)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,0,-1)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          },
+          {
+            "case": "PT5-widen-address",
+            "ok": true,
+            "expected": {
+              "atoms": [
+                "PTR(@g,0,-1)",
+                "PTR(EXT,0,-1)"
+              ],
+              "top": true
+            },
+            "actual": {
+              "atoms": [
+                "PTR(EXT,0,-1)",
+                "PTR(@g,0,-1)"
+              ],
+              "function": "top",
+              "top": true,
+              "value": "%v"
+            },
+            "diagnostic": ""
+          }
+        ]
+      },
       "materialisation": {
         "major": 23,
-        "cases": 5,
-        "passed": 5,
+        "cases": 15,
+        "passed": 15,
         "results": [
           {
             "case": "n-flags",
@@ -506,6 +1023,56 @@
             "case": "n-constant-lane",
             "ok": true,
             "error": ""
+          },
+          {
+            "case": "n-lower-widenable",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-undef",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-defined-zero",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-dynamic-lane",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-narrow-lane",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-trap",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-memintrinsics",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-atomic",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-atomic-wrap",
+            "ok": true,
+            "error": ""
+          },
+          {
+            "case": "n-atomic-usub",
+            "ok": true,
+            "error": ""
           }
         ]
       },
@@ -514,10 +1081,179 @@
         "checks": {
           "flags": true,
           "freeze": true,
-          "host_preserved": true
+          "rstep_preserved": true,
+          "host_preserved": true,
+          "n-flags": true,
+          "n-shift": true,
+          "n-undef": true,
+          "n-defined-zero": true,
+          "n-dynamic-lane": true,
+          "n-narrow-lane": true,
+          "n-trap": true,
+          "n-memintrinsics": true,
+          "n-atomic": true,
+          "n-atomic-wrap": true,
+          "n-atomic-usub": true
         },
-        "passed": 3,
-        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        "cases": 15,
+        "passed": 15,
+        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
+        "published_closures": [
+          {
+            "fixture": "n-flags",
+            "keys": [
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691",
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shift",
+            "keys": [
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4",
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-undef",
+            "keys": [
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1",
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-defined-zero",
+            "keys": [
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c",
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-dynamic-lane",
+            "keys": [
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478",
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-narrow-lane",
+            "keys": [
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e",
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-trap",
+            "keys": [
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35",
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-memintrinsics",
+            "keys": [
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc",
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic",
+            "keys": [
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892",
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "-nand",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-wrap",
+            "keys": [
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4",
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-usub",
+            "keys": [
+              "7800f1a23ec1686d4ce3488e3cc0e188a8f067163facab1b4746a65bfd1e85e0",
+              "7800f1a23ec1686d4ce3488e3cc0e188a8f067163facab1b4746a65bfd1e85e0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "majors=23",
+            "context_implemented": true
+          }
+        ]
       },
       "descriptors": {
         "major": 23,
@@ -1575,6 +2311,1409 @@
       "passed": 12
     }
   },
+  "acceptance_audits": {
+    "18": {
+      "all_published_materialised_keys": {
+        "major": 18,
+        "checks": {
+          "flags": true,
+          "freeze": true,
+          "rstep_preserved": true,
+          "host_preserved": true,
+          "n-budget-stage": false,
+          "n-lower-widenable": false,
+          "n-defined-zero": true,
+          "n-constant-lane": true,
+          "n-dynamic-lane": true,
+          "n-narrow-lane": true,
+          "n-byval-copy": false,
+          "n-rstep-return": false,
+          "n-platform-mmio": false,
+          "n-atomic-nand": true,
+          "n-atomic-wrap": true,
+          "n-bitcast-lanes": false,
+          "n-bitcast-scalar": false,
+          "n-vp-merge": false,
+          "n-vp-select": false,
+          "n-vp-product": false,
+          "n-vector-i24": false,
+          "n-gep-index": true,
+          "n-fpconv-wide": false,
+          "n-wide-intrinsics": false,
+          "n-flags": true,
+          "n-shift": true,
+          "n-undef": true,
+          "n-query": true,
+          "n-trap": true,
+          "n-vector": false,
+          "n-wide-sub": false,
+          "n-wideint": false,
+          "n-shadow-stack": false,
+          "n-memintrinsics": true,
+          "n-intrinsics": false,
+          "n-atomic": true,
+          "n-fcmp": false,
+          "n-fmuladd": false,
+          "n-fp80": false,
+          "n-libm": false,
+          "n-libm-x86-f128": false,
+          "n-libm-x86-ppcf128": false,
+          "n-libm-arm-ppcf128": false,
+          "n-libm-arm-f80": false,
+          "n-libm-riscv-ppcf128": false,
+          "n-libm-riscv-f80": false,
+          "n-varargs": false,
+          "n-eh": false,
+          "n-asm": false
+        },
+        "cases": 49,
+        "passed": 18,
+        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
+        "published_closures": [
+          {
+            "fixture": "n-budget-stage",
+            "keys": [
+              "14c1b1b9a7cdd9ffc6a5db7ce3579caa1135928b930cce046fea1359792c9017",
+              "be4dc54609a0db28aeb1180bef708ff64c5cc2efccc5892a3c8a35938c71d671"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-lower-widenable",
+            "keys": [
+              "external",
+              "79c184ed4d40b81345755d40e687705885e961460098516d3db511b951a0309d"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-defined-zero",
+            "keys": [
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c",
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-constant-lane",
+            "keys": [
+              "ca34c8e1b9dbd8d14c43feb8f4e4079e146ab7b0dbcdc252d6de7a7c83e9b92a",
+              "ca34c8e1b9dbd8d14c43feb8f4e4079e146ab7b0dbcdc252d6de7a7c83e9b92a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-dynamic-lane",
+            "keys": [
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478",
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-narrow-lane",
+            "keys": [
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e",
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-byval-copy",
+            "keys": [
+              "0ad2f320725de721dcf4f32510a53d6851001857ad525f6e958e490df66812a4",
+              "6b60122e6f5ad0d097c27d9b4fcb278653c3be25d86fd2a0bd509af68a3a3c9a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-rstep-return",
+            "keys": [
+              "2ce4ef0091a663e75b96053dc23513455c0d879ad0839fa8ba62b91fae616364",
+              "8aa27bc21f4d17b22a6ed20386566d0a0cbc4e36306260292d9c6af759df568f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "rmode=@f",
+            "context_implemented": false
+          },
+          {
+            "fixture": "n-platform-mmio",
+            "keys": [
+              "96b191ccc44e8c789e9a5dbf27092102268e06b630e48eebea670eb985cabfd0",
+              "6e88cf55eeba37d10cbb620220361cced42e891918ec13e9032d5078063afaa3"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "platform=riscv64-bennett-virt",
+            "context_implemented": false
+          },
+          {
+            "fixture": "n-atomic-nand",
+            "keys": [
+              "7d7a2db3b945d4b6962d165b4087602a8e58ed641e3f155127470681f4f5f614",
+              "7d7a2db3b945d4b6962d165b4087602a8e58ed641e3f155127470681f4f5f614"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-wrap",
+            "keys": [
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4",
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-bitcast-lanes",
+            "keys": [
+              "094381fb21cbedd08a7ae383eb6ea8c5415fe11cee42ba180f50829de66515e4",
+              "a9d9cf14226ae74df140aab2909247c4c2cfdf63541f8e70220375ca7226c088"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-bitcast-scalar",
+            "keys": [
+              "adf464bf49df8af2dd492efbac612e1db9087768d6e993adb6dc39250dafdfaf",
+              "62308781087f3ecacf6ec6337ae97025b32abdc1dbe233f8580847c9653d58cc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-merge",
+            "keys": [
+              "54818bd870be2adddeaa15800881cc5dfe885d5c3328d95d2c089c224c1013ca",
+              "946939c354737eca0e71be0e4289d5e364e30309c52373dee80784870d209aa0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-select",
+            "keys": [
+              "3da50aa121bc430ed1dd374d8b179564df176ee2ca0b8adc0bdaa3b6e888d7ab",
+              "616776580f61bd3269b33db63e62ac6bf3906f7bcaff71a9fd148d011871c1fd"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-product",
+            "keys": [
+              "d135cfa65aa111586fbb2775aa6757eca22d4659df9b91fed635c7be264c55ce",
+              "35ddf44b19f753fa9cdc69027a7784fba27bd78e740d9645f8a916fc3618fbe9"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vector-i24",
+            "keys": [
+              "d4aeb22ab5dd6d704e37adc3f650ad259240c1577f1d22146b9f5a74a99dc80b",
+              "3175ea930142d1d36dff51c5f13c8b495e17ef7e4cb7f2c30caaab80a1b2fb50"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-gep-index",
+            "keys": [
+              "63b2b421f7db6c808ef4c6f4fc9f62b1aa03bc0f5f44d4be30fea948edf0d78a",
+              "63b2b421f7db6c808ef4c6f4fc9f62b1aa03bc0f5f44d4be30fea948edf0d78a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fpconv-wide",
+            "keys": [
+              "635b29f7c7231d3b02b1d1a446225f2b4333b267e30d511678d73987024c2980",
+              "44c90a2a7aa05b0425a291d588d22c79a39d06d5b88cb1c038565ba262a539f9"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wide-intrinsics",
+            "keys": [
+              "915eb51c7ac2c8a6f524f217ecd2f300da2e94a5fadf1892e1a343754e67abb5",
+              "1b176682a6697ef7dedf1e2a6a52647915b9b748438734ed2683e54723d4fc6b"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-flags",
+            "keys": [
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691",
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shift",
+            "keys": [
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4",
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-undef",
+            "keys": [
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1",
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-query",
+            "keys": [
+              "3a8e228b9971c4fa02036340fb54b86dc74cfba564b71f83ee6ad3b6dfda31c0",
+              "3a8e228b9971c4fa02036340fb54b86dc74cfba564b71f83ee6ad3b6dfda31c0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-trap",
+            "keys": [
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35",
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vector",
+            "keys": [
+              null,
+              "71a06001d65c927547a9eba527d45ba5b06c3079e262a03ec410371253c3e93b"
+            ],
+            "errors": [
+              "bennett: unimplemented: \u00a75 PT10 composite operation (milestone 1) at   %s = add <4 x i32> %a, %b\n",
+              ""
+            ],
+            "ok": false,
+            "context": "-i24",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wide-sub",
+            "keys": [
+              "7b7ec944fb803a49da9baf0f7e2d8a5a735092e824300fd783606f1cf23db1f1",
+              "54fffe162d6255d34cb257a14f9cc9b8ab6e2bc870162cbe28b7c5fac405a5f1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wideint",
+            "keys": [
+              "1f62918a772f5c3d7486f2aa23e958a544c0aa6162230dc2aed0fdba6f1a7173",
+              "db5a3c23cf99f4a1cb1fe98b02e161813833731c45a5ca2df54320989c0a914b"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shadow-stack",
+            "keys": [
+              "6219e7d68a85e2482a6a24555711be71db2e551744c1a2a9f9b9d30b083b90f1",
+              "f690bb930cf3d8e5d203433f4dfe50b2f2d4468abdd296ddf84e1859b2a5e7a5"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-memintrinsics",
+            "keys": [
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc",
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-intrinsics",
+            "keys": [
+              "063bb2d26bef057ee0f73c29e858d280689e30cafb366da1a1a47dfd2027db89",
+              "ee38c19fc43f9b7e93daca4b20c0f3dcf73466afe13db0082892c5d3bce40a43"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic",
+            "keys": [
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892",
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "-nand",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fcmp",
+            "keys": [
+              "797c2cc245f637c291e2115f243673ab3174393269641836e73f24845b6f39e4",
+              "5ade741ec6043bc89204bf6e71299646dbcef4497110e9062c8c3d45b6f7d173"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fmuladd",
+            "keys": [
+              "external",
+              "f9d89132a7e685c0dbefabce56e6ed407a755db0b76aeb354a4c641ee1348059"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fp80",
+            "keys": [
+              "25a7230af0f1e865571bb813d50fe280925708519cfd60f225f1ef9e2ce9bada",
+              "dfe49486342011cc4e83d972f720c5bd5d47cf7f5f33076aff094f1db43f06eb"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm",
+            "keys": [
+              "fe714b717375c53e365103c727411205fa8942e644ac71f1cf08bfc3c5b6cf69",
+              "681a750adcaa12b15dc948bb956082b73c2b7d9b0b4cc9876f1f966b53e39be7"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-x86-f128",
+            "keys": [
+              "external",
+              "181dfe92034c71acbc27846ccb372f2c70235a2d8241c7d9b90118cdfa5d6735"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-x86-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-arm-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-arm-f80",
+            "keys": [
+              "external",
+              "615ad143759d852bdb60b85f0d940aef4929e0f4c715eb03acbc32d7e22ce28f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-riscv-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-riscv-f80",
+            "keys": [
+              "external",
+              "615ad143759d852bdb60b85f0d940aef4929e0f4c715eb03acbc32d7e22ce28f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-varargs",
+            "keys": [
+              "35d26934f998b310798e2a9db742f2ada729f9f56b7d5ab28aa5f455c052fbec",
+              "8cf560d23bfcfd1a46e0d2c9e9ef646932c4643edd875fdd89ade8a34f4363c1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-eh",
+            "keys": [
+              "a5f79911fdd9be22a55b6eed18b89b191503e15b1325e4b6c19bf8ef5b754334",
+              "f52b06e9ed05500f0be633eea8f2dfa4cc962c29ed03771bb181b27b3726a300"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-asm",
+            "keys": [
+              "13a9dc185b97e169d9bcd4d85d4de0badd36e44e3abd417ca6e0ae419e439774",
+              "050bfd82d6aa386a97af8651c68c5979c9895499a67c8aa6819b894d20bfac7d"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          }
+        ]
+      },
+      "exit": 1,
+      "complete": false
+    },
+    "23": {
+      "all_published_materialised_keys": {
+        "major": 23,
+        "checks": {
+          "flags": true,
+          "freeze": true,
+          "rstep_preserved": true,
+          "host_preserved": true,
+          "n-budget-stage": false,
+          "n-lower-widenable": false,
+          "n-defined-zero": true,
+          "n-constant-lane": true,
+          "n-dynamic-lane": true,
+          "n-narrow-lane": true,
+          "n-byval-copy": false,
+          "n-rstep-return": false,
+          "n-platform-mmio": false,
+          "n-atomic-nand": true,
+          "n-atomic-wrap": true,
+          "n-atomic-usub": true,
+          "n-bitcast-lanes": false,
+          "n-bitcast-scalar": false,
+          "n-vp-merge": false,
+          "n-vp-select": false,
+          "n-vp-product": false,
+          "n-vector-i24": false,
+          "n-gep-index": true,
+          "n-fpconv-wide": false,
+          "n-wide-intrinsics": false,
+          "n-flags": true,
+          "n-shift": true,
+          "n-undef": true,
+          "n-query": true,
+          "n-trap": true,
+          "n-vector": false,
+          "n-wide-sub": false,
+          "n-wideint": false,
+          "n-shadow-stack": false,
+          "n-memintrinsics": true,
+          "n-intrinsics": false,
+          "n-atomic": true,
+          "n-fcmp": false,
+          "n-fmuladd": false,
+          "n-fp80": false,
+          "n-libm": false,
+          "n-libm-x86-f128": false,
+          "n-libm-x86-ppcf128": false,
+          "n-libm-arm-ppcf128": false,
+          "n-libm-arm-f80": false,
+          "n-libm-riscv-ppcf128": false,
+          "n-libm-riscv-f80": false,
+          "n-varargs": false,
+          "n-eh": false,
+          "n-asm": false
+        },
+        "cases": 50,
+        "passed": 19,
+        "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
+        "published_closures": [
+          {
+            "fixture": "n-budget-stage",
+            "keys": [
+              "14c1b1b9a7cdd9ffc6a5db7ce3579caa1135928b930cce046fea1359792c9017",
+              "be4dc54609a0db28aeb1180bef708ff64c5cc2efccc5892a3c8a35938c71d671"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-lower-widenable",
+            "keys": [
+              "external",
+              "79c184ed4d40b81345755d40e687705885e961460098516d3db511b951a0309d"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-defined-zero",
+            "keys": [
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c",
+              "8a99f884211e3202002aafa96f0df680b25f62db26c61ddf771f5a44b674111c"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-constant-lane",
+            "keys": [
+              "ca34c8e1b9dbd8d14c43feb8f4e4079e146ab7b0dbcdc252d6de7a7c83e9b92a",
+              "ca34c8e1b9dbd8d14c43feb8f4e4079e146ab7b0dbcdc252d6de7a7c83e9b92a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-dynamic-lane",
+            "keys": [
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478",
+              "7cf3e95c272e6bb9453fe79c43d68e8d8dcb02f3cf61b50076d6fc09476a9478"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-narrow-lane",
+            "keys": [
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e",
+              "65fd9d8c14b678c956fd8814c3b7af7d3a419828d55287094030d2c87862c40e"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-byval-copy",
+            "keys": [
+              "0ad2f320725de721dcf4f32510a53d6851001857ad525f6e958e490df66812a4",
+              "6b60122e6f5ad0d097c27d9b4fcb278653c3be25d86fd2a0bd509af68a3a3c9a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-rstep-return",
+            "keys": [
+              "2ce4ef0091a663e75b96053dc23513455c0d879ad0839fa8ba62b91fae616364",
+              "8aa27bc21f4d17b22a6ed20386566d0a0cbc4e36306260292d9c6af759df568f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "rmode=@f",
+            "context_implemented": false
+          },
+          {
+            "fixture": "n-platform-mmio",
+            "keys": [
+              "96b191ccc44e8c789e9a5dbf27092102268e06b630e48eebea670eb985cabfd0",
+              "6e88cf55eeba37d10cbb620220361cced42e891918ec13e9032d5078063afaa3"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "platform=riscv64-bennett-virt",
+            "context_implemented": false
+          },
+          {
+            "fixture": "n-atomic-nand",
+            "keys": [
+              "7d7a2db3b945d4b6962d165b4087602a8e58ed641e3f155127470681f4f5f614",
+              "7d7a2db3b945d4b6962d165b4087602a8e58ed641e3f155127470681f4f5f614"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-wrap",
+            "keys": [
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4",
+              "1617caf08383b4ba6eec6d30cc90ff9898298f2d9f0284f4e0f6dd0299cc75d4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic-usub",
+            "keys": [
+              "7800f1a23ec1686d4ce3488e3cc0e188a8f067163facab1b4746a65bfd1e85e0",
+              "7800f1a23ec1686d4ce3488e3cc0e188a8f067163facab1b4746a65bfd1e85e0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "majors=23",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-bitcast-lanes",
+            "keys": [
+              "094381fb21cbedd08a7ae383eb6ea8c5415fe11cee42ba180f50829de66515e4",
+              "a9d9cf14226ae74df140aab2909247c4c2cfdf63541f8e70220375ca7226c088"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-bitcast-scalar",
+            "keys": [
+              "adf464bf49df8af2dd492efbac612e1db9087768d6e993adb6dc39250dafdfaf",
+              "62308781087f3ecacf6ec6337ae97025b32abdc1dbe233f8580847c9653d58cc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-merge",
+            "keys": [
+              "1272fda3680f38ee38872d82c7cbbccac7c621482671cefb4eef39db599052b9",
+              "946939c354737eca0e71be0e4289d5e364e30309c52373dee80784870d209aa0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-select",
+            "keys": [
+              "b1a4c147bcab23366f6684206683a66245bc832cb009779f5bbbb8d00ba72db2",
+              "616776580f61bd3269b33db63e62ac6bf3906f7bcaff71a9fd148d011871c1fd"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vp-product",
+            "keys": [
+              "7c35b80d348603cd8879a9fecdfb53d7530f4a8955d35fe14c1c6083a6123f62",
+              "35ddf44b19f753fa9cdc69027a7784fba27bd78e740d9645f8a916fc3618fbe9"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vector-i24",
+            "keys": [
+              "d4aeb22ab5dd6d704e37adc3f650ad259240c1577f1d22146b9f5a74a99dc80b",
+              "3175ea930142d1d36dff51c5f13c8b495e17ef7e4cb7f2c30caaab80a1b2fb50"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-gep-index",
+            "keys": [
+              "63b2b421f7db6c808ef4c6f4fc9f62b1aa03bc0f5f44d4be30fea948edf0d78a",
+              "63b2b421f7db6c808ef4c6f4fc9f62b1aa03bc0f5f44d4be30fea948edf0d78a"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fpconv-wide",
+            "keys": [
+              "635b29f7c7231d3b02b1d1a446225f2b4333b267e30d511678d73987024c2980",
+              "44c90a2a7aa05b0425a291d588d22c79a39d06d5b88cb1c038565ba262a539f9"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wide-intrinsics",
+            "keys": [
+              "1101b608b8079e3970b595ebcb9ee3f77b070c153133e7e749ac1d1fb84b5a5b",
+              "1b176682a6697ef7dedf1e2a6a52647915b9b748438734ed2683e54723d4fc6b"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-flags",
+            "keys": [
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691",
+              "c989decd81dfe9155f7ae50a3c6a2c5af138af90de9c4ca5e06179022899b691"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shift",
+            "keys": [
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4",
+              "fe7771d26c441c8656f8291f2b0a0f211c005cbc5c2d2f0a857c84ad1ff0b2b4"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-undef",
+            "keys": [
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1",
+              "046c5e40326069235e5cdf06c3979c6a80352f07dc94fbfc0e859a3be02beca1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-query",
+            "keys": [
+              "3a8e228b9971c4fa02036340fb54b86dc74cfba564b71f83ee6ad3b6dfda31c0",
+              "3a8e228b9971c4fa02036340fb54b86dc74cfba564b71f83ee6ad3b6dfda31c0"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-trap",
+            "keys": [
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35",
+              "ed2e3a618added31b0fb5b2dd820474c34a0493e1587b4c2f16b9478e1c55e35"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-vector",
+            "keys": [
+              null,
+              "71a06001d65c927547a9eba527d45ba5b06c3079e262a03ec410371253c3e93b"
+            ],
+            "errors": [
+              "bennett: unimplemented: \u00a75 PT10 composite operation (milestone 1) at   %s = add <4 x i32> %a, %b\n",
+              ""
+            ],
+            "ok": false,
+            "context": "-i24",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wide-sub",
+            "keys": [
+              "7b7ec944fb803a49da9baf0f7e2d8a5a735092e824300fd783606f1cf23db1f1",
+              "54fffe162d6255d34cb257a14f9cc9b8ab6e2bc870162cbe28b7c5fac405a5f1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-wideint",
+            "keys": [
+              "1f62918a772f5c3d7486f2aa23e958a544c0aa6162230dc2aed0fdba6f1a7173",
+              "db5a3c23cf99f4a1cb1fe98b02e161813833731c45a5ca2df54320989c0a914b"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-shadow-stack",
+            "keys": [
+              "6219e7d68a85e2482a6a24555711be71db2e551744c1a2a9f9b9d30b083b90f1",
+              "f690bb930cf3d8e5d203433f4dfe50b2f2d4468abdd296ddf84e1859b2a5e7a5"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-memintrinsics",
+            "keys": [
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc",
+              "fe8f0a8cdfac9123c0ae4af8328dc56279ad36e6219a3579c6a70413ff5087dc"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-intrinsics",
+            "keys": [
+              "cb84729de89522962c518f0f9d661c4cc2566642f33bd86422252a1584461462",
+              "ee38c19fc43f9b7e93daca4b20c0f3dcf73466afe13db0082892c5d3bce40a43"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-atomic",
+            "keys": [
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892",
+              "72ce7599f2b51221afc6ddbecd0c58d840f0f539e3082ed07760a7387a11a892"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": true,
+            "context": "-nand",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fcmp",
+            "keys": [
+              "797c2cc245f637c291e2115f243673ab3174393269641836e73f24845b6f39e4",
+              "5ade741ec6043bc89204bf6e71299646dbcef4497110e9062c8c3d45b6f7d173"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fmuladd",
+            "keys": [
+              "external",
+              "f9d89132a7e685c0dbefabce56e6ed407a755db0b76aeb354a4c641ee1348059"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-fp80",
+            "keys": [
+              "25a7230af0f1e865571bb813d50fe280925708519cfd60f225f1ef9e2ce9bada",
+              "dfe49486342011cc4e83d972f720c5bd5d47cf7f5f33076aff094f1db43f06eb"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm",
+            "keys": [
+              "d5a31a8b045e991b3f82d4fbe97189121d8edaeea749429cf1bbe6d83c2c6c62",
+              "681a750adcaa12b15dc948bb956082b73c2b7d9b0b4cc9876f1f966b53e39be7"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-x86-f128",
+            "keys": [
+              "external",
+              "181dfe92034c71acbc27846ccb372f2c70235a2d8241c7d9b90118cdfa5d6735"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-x86-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-arm-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-arm-f80",
+            "keys": [
+              "external",
+              "615ad143759d852bdb60b85f0d940aef4929e0f4c715eb03acbc32d7e22ce28f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-riscv-ppcf128",
+            "keys": [
+              "external",
+              "fe53a420a251253c79baf14503a9eb946553d1212d2bf219bc2f87227976de37"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-libm-riscv-f80",
+            "keys": [
+              "external",
+              "615ad143759d852bdb60b85f0d940aef4929e0f4c715eb03acbc32d7e22ce28f"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-varargs",
+            "keys": [
+              "a51dbbc8716cbf0c22c96c278b17e4a0f797f69a59adef9bd884779d3854b8dd",
+              "8cf560d23bfcfd1a46e0d2c9e9ef646932c4643edd875fdd89ade8a34f4363c1"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-eh",
+            "keys": [
+              "a5f79911fdd9be22a55b6eed18b89b191503e15b1325e4b6c19bf8ef5b754334",
+              "f52b06e9ed05500f0be633eea8f2dfa4cc962c29ed03771bb181b27b3726a300"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          },
+          {
+            "fixture": "n-asm",
+            "keys": [
+              "13a9dc185b97e169d9bcd4d85d4de0badd36e44e3abd417ca6e0ae419e439774",
+              "050bfd82d6aa386a97af8651c68c5979c9895499a67c8aa6819b894d20bfac7d"
+            ],
+            "errors": [
+              "",
+              ""
+            ],
+            "ok": false,
+            "context": "",
+            "context_implemented": true
+          }
+        ]
+      },
+      "exit": 1,
+      "complete": false
+    }
+  },
   "milestone_1_complete": false,
   "production_launch_implemented": false,
   "spec_corpus_scalar_inventory": {
@@ -1594,8 +3733,13 @@
   },
   "remaining_M1": {
     "general_reference_audit_and_all_rule_keys": "bp-3w4",
+    "intrinsic_thunk_ordering_question": "bp-tr5",
     "production_descriptors_CC_launches_host_stubs_records": "bp-2zv",
-    "rung1_scalar_examples_missing": 8
+    "rung1_scalar_examples_missing": 8,
+    "object_only_vectors_not_emitted": [
+      "entry-stack",
+      "arena-o1"
+    ]
   },
   "existing_mechanical_deferrals": {
     "FP": "bp-7ni: section 13.1 helpers and native comparison linking",
@@ -1626,5 +3770,120 @@
       "target_fault": "XOR delivery is independent of their entry values"
     }
   },
-  "historical_step_check_provenance": "Previous pass, unchanged inc8/switch5 bytes, 256 inputs each; not re-run in M1c. add2 exhaustive timeout remains historical."
+  "historical_step_check_provenance": "Previous passes, unchanged inc8/switch5 bytes, 256 inputs each; not re-run in fourth pass. add2 exhaustive timeout remains historical.",
+  "example_byte_equality": [
+    {
+      "name": "oracle-empty-output",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "oracle-empty-fault",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "oracle-discard-return",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "atomic-nand",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "pointer-as270",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "gep-index-obj",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "gep-index-const",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "binding-out-byte",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "binding-clock-read",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "binding-block-byte",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "binding-console-byte",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "entry-replay-byte",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "indirectbr-two-blocks",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "inc8",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "add2",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "rung4-mini",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "rung8-mini",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "listsum",
+      "18": false,
+      "23": false
+    },
+    {
+      "name": "switch5",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "fp-aggregate",
+      "18": true,
+      "23": true
+    },
+    {
+      "name": "entry-stack",
+      "18": false,
+      "23": false,
+      "reason": "No published LLVM lift source; not compiler-emitted."
+    },
+    {
+      "name": "arena-o1",
+      "18": false,
+      "23": false,
+      "reason": "No published LLVM lift source; not compiler-emitted."
+    }
+  ],
+  "new_deferrals": []
 }

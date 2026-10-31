@@ -136,3 +136,28 @@ run. The two ABI-v0 runtime blockers and G0/G1 ambiguity are resolved at the new
 pin (bp-c2i/bp-p26 closed); the CMake validation bead bp-ahz is closed.
 Full N0–N35/V1–V16, entry-state replay, comparison link and frontend envelopes
 remain scheduled. General Grover over unmodified SQLite stays the core target.
+
+
+## Fourth-pass audit (2026-10-31; M1 still open)
+
+Item 1 advanced: 17 analysis regressions and six represented-address witnesses
+per major; 14/15 published materialisation fixtures and 14/15 key assertions
+(LLVM 18/23). New fixes cover constant narrow-index GEP wrap, width-changing
+object provenance with numerical EXT separated from host escape, PT3 address
+space copying, PT8 runtime helper spellings, pointer xchg/N9 select unions,
+undefined shuffle masks, rstep preservation and repeated N14 patterns.
+
+The all-fixture materialised-key audit remains red: 18/49 on LLVM 18, 19/50
+on LLVM 23, including four base assertions. All 31 failed obligations are
+recorded in verification.json. General symbolic/residue images, full atomic /
+composite transfer and precise entry/host/boundary/generation tier seeding
+remain M1 under bp-3w4. Independent V1–V16 validation is not implemented.
+New bp-tr5 requests clarification of §7.2 thunk resolution versus N0's
+materialisation of declared intrinsics and §5.2's pre-verdict value effects.
+It is an M1 contract question, not an M2 deferral.
+
+Items 2 and 3 have not been delivered in this pass. Production scalar
+descriptor/CC launches, stubs and records remain bp-2zv. Eight lifts plus
+entry-stack/arena-o1 remain acceptance obligations with the existing exact
+sentences and mechanical owners above. No M1 requirement has been moved to
+M2, no output is declared out of scope, and no M1 completion is claimed.

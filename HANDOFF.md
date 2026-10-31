@@ -1,37 +1,45 @@
 # Handoff: bennett-plugin
 
-State (2026-10-31): third implementation pass landed locally; **M1 remains
-incomplete**. No push. Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
-ISA **0.8**. The sibling worktree is unaccepted draft 0.2.11; gate drift is against
-the accepted registry and pinned blob, with worktree/HEAD differences reported.
+State (2026-10-31): fourth-pass code/tests **95fa83f** advanced item 1; **M1 remains incomplete**.
+No push. Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
+ISA **0.8**. Do not read/adopt the sibling working draft 0.2.11.
 
-Verified: CMake 3.28.3 dual-major build/load; 23 markers; 73/74 applicable published
-recognition examples; 12 analysis regressions; five materialisation fixtures;
-scalar materialised keys; 12 exact reference objects and 35 stated vectors per
-major; C/descriptor-derived inc8. Legality: **66/65/1/0/0** per major
-(run/agree/deferred/blocked/diverge), gate exit 0. Sole deferral:
-fp-rot-fastmath-reassoc, L5, M2 §13 / bp-7ni. Former ABI runtime and global-numbering
-blockers are resolved at the accepted pin. See docs/verification.json for actual
-plugin digests, object/symbol hashes, vectors and before/after totals.
+Fresh dual-major headless gate: **66/65/1/0/0** per major
+(run/agree/deferred/blocked/diverge), exit 0 before and after. Sole deferral:
+fp-rot-fastmath-reassoc (M2 §13 / bp-7ni). Twelve full published objects and
+all 35 run vectors reproduce on each major; no additional example is complete.
 
-Next: finish **M1** general reference analysis/all-rule materialised keys
-(bp-3w4) and production descriptor/CC launch path, host entry replacement and
-records (bp-2zv). Static descriptor-reference remains a test interface. Brief 1b
-item 4 still has eight scalar-typed lift examples plus two object-only integration
-vectors missing; their exact rows and owning beads are in docs/PROGRESS.md.
-Do not close M1 or narrow the north star: Grover over unmodified SQLite is core.
-Existing M2 mechanics: FP/helper/native comparison linking (bp-7ni), full
-normalisation, calls/memory/device bindings/replay (bp-311); M3 arena/action
-outlining (bp-qql). General TDL/CC-R and all later demo rungs remain scheduled.
+Fourth-pass checks: 17/17 analysis regressions, 6/6 address/provenance cases,
+14/14 materialisation fixtures and key assertions on LLVM 18, 15/15 of each on
+23. Full published key acceptance audit is separately **red**, 18/49 on 18,
+19/50 on 23 (four base assertions included). Run with `--all-fixtures`.
+PROGRESS has a witness/status row for every §4/§5 rule, every N rule and V1–V16.
+verification.json records actual digests, objects, hashes, vectors and failures.
 
-Run the full gate from any directory:
+Next, finish item 1 (bp-3w4): general symbolic/residue/wide represented-address
+images, all composite/atomic transfers, exact host/address/entry/boundary /
+generation tier seeding and all materialised keys. Resolve **bp-tr5**: §7.2's
+source forwarding-thunk resolution makes the published N0 widenable wrapper an
+external intrinsic candidate, while its materialised body is defined `ret true`.
+The required virtual materialisation/resolve order needs clarification.
+
+Then item 2 (bp-2zv): production scalar descriptors/CC launch objects, host
+replacement, records; descriptor-reference is still test-only. Item 3 still
+requires binding-out-byte/clock-read/block-byte/console-byte, entry-replay-byte,
+rung4-mini, rung8-mini, listsum, entry-stack and arena-o1. Exact missing rows and
+existing mechanical owners bp-311/bp-qql are in PROGRESS/PLAN; none is out of scope.
+No new M2 deferral was added. Grover over unmodified SQLite remains core.
+
+Run the full regression gate from any directory:
 
 ```sh
 mkdir -p /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp
 env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp /home/tobias/Projects/bennett-workspace/bennett-plugin/scripts/pre-push
 ```
 
-Never use LLVM graphical viewer passes. Every build/test/run uses the same
-headless prefix and project-local TMPDIR. Beads commands use
-`env -C /home/tobias/Projects/bennett-workspace/bennett-plugin BEADS_HOOK_TIMEOUT=20 bd ...`;
-export `.beads/issues.jsonl` before explicit-path commits. The orchestrator pushes.
+For full-key acceptance, use that same headless prefix before
+`python3 /home/tobias/Projects/bennett-workspace/bennett-plugin/tests/region_keys.py --major 18 --all-fixtures`
+and again with 23. These commands currently exit 1; this is not M1 acceptance.
+Never run LLVM graphical viewer passes. Every build/test/run uses the headless
+prefix and project-local TMPDIR. Beads: `env -C <repo> BEADS_HOOK_TIMEOUT=20 bd ...`;
+export `.beads/issues.jsonl` before explicit-path commits. Do not push.
