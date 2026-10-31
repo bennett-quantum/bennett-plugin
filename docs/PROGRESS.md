@@ -6,21 +6,22 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 closed; bp-1us aggregate rows implemented, full gate running**. Both runtime-linked analyses reach S1–S5;
+(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 and bp-1us closed after separate full dual-major gates**. Both runtime-linked analyses reach S1–S5;
 linked production next stops at §17.4 `malloc` (bp-tav). Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
   pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
   the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
-  and 23 recognition, analysis_edges, reference_images, materialisation, region_keys, scalars, descriptors,
+  and 23 recognition, analysis_edges, analysis_performance, reference_images, materialisation, aggregate_rows, region_keys, scalars, descriptors,
   production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate. The gate also runs the full key audit with explicit bd accounting and independent V1–V16 validation.
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
 Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**
 (924/924 cells on 18, 792/792 on 23); analysis_edges 20/20 and analysis_performance 3/3.
-All 288 prior object hashes preserved; 288 equal object pairs, 45 published matches.
+Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
+All 288 prior object hashes preserved; 297 equal object pairs, 45 published matches.
 Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
@@ -135,3 +136,9 @@ Exact additive closure through PT3 copies, finite-product caching, indexed slots
 Recorded hashtable: >300s→5.79s LLVM18, >300s→5.64s LLVM23; 64 rounds each, iteration/time budgets diagnose rule and AV element.
 Both published-runtime/pinned-arith links plus lto<O3> reach S1–S5 (11.23s/13.13s); next production rule is §17.4 malloc, filed bp-tav.
 Final full gate exit 0, 66/66/0/0/0 each; 288 equal pairs, 45 published matches, all 288 prior hashes preserved; one earlier gate stopped incomplete for vector-store caching.
+
+### Pass 19 - 2026-10-31 - 56eadb7 (bp-1us closed)
+Depth-first field locations, unchanged-field aliases, flattened parameters/edge moves and packed direct/indirect call results/nonconstant returns implement §16.4.
+N25 hidden return pointers precede N22; nested projections and aggregate phi/select/freeze field shells preserve i129 top widths and loop-carried values.
+Three recognised/materialised/verified probes per major: 15 L vectors + 3 numerical CC launches; pinned real-arith L production passes five vectors on both majors (softfloat 90/90 and 95/95).
+Final full gate exit 0, 66/66/0/0/0 each; 297 equal pairs, 45 published matches, all 288 prior hashes preserved; one incomplete gate stopped for wide aggregate phis; bp-7ni untouched.

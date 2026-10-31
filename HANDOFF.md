@@ -1,43 +1,47 @@
 # Handoff
 
-Rewritten at session end only. Mid-session state lives in chat, the worklog and bd.
+Rewritten at session end: **Sat Oct 31 23:42:27 UTC 2026**.
 
-## State (2026-10-31)
+## State
 
-**M1 is complete on the plan's definition** (`docs/PLAN.md`; maintainer ruling in
-`bennett/docs/council/README.md`, watcher pass 4): 17 scalar objects byte-exact on LLVM 18 and
-23, 40 vectors per major, legality gate 66/65/1/0/0 per major, production scalar launches.
-Accepted dialect 0.2.10 @ 023f5a7, ISA 0.8. Sole gate deferral: fp-rot-fastmath-reassoc (bp-7ni).
+Pinned contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
+ISA **0.8** (`SPEC_VERSIONS.toml`; gate checks the accepted pin). M1 remains complete;
+M2 and the North Star ladder remain in progress. `bd ready` / `bd list` are the obligation list.
 
-## Open beads by milestone (`bd list`; labels `m2`/`m3`/`m4`)
+This consumer-driven pass closed **bp-au6**, then **bp-1us**, with a complete in-tree gate
+for each. No push. bp-7ni recursive CC soft-float closure was not changed.
 
-- **M2:** bp-kv5 (general descriptor dispatch), bp-piq (budget-stage shadow-stack vector),
-  bp-311 (replay, device bindings, lifted memory/calls), bp-7ni (soft-float).
-- **M3:** bp-rbl (general handle environments), bp-65x (parameterised INOUT, budget minima),
-  bp-qql (arena-o1); ISA blockers bp-2tw, bp-2bi, bp-ckk, bp-is0.
-- **M4:** bp-o7f (executable certificate reproduction; upstream 8r4/47t).
-- **Unmoved M1 leftovers needing maintainer disposition:** bp-2zv, bp-3w4, bp-tr5, bp-tye.
+- bp-au6: exact S2 cycle acceleration/caching, slot indexes and nested zero-image unions;
+  original unlinked hashtable probes exceeded 300 seconds on both majors; first green
+  measurements were 5.79s (18) / 5.64s (23), 64 rounds each. Iteration/time budgets diagnose
+  §5.2 rule and AV element. Implementation `04006df`, receipt `569fa9c`.
+- bp-1us: implementation `56eadb7`; depth-first aggregate field transport, packed calls/returns,
+  N25 hidden return pointers and N22 nested/loop-carried field shells. Three probes per major
+  retain recognition and verified materialisation hashes, execute 15 L vectors and three real
+  CC launches. Pinned real-arith L production passes five numerical inputs on both majors.
+- Final gate: **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge** each major;
+  cells 924/924 (18), 792/792 (23). **297** equal object pairs, **45** published matches,
+  all **288** previous object hashes preserved. Repeated oracle calls share one reference.
+  Latest receipt: `docs/verification.json`.
 
-## How to run the gate
+## Rung 2 frontier
 
-`scripts/pre-push` gates a clean checkout: it reads the sha being pushed from the refs git
-supplies on stdin (HEAD when run directly), creates a detached worktree at
-`.tmp/gate-<sha>`, builds both majors and runs the full gate there with TMPDIR inside it,
-removes the worktree, and exits with the gate's status. Run it headless:
+Published runtimes existed on both majors. Recorded postlink inputs were linked with those
+runtimes and SHA-pinned arith (`llvm-link --only-needed`), then `lto<O3>`, then the plugin.
+Both analyses reach S1–S5; final linked analysis times: 11.34s (18), 5.89s (23).
+Both production runs stop explicitly at **§17.4 CC marker/call lowering: malloc(32)**;
+new plugin bead **bp-tav** owns this next measured producer. Commands, input/publication/plugin
+hashes and diagnostics are in `docs/rung2-analysis.json` and the verification receipt.
+The hashtable has not executed or reversed on either executor; rung 2 remains red.
+No dialect-spec bead was needed or filed, and no spec text was changed.
 
-`env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER /home/tobias/Projects/bennett-workspace/bennett-plugin/scripts/pre-push`
+## Verification and commits
 
-`scripts/gate` runs the same sequence in the current (possibly dirty) tree for iteration; it
-is not a push gate. After a gate, `scripts/record-verification.py --pass NAME --date D
---commits A,B --gate-exit 0` rewrites `docs/verification.json` (latest pass only). Never LLVM
-`-view-*`. Export beads (`bd export -o .beads/issues.jsonl`) and commit explicit paths.
+Run headless with DISPLAY, WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS and BROWSER unset,
+and TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp. Never LLVM -view-*.
 
-## Pushing
-
-The orchestrator pushes normally (`git push`); the pre-push hook is the gate, so
-`--no-verify` is retired for code pushes. Install the hook with `scripts/install-hooks.sh`.
-
-## Next
-
-M2, starting with **bp-kv5** (dialect 8.4 compare trees over candidate/width/size/device
-fields and arbitrary descriptor memory loads). One pass per bead until it closes, one gate.
+`scripts/gate` is the in-tree iteration gate. `scripts/pre-push` gates a frozen pushed sha
+in a detached worktree. Record a completed gate with **python3 scripts/record-verification.py**
+(the Python script is not executable), supplying --pass, --date, --commits and --gate-exit 0.
+Export beads with `bd export -o .beads/issues.jsonl`; commit explicit paths. The orchestrator
+pushes after reviewing the commits. See `docs/PROGRESS.md` passes 18–19 for this pass.

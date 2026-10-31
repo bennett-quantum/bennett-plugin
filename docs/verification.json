@@ -1,13 +1,15 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "eighteenth-bp-au6",
+    "name": "nineteenth-bp-1us",
     "date": "2026-10-31",
     "commits": [
-      "04006df"
+      "04006df",
+      "569fa9c",
+      "56eadb7"
     ],
-    "code_head": "04006dfa758ef426ea1b7aebdbccf3d372ec72a2",
-    "recorded_at": "2026-10-31T23:02:31+00:00",
+    "code_head": "56eadb7f7044e42c75510884a44a98178ba78a65",
+    "recorded_at": "2026-10-31T23:42:34+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
@@ -18,8 +20,8 @@
       "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
     },
     "plugin_sha256": {
-      "18": "ce9276f2f43b01ac12df2e92871b0516ccc0eb38067efd33d2290a41167d981f",
-      "23": "604078a8cb0824c1dd1bef12b1b2ca5953c7babb3393f5cae61da02b7f5f8409"
+      "18": "8c7ca5095bc1b1d11f8480a69e7532747f07919a82d33be99b248a659dafa0d0",
+      "23": "112b4a8096a6b18718c25f4bad3a244243ca756079f500dcbb2a932bb68f78b4"
     },
     "gate": {
       "command": "scripts/gate",
@@ -46,7 +48,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 5.7920131090068026,
+          "seconds": 2.716584827998304,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%251) in @ht_demo_grow (milestone 1) at   %251 = icmp eq i64 %250, %0\n"
         },
@@ -58,25 +60,408 @@
           "cases": 36,
           "passed": 36
         },
-        "softfloat": {
-          "cases": 84,
-          "passed": 84,
-          "known_remainders": [
+        "aggregate-rows": {
+          "cases": 3,
+          "passed": 3,
+          "evidence": [
             {
-              "name": "published-production-next-rule",
+              "case": "aggregate-fields",
               "ok": true,
-              "detail": "bennett: unimplemented: \u00a716.4 scalar row (milestone 2) at   %658 = extractvalue { i64, i64 } %657, 0\n",
-              "expected_unimplemented": true,
-              "determining_sentence": "\u00a716.4: insertvalue/extractvalue use lift.mov of the depth-first flattened field locations; aggregate call results are unpacked field by field (bp-1us)."
+              "recognised": ".tmp/aggregate-rows/18/aggregate-fields/recognised.json",
+              "materialised": ".tmp/aggregate-rows/18/aggregate-fields/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 9,
+                  "steps": 58
+                },
+                {
+                  "input": 1,
+                  "payload": 10,
+                  "steps": 58
+                },
+                {
+                  "input": 7,
+                  "payload": 16,
+                  "steps": 58
+                },
+                {
+                  "input": 19088743,
+                  "payload": 2311536,
+                  "steps": 58
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 16777224,
+                  "steps": 58
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "72ee9b1eb7742c26461be0766d55f4636f05edef2feb86d364768497e440c92d",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "0",
+                    "reg": 3,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 4,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 6,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 7,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "72ee9b1eb7742c26461be0766d55f4636f05edef2feb86d364768497e440c92d",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "16"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "3656527d23ba9d763e129fd1d2cd751c0d46c12cf161160e4d273d0b78ee515f",
+              "materialised_sha256": "6927e9efdc6f8f9e7f9309094dd083b0e871f0acc8069ee1132245ed4a8ca07b",
+              "materialised_bitcode_sha256": "11486d0536059a969202d837d2d4e2596b6acde7f7ba50e3062439344e92a765",
+              "materialised_verified": true
+            },
+            {
+              "case": "aggregate-call-result",
+              "ok": true,
+              "recognised": ".tmp/aggregate-rows/18/aggregate-call-result/recognised.json",
+              "materialised": ".tmp/aggregate-rows/18/aggregate-call-result/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 3,
+                  "steps": 33
+                },
+                {
+                  "input": 1,
+                  "payload": 4,
+                  "steps": 33
+                },
+                {
+                  "input": 7,
+                  "payload": 10,
+                  "steps": 33
+                },
+                {
+                  "input": 19088743,
+                  "payload": 19088746,
+                  "steps": 33
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 2,
+                  "steps": 33
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "a05691b4a0c1cdb80967d9f7c522bebf22ea0296018fb01da6c09e68cb84049a",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "0",
+                    "reg": 3,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 4,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 6,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 7,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "a05691b4a0c1cdb80967d9f7c522bebf22ea0296018fb01da6c09e68cb84049a",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "10"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "1257c9f91117ae5298fcbe3d10e321315c9fbe379f2e5f299a7c6aa752086338",
+              "materialised_sha256": "f396467702908193b0918e38b6440ecd7f9dd6a9d804ba77e867cda1886c7321",
+              "materialised_bitcode_sha256": "33f8874c53ad0ae68d6733b1ffd0776ad93343a960e2376d0c2830256850da6c",
+              "materialised_verified": true
+            },
+            {
+              "case": "aggregate-wide-return",
+              "ok": true,
+              "recognised": ".tmp/aggregate-rows/18/aggregate-wide-return/recognised.json",
+              "materialised": ".tmp/aggregate-rows/18/aggregate-wide-return/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 9,
+                  "steps": 4054
+                },
+                {
+                  "input": 1,
+                  "payload": 11,
+                  "steps": 4054
+                },
+                {
+                  "input": 7,
+                  "payload": 17,
+                  "steps": 4054
+                },
+                {
+                  "input": 19088743,
+                  "payload": 19088753,
+                  "steps": 4054
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 9,
+                  "steps": 4054
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "1c8b9d8c90dcfaa97ac5a9a9716aef88e7a60a6ba6495b794382533870718147",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "1",
+                    "reg": 3,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 4,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 6,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 7,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "1c8b9d8c90dcfaa97ac5a9a9716aef88e7a60a6ba6495b794382533870718147",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "17"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "c1bc646c26a7ba96a8a2357b2f1350a45dcdd2dc18c8e0557f46a0db2f06b511",
+              "materialised_sha256": "8facd4dcd25a36734fb79dda62617829cf3e3b306895eb6d605e643f3a9b47b0",
+              "materialised_bitcode_sha256": "0aa79728065c0e323652b32d84f71c1f4565396a4f8b7167a99f4cef6da29e3e",
+              "materialised_verified": true
             }
-          ],
+          ]
+        },
+        "softfloat": {
+          "cases": 90,
+          "passed": 90,
+          "known_remainders": [],
           "published_production": [
             {
-              "name": "published-production-next-rule",
+              "name": "published-production-link",
               "ok": true,
-              "detail": "bennett: unimplemented: \u00a716.4 scalar row (milestone 2) at   %658 = extractvalue { i64, i64 } %657, 0\n",
-              "expected_unimplemented": true,
-              "determining_sentence": "\u00a716.4: insertvalue/extractvalue use lift.mov of the depth-first flattened field locations; aggregate call results are unpacked field by field (bp-1us)."
+              "detail": "bennett: residual validator accepted L closure (18 functions)\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/softfloat-production-probe/18/top/oracle-0/ref.bennett\nbennett: residual validator accepted L closure (18 functions)\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/softfloat-production-probe/18/top/oracle-1/ref.bennett\n"
+            },
+            {
+              "name": "published-production-check",
+              "ok": true,
+              "detail": "{\"object_hash\":\"adb6dd0503af24287b31ce6a7dfd0bdc0fda35744b933f83daff5c9f5b6251db\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\",\"interface_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"G3\":{\"closure_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\",\"interface_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\"},\"G4\":{\"closure_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\",\"interface_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\"},\"G5\":{\"closure_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\",\"interface_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\"},\"G6\":{\"closure_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\",\"interface_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\"},\"G7\":{\"closure_hash\":\"63fa580617df5635a585f46cc5a2a9b870df135fff9ecc5c0ba0209c64fe16f0\",\"interface_hash\":\"63fa580617df5635a585f46cc5a2a9b870df135fff9ecc5c0ba0209c64fe16f0\"},\"G8\":{\"closure_hash\":\"7937fd6872cfd394cd83c40d14666b279efe191f504a413da4aed63b9a5ce335\",\"interface_hash\":\"7937fd6872cfd394cd83c40d14666b279efe191f504a413da4aed63b9a5ce335\"},\"L1\":{\"closure_hash\":\"f547e2dd5511ac9eaf268dd6536c89a3f7e02a8d8368fececdf1e178e8f6c38b\",\"interface_hash\":\"f547e2dd5511ac9eaf268dd6536c89a3f7e02a8d8368fececdf1e178e8f6c38b\"},\"L10\":{\"closure_hash\":\"97266d1acad293e0e4b0718f01ed7b5875bf5421aa843875bcff7bdc62f55d18\",\"interface_hash\":\"97266d1acad293e0e4b0718f01ed7b5875bf5421aa843875bcff7bdc62f55d18\"},\"L11\":{\"closure_hash\":\"353a022bb44bc16a41f840f65c6f9d5c1b469072eac22976ffce60b7ee3aa3bd\",\"interface_hash\":\"353a022bb44bc16a41f840f65c6f9d5c1b469072eac22976ffce60b7ee3aa3bd\"},\"L12\":{\"closure_hash\":\"d65a7202d3339ca5b29e894b5798b51fcb75ee8fda275dab6fc09f0eb1f2fff3\",\"interface_hash\":\"d65a7202d3339ca5b29e894b5798b51fcb75ee8fda275dab6fc09f0eb1f2fff3\"},\"L13\":{\"closure_hash\":\"6fc4d7e005af138a060b047e9a2223d796de50bce336a245e6db702e55e28a6a\",\"interface_hash\":\"6fc4d7e005af138a060b047e9a2223d796de50bce336a245e6db702e55e28a6a\"},\"L14\":{\"closure_hash\":\"0f053603654895d6a2ccd546bef2d0313928671e17be26f36d0e4436e0c33a18\",\"interface_hash\":\"0f053603654895d6a2ccd546bef2d0313928671e17be26f36d0e4436e0c33a18\"},\"L15\":{\"closure_hash\":\"848a146d4dd5adbd0f7c2897358eff6705ebc093cbdd36a1ba11365d01df6eb9\",\"interface_hash\":\"848a146d4dd5adbd0f7c2897358eff6705ebc093cbdd36a1ba11365d01df6eb9\"},\"L16\":{\"closure_hash\":\"d44700466c0784d7728dead6a075c5d0524ff1f4e68fdee6c95aa5dac4f8ea61\",\"interface_hash\":\"d44700466c0784d7728dead6a075c5d0524ff1f4e68fdee6c95aa5dac4f8ea61\"},\"L17\":{\"closure_hash\":\"eccb059dd6537b7c81f7fe56fa711a42b551b281538cabc74ffbe010bf134834\",\"interface_hash\":\"eccb059dd6537b7c81f7fe56fa711a42b551b281538cabc74ffbe010bf134834\"},\"L18\":{\"closure_hash\":\"0e5377fcd350b0c65f4a1ca2a0fe4abcd464a643e9b134301df90e6d0e8b7824\",\"interface_hash\":\"0e5377fcd350b0c65f4a1ca2a0fe4abcd464a643e9b134301df90e6d0e8b7824\"},\"L2\":{\"closure_hash\":\"c81daa1effe43d356e93a82338678f43dc971d4d9b65b10bde85b712546c3d70\",\"interface_hash\":\"c81daa1effe43d356e93a82338678f43dc971d4d9b65b10bde85b712546c3d70\"},\"L3\":{\"closure_hash\":\"1854d875a3aedad2d48e62b835c3b18de13a0dee9698fa27c5f6943da7e819a7\",\"interface_hash\":\"1854d875a3aedad2d48e62b835c3b18de13a0dee9698fa27c5f6943da7e819a7\"},\"L4\":{\"closure_hash\":\"d1ea5dcebd0763669033fe5cd457791f692153d630d183234659cb2349fd6dfa\",\"interface_hash\":\"d1ea5dcebd0763669033fe5cd457791f692153d630d183234659cb2349fd6dfa\"},\"L5\":{\"closure_hash\":\"fa2384b38fd47612bed30e9bd5e135128ad6ad3e126b16a5087740b036b18812\",\"interface_hash\":\"fa2384b38fd47612bed30e9bd5e135128ad6ad3e126b16a5087740b036b18812\"},\"L6\":{\"closure_hash\":\"6505f0c2acc04ec542ab277617d1597316c531dfad917c1abed5ea3b046ca09f\",\"interface_hash\":\"6505f0c2acc04ec542ab277617d1597316c531dfad917c1abed5ea3b046ca09f\"},\"L7\":{\"closure_hash\":\"ba3f3ecd1343798ee4febb0d0b86735e4e8818b03ee07dcae84e9de1226407a6\",\"interface_hash\":\"ba3f3ecd1343798ee4febb0d0b86735e4e8818b03ee07dcae84e9de1226407a6\"},\"L8\":{\"closure_hash\":\"974c694b1e3e2a3c6589a746a42a8ef0047b040213388cff66c5cce4af24b2d7\",\"interface_hash\":\"974c694b1e3e2a3c6589a746a42a8ef0047b040213388cff66c5cce4af24b2d7\"},\"L9\":{\"closure_hash\":\"c08e51ef09079f9be40b5b0650e91bb637cce4efcb89aea9caa10496355f87e5\",\"interface_hash\":\"c08e51ef09079f9be40b5b0650e91bb637cce4efcb89aea9caa10496355f87e5\"},\"ref\":{\"closure_hash\":\"95b60e45320ba2f6ecc684ed8ddbe74ed9b618e7ad70f58eff18560e02bd6540\",\"interface_hash\":\"95b60e45320ba2f6ecc684ed8ddbe74ed9b618e7ad70f58eff18560e02bd6540\"}},\"unresolved_imports\":[]}\n"
+            },
+            {
+              "name": "published-production-numerical-0",
+              "ok": true,
+              "detail": "{\"code\":0,\"payload\":0,\"steps\":44892}\n"
+            },
+            {
+              "name": "published-production-numerical-1",
+              "ok": true,
+              "detail": "{\"code\":0,\"payload\":1,\"steps\":44995}\n"
+            },
+            {
+              "name": "published-production-numerical-4607182418800017408",
+              "ok": true,
+              "detail": "{\"code\":0,\"payload\":1,\"steps\":53941}\n"
+            },
+            {
+              "name": "published-production-numerical-9218868437227405312",
+              "ok": true,
+              "detail": "{\"code\":0,\"payload\":1,\"steps\":53538}\n"
+            },
+            {
+              "name": "published-production-numerical-9221120237041090560",
+              "ok": true,
+              "detail": "{\"code\":0,\"payload\":1,\"steps\":60821}\n"
             }
           ]
         },
@@ -182,7 +567,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 5.640469766003662,
+          "seconds": 3.2624085179995745,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%258) in @ht_demo_grow (milestone 1) at   %258 = icmp eq i64 %257, %0\n"
         },
@@ -193,6 +578,369 @@
         "materialisation": {
           "cases": 37,
           "passed": 37
+        },
+        "aggregate-rows": {
+          "cases": 3,
+          "passed": 3,
+          "evidence": [
+            {
+              "case": "aggregate-fields",
+              "ok": true,
+              "recognised": ".tmp/aggregate-rows/23/aggregate-fields/recognised.json",
+              "materialised": ".tmp/aggregate-rows/23/aggregate-fields/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 9,
+                  "steps": 58
+                },
+                {
+                  "input": 1,
+                  "payload": 10,
+                  "steps": 58
+                },
+                {
+                  "input": 7,
+                  "payload": 16,
+                  "steps": 58
+                },
+                {
+                  "input": 19088743,
+                  "payload": 2311536,
+                  "steps": 58
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 16777224,
+                  "steps": 58
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "72ee9b1eb7742c26461be0766d55f4636f05edef2feb86d364768497e440c92d",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "0",
+                    "reg": 3,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 4,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 6,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 7,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "72ee9b1eb7742c26461be0766d55f4636f05edef2feb86d364768497e440c92d",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "16"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "3656527d23ba9d763e129fd1d2cd751c0d46c12cf161160e4d273d0b78ee515f",
+              "materialised_sha256": "6927e9efdc6f8f9e7f9309094dd083b0e871f0acc8069ee1132245ed4a8ca07b",
+              "materialised_bitcode_sha256": "8833ef5d2bca50f2f88e9668678cc09fa85296ec576a1ec2cebc6254db647b40",
+              "materialised_verified": true
+            },
+            {
+              "case": "aggregate-call-result",
+              "ok": true,
+              "recognised": ".tmp/aggregate-rows/23/aggregate-call-result/recognised.json",
+              "materialised": ".tmp/aggregate-rows/23/aggregate-call-result/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 3,
+                  "steps": 33
+                },
+                {
+                  "input": 1,
+                  "payload": 4,
+                  "steps": 33
+                },
+                {
+                  "input": 7,
+                  "payload": 10,
+                  "steps": 33
+                },
+                {
+                  "input": 19088743,
+                  "payload": 19088746,
+                  "steps": 33
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 2,
+                  "steps": 33
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "a05691b4a0c1cdb80967d9f7c522bebf22ea0296018fb01da6c09e68cb84049a",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "0",
+                    "reg": 3,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 4,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 6,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 7,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "a05691b4a0c1cdb80967d9f7c522bebf22ea0296018fb01da6c09e68cb84049a",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "10"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "1257c9f91117ae5298fcbe3d10e321315c9fbe379f2e5f299a7c6aa752086338",
+              "materialised_sha256": "f396467702908193b0918e38b6440ecd7f9dd6a9d804ba77e867cda1886c7321",
+              "materialised_bitcode_sha256": "567ac6949f34e42815b35b6ce8dead0c8f5533ac5e8c1967e24f68bb13e7c0e9",
+              "materialised_verified": true
+            },
+            {
+              "case": "aggregate-wide-return",
+              "ok": true,
+              "recognised": ".tmp/aggregate-rows/23/aggregate-wide-return/recognised.json",
+              "materialised": ".tmp/aggregate-rows/23/aggregate-wide-return/materialised.ll",
+              "vectors": [
+                {
+                  "input": 0,
+                  "payload": 9,
+                  "steps": 4054
+                },
+                {
+                  "input": 1,
+                  "payload": 11,
+                  "steps": 4054
+                },
+                {
+                  "input": 7,
+                  "payload": 17,
+                  "steps": 4054
+                },
+                {
+                  "input": 19088743,
+                  "payload": 19088753,
+                  "steps": 4054
+                },
+                {
+                  "input": 18446744073709551615,
+                  "payload": 9,
+                  "steps": 4054
+                }
+              ],
+              "cc_result": {
+                "budgets": [
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  },
+                  {
+                    "depth": 128,
+                    "heap": 65536,
+                    "stack": 65536,
+                    "steps": 1000000
+                  }
+                ],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "top",
+                "entry_memory_digest": "1c8b9d8c90dcfaa97ac5a9a9716aef88e7a60a6ba6495b794382533870718147",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                "host_requests": [],
+                "measurements": [
+                  {
+                    "bits": "1",
+                    "reg": 3,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 4,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 5,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 6,
+                    "value": 0
+                  },
+                  {
+                    "bits": "1",
+                    "reg": 7,
+                    "value": 1
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 8,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 9,
+                    "value": 0
+                  },
+                  {
+                    "bits": "0",
+                    "reg": 10,
+                    "value": 0
+                  }
+                ],
+                "memory_digest": "1c8b9d8c90dcfaa97ac5a9a9716aef88e7a60a6ba6495b794382533870718147",
+                "memory_equals_entry": true,
+                "results": [
+                  {
+                    "type": "i64",
+                    "value": "17"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 64,
+                "tape": []
+              },
+              "recognised_sha256": "c1bc646c26a7ba96a8a2357b2f1350a45dcdd2dc18c8e0557f46a0db2f06b511",
+              "materialised_sha256": "8facd4dcd25a36734fb79dda62617829cf3e3b306895eb6d605e643f3a9b47b0",
+              "materialised_bitcode_sha256": "f30613648ffea240c59442eebd294a212c6e22c152aeb1b16444466569124b9b",
+              "materialised_verified": true
+            }
+          ]
         },
         "softfloat": {
           "cases": 95,
@@ -536,13 +1284,159 @@
         }
       },
       "next_production_bead": "bp-tav",
-      "claims": "S2 fixpoint completion only. Both linked production invocations stop at \u00a717.4 malloc; no executor or reversal claim."
+      "claims": "S2 fixpoint completion only. Both linked production invocations stop at \u00a717.4 malloc; no executor or reversal claim.",
+      "linked_final": {
+        "18": {
+          "major": 18,
+          "plugin_sha256": "8c7ca5095bc1b1d11f8480a69e7532747f07919a82d33be99b248a659dafa0d0",
+          "input_sha256": "8f5ae2537e76ebf0c8c8b9358ff0b380a9cd9c36925eeabd9a40f3a4b5555972",
+          "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+          "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+          "stages": [
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-18.ll",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.026368024002294987,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.0712092589965323,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 11.344360457995208,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/out"
+              ],
+              "exit": 1,
+              "seconds": 10.461764089995995,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   %3 = tail call noalias dereferenceable_or_null(32) ptr @malloc(i64 noundef 32) #11\n"
+            }
+          ]
+        },
+        "23": {
+          "major": 23,
+          "plugin_sha256": "112b4a8096a6b18718c25f4bad3a244243ca756079f500dcbb2a932bb68f78b4",
+          "input_sha256": "d9af32ad33d63b9133bb2b4245cdc9c30491d3f284ecedcb37e272f3cff63ade",
+          "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+          "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+          "stages": [
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-23.ll",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.024866960011422634,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.0740692300023511,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 5.890611044000252,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/out"
+              ],
+              "exit": 1,
+              "seconds": 12.417509013001109,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   %3 = tail call noalias dereferenceable_or_null(32) ptr @malloc(i64 noundef 32) #12\n"
+            }
+          ]
+        }
+      },
+      "linked_final_code_commit": "56eadb7f7044e42c75510884a44a98178ba78a65",
+      "linked_final_note": "Retested after bp-1us with the final gated plugin: both linked analyses complete; both production runs stop at \u00a717.4 malloc (bp-tav). No hashtable executor/reversal claim."
     },
     "object_pairs": {
-      "count": 288,
+      "count": 297,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 203,
+      "production_cross_major_pairs": 212,
       "preserved_previous_objects": 288,
       "rows": [
         {
@@ -2271,6 +3165,60 @@
           "object": "memory-runtime/memset-16-16-0/ref.bennett",
           "bytes": 2334,
           "sha256": "eace3246d34381827b425dbbb8ba3aedf54215a10332b1b8a901387ee69179d5",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-call-result/out/ref.bennett",
+          "bytes": 2678,
+          "sha256": "630c90503754c80b048599c4b47fb5f835436ea3baa562e1d48d500734eda244",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-call-result/production/top/launch.bennett",
+          "bytes": 6632,
+          "sha256": "9ee7553d078742bd74328daeb1b639e4bc2ee4450d7aee0e28a541ed132bc69d",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-call-result/production/top/oracle-0/ref.bennett",
+          "bytes": 2673,
+          "sha256": "310f15b94f9ecd8628156f69f3632808100de3ea961d79732334d329c36aa3dd",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-fields/out/ref.bennett",
+          "bytes": 3268,
+          "sha256": "8ced2655c139136fea4f43ffabed863c26a2e97d24d97cf3d51da8c6a530b86b",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-fields/production/top/launch.bennett",
+          "bytes": 7220,
+          "sha256": "59c3304435f08220bb0946250c342b5b0491b09059c7895daf8ce01eabe71b0c",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-fields/production/top/oracle-0/ref.bennett",
+          "bytes": 3263,
+          "sha256": "23e4cb51e6bcb5af53edefe39fe57f91aaeb27bee4f0a2c790afcdf01f2b7757",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-wide-return/out/ref.bennett",
+          "bytes": 287266,
+          "sha256": "f4eaf193cee74c9a73df393de8ca88014fb150db7781e8fe5c6f1fff1daab9c6",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-wide-return/production/top/launch.bennett",
+          "bytes": 291225,
+          "sha256": "7d654b324ec58de465138153fffd9246ba06a685ac4dc0471619e49366e6f7d0",
+          "published_golden": null
+        },
+        {
+          "object": "aggregate-rows/aggregate-wide-return/production/top/oracle-0/ref.bennett",
+          "bytes": 287261,
+          "sha256": "f2c9cd7c41ab9b7d42f7b20ca40b2eb7fb823dc0e935912535a69dc9705be137",
           "published_golden": null
         }
       ]
