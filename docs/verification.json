@@ -1,26 +1,24 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "eighth",
+    "name": "ninth",
     "date": "2026-10-31",
     "commits": [
-      "a8a2d81",
-      "5d8d1f9",
-      "8e49ae0",
-      "8e8118e",
-      "de4fe2c"
+      "af8f31e",
+      "d5b8904",
+      "f9956c6"
     ],
-    "code_head": "18f780b888d717b1e05aa6857350e954b9991594",
-    "recorded_at": "2026-10-31T15:57:56+00:00",
+    "code_head": "f9956c6c6eb255fd0a902a9b53d784947ee9cf71",
+    "recorded_at": "2026-10-31T16:28:09+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
     "plugin_sha256": {
-      "18": "839d01a8c83a557c25a902a162e1edf42eba166faddfba855b499007842f3f8a",
-      "23": "988156aa32f87d418dc94d982b4516282a60f3957c69a74cb1992a0780d417e8"
+      "18": "7ff0d22536a8ffbd8f9892ca4f9377ac79decc274390007d5db389f0296eab3d",
+      "23": "bc390f9bb748da376d6d18f201f292d3a72407ac769126bf4db04c6651d4115c"
     },
     "gate": {
-      "command": "scripts/pre-push",
+      "command": "scripts/gate",
       "exit": 0,
       "accepted_contract_drift": false,
       "contract_head_drift": true,
@@ -112,8 +110,8 @@
           "expected_rejections": 0
         },
         "production-dispatch": {
-          "cases": 3,
-          "ok": 3,
+          "cases": 23,
+          "ok": 23,
           "expected_rejections": 0
         },
         "production-environments": {
@@ -168,8 +166,8 @@
           "expected_rejections": 0
         },
         "production-dispatch": {
-          "cases": 3,
-          "ok": 3,
+          "cases": 23,
+          "ok": 23,
           "expected_rejections": 0
         },
         "production-environments": {
@@ -219,10 +217,11 @@
       }
     },
     "object_pairs": {
-      "count": 97,
+      "count": 198,
       "byte_identical": true,
-      "published_matches": 27,
-      "production_cross_major_pairs": 46,
+      "published_matches": 31,
+      "production_cross_major_pairs": 147,
+      "preserved_previous_objects": 97,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
@@ -531,6 +530,540 @@
           "published_golden": null
         },
         {
+          "object": "production-dispatch/across-blocks/out/top/launch.bennett",
+          "bytes": 27724,
+          "sha256": "b659876707c5230c5909ede3a32f6071fbb69f5ffdf191814997ed7806ebd32f",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-0/ref.bennett",
+          "bytes": 969,
+          "sha256": "03077b24077924001d50ff5782b3fcfdbfbce78f9ac9352b0bad62e6a46dfa42",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-1/ref.bennett",
+          "bytes": 974,
+          "sha256": "2d95bf48c05b3b86cbaa78aa00e78bdea612459341c68807a322374c81ec7008",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-2/ref.bennett",
+          "bytes": 1002,
+          "sha256": "ba7a505dc044cff3a99e4aa0e552aef9d45a8d8ebff6feaeb1bffe2b0b421868",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-3/ref.bennett",
+          "bytes": 1007,
+          "sha256": "7f946fca9b22a62613b3b7612a839c88006bfc759ec4240bb3f6948eb12326dc",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-4/ref.bennett",
+          "bytes": 969,
+          "sha256": "c10b7d98e0adb853889ffc7184ac054c1d572d8b7fa10ce723c1e8cf033fc17e",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-5/ref.bennett",
+          "bytes": 974,
+          "sha256": "1bc89caf0d58746cacc9b9cc0ecda6b8485b21605ea95983aa4bf7cbe0cee417",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-6/ref.bennett",
+          "bytes": 1002,
+          "sha256": "cf64cf6bc2be93d52a52c77808ffc613014d69a15b7c6235234d815d9ee3174d",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/across-blocks/out/top/oracle-7/ref.bennett",
+          "bytes": 1007,
+          "sha256": "4f7d3e3ecd30cb49212bf6111e96128c4d5800b8a8ce853b4d28a57ba045c5bd",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/allocation-width/out/top/launch.bennett",
+          "bytes": 4943,
+          "sha256": "5c4753e8d408ccbe84db8337baf940703501433aeeac4d246040cabc183762cc",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/allocation-width/out/top/oracle-0/ref.bennett",
+          "bytes": 931,
+          "sha256": "80af738e374ef86fa25c19a88d96d6fd50f3230f4b07c5073a50e122de460572",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/allocation-width/out/top/oracle-1/ref.bennett",
+          "bytes": 899,
+          "sha256": "33a9720a9933b45728ad3a6981a3bb0161ff698d5a95da4befac56fe797d6549",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/bad-size/out/top/launch.bennett",
+          "bytes": 6026,
+          "sha256": "6c81526b229ca97e3e112d5b1019c9922b8fbc7fa2bf9bf73112ee71c2f3f0b5",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/bad-size/out/top/oracle-0/ref.bennett",
+          "bytes": 1040,
+          "sha256": "aa8fddd878a0ef6d78a233aa7df6643268e3f12557bd6a48f96a833cc30df746",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/binding-block-byte/out/top/launch.bennett",
+          "bytes": 3234,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/binding-block-byte/out/top/oracle-0/ref.bennett",
+          "bytes": 1782,
+          "sha256": "a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c",
+          "published_golden": "binding-block-byte"
+        },
+        {
+          "object": "production-dispatch/binding-clock-read/out/top/launch.bennett",
+          "bytes": 2907,
+          "sha256": "2e082fab4f48a55026809463b77f3c75794cd607adcb50c8183ac0f72a5fc6ba",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/binding-clock-read/out/top/oracle-0/ref.bennett",
+          "bytes": 1499,
+          "sha256": "ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e",
+          "published_golden": "binding-clock-read"
+        },
+        {
+          "object": "production-dispatch/binding-console-byte/out/top/launch.bennett",
+          "bytes": 3659,
+          "sha256": "d24a83ab304fa7713f3e845ea2903815c6b7394f269a9d3b7d7de29d79f818ba",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/binding-console-byte/out/top/oracle-0/ref.bennett",
+          "bytes": 2251,
+          "sha256": "c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf",
+          "published_golden": "binding-console-byte"
+        },
+        {
+          "object": "production-dispatch/binding-out-byte/out/top/launch.bennett",
+          "bytes": 2496,
+          "sha256": "77403cff04bfc0cf18e834c8f2371739d6c7c66abf56d3eb8c7a36a68e9c33b3",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/binding-out-byte/out/top/oracle-0/ref.bennett",
+          "bytes": 1088,
+          "sha256": "94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581",
+          "published_golden": "binding-out-byte"
+        },
+        {
+          "object": "production-dispatch/candidate-memory/out/top/launch.bennett",
+          "bytes": 3727,
+          "sha256": "5d6689eeb1a973a420664c59088b57285cf135033f8b680da7ae0809bfc19df3",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-memory/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "cbdd60321f7986e14c5bd3e636e416099f5081dcc195c4ad2b858ee0e0cb9621",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-memory/out/top/oracle-1/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-no-match/out/top/launch.bennett",
+          "bytes": 2321,
+          "sha256": "2c2cca667cf3ceddc8d3914a87ae2b777bffffbe4bbacabcbe8951770e004c21",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-no-match/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-select/out/top/launch.bennett",
+          "bytes": 3597,
+          "sha256": "6e9b62ec4cd5aad75cebbbe4de68eb334d0624f11a551183439281f8e89474b0",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-select/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "cbdd60321f7986e14c5bd3e636e416099f5081dcc195c4ad2b858ee0e0cb9621",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/candidate-select/out/top/oracle-1/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/clock-value/out/top/launch.bennett",
+          "bytes": 2337,
+          "sha256": "f0bceb64ee6da6f812fff8aa914a8053c72ddc9290d823e8190517e59e8cc12a",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/clock-value/out/top/oracle-0/ref.bennett",
+          "bytes": 1387,
+          "sha256": "4898a6c2fbce73e2a3689585a72f75fb4ea6840376f727ceb031958b51c6cf1e",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/launch.bennett",
+          "bytes": 142262,
+          "sha256": "e588f24e63727299fada5dba6ce2b1fb78d4284f029aac668bd774334d756e2a",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-0/ref.bennett",
+          "bytes": 2331,
+          "sha256": "a768775c60be84e8bbdcd7e615764c9cb42333692bdd2194b3251cf05a2a532c",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-1/ref.bennett",
+          "bytes": 2331,
+          "sha256": "8bf352a0dca12cc18872f9460ceeefc6eba0c3a6cbfd64bb8c6b810bca1bcce3",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-2/ref.bennett",
+          "bytes": 2364,
+          "sha256": "74fbb4318bfbf670dae01baf8bdf4a36f005bfc2325defa65a32908bb2cdfcfd",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-3/ref.bennett",
+          "bytes": 2364,
+          "sha256": "a246146d0864ddc654379cc9fb9a36f1f49f1960f258b2ce4c7ee2ac194d5ecf",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-4/ref.bennett",
+          "bytes": 1299,
+          "sha256": "88e574e09d0cba4d37d7efb5273015a8099db07476eb51d827da456f0d543a68",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-5/ref.bennett",
+          "bytes": 1958,
+          "sha256": "b836efff088f45af7a7f65f2b166cf146aead4f29d2c609ac9e53001dd849445",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-6/ref.bennett",
+          "bytes": 1332,
+          "sha256": "b246443907932176d7a883dcac03792bbd6ee9f9282d376db9acc6a21dd382a7",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-7/ref.bennett",
+          "bytes": 1991,
+          "sha256": "4a01b3b2bb46cb340f942d775e66225923c061b9533b22aed198dca4fcbc3911",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-8/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-global/out/top/oracle-9/ref.bennett",
+          "bytes": 946,
+          "sha256": "8dbf9bc8855c8c0b7368a6ed12dadd173adf917d5948cef5f41cbac9b771f3b4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-loop/out/top/launch.bennett",
+          "bytes": 7513,
+          "sha256": "b643113e57a9147bedbfb4328a04a595343fb6e9f0cef9c2c6c54aa51b6a7199",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-loop/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-loop/out/top/oracle-1/ref.bennett",
+          "bytes": 946,
+          "sha256": "8dbf9bc8855c8c0b7368a6ed12dadd173adf917d5948cef5f41cbac9b771f3b4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-phi/out/top/launch.bennett",
+          "bytes": 8134,
+          "sha256": "ea222b29a98754dcdebfc5aee2c08d2a581f8a38087800f737507e81a125b258",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-phi/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-phi/out/top/oracle-1/ref.bennett",
+          "bytes": 946,
+          "sha256": "8dbf9bc8855c8c0b7368a6ed12dadd173adf917d5948cef5f41cbac9b771f3b4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-select/out/top/launch.bennett",
+          "bytes": 8166,
+          "sha256": "fda804071391d24706b4ec512ebb6fb002066d6245390b9ca580393114920156",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-select/out/top/oracle-0/ref.bennett",
+          "bytes": 913,
+          "sha256": "25c714e7756b8e09b40357b58a44dff470ede4991926dbdc7412206ba53b3845",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/descriptor-select/out/top/oracle-1/ref.bennett",
+          "bytes": 946,
+          "sha256": "8dbf9bc8855c8c0b7368a6ed12dadd173adf917d5948cef5f41cbac9b771f3b4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/launch.bennett",
+          "bytes": 227677,
+          "sha256": "bf72646aa1321a9099486f1c41b12692da82cbf6eb3449244d73c3251d21c2d5",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-0/ref.bennett",
+          "bytes": 1271,
+          "sha256": "0157ff612f129ea3324d8162a9296955e4286be6550006a3710adf1cc8812ded",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-1/ref.bennett",
+          "bytes": 1673,
+          "sha256": "b7215397be1cde1fb4185f3d0ee45bfa2b46a11afaa04b9a66d3f3023fb639b2",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-10/ref.bennett",
+          "bytes": 6598,
+          "sha256": "a85e8fb1c9b07ece5dc5cdbdfe081e07e5faf5bf5a63200189ae45b269ab5f6e",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-11/ref.bennett",
+          "bytes": 6598,
+          "sha256": "c881ee8bfb6abd48c02df829ff4facb966252e9330ef5edb599c9eb4a1220849",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-12/ref.bennett",
+          "bytes": 6598,
+          "sha256": "426770d96ba8ab50a590dc3f195526f59866de9c1d78f9420d04503da8b30df1",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-13/ref.bennett",
+          "bytes": 6598,
+          "sha256": "3d5a5a04d35aef39b9d5d54688f308fafd8377aee241c0327787ee771241655b",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-14/ref.bennett",
+          "bytes": 6598,
+          "sha256": "46e932fb65782e7033b5f88c50d8b6b3c99a3eeaadc6845a225f0e1bf7ab7992",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-15/ref.bennett",
+          "bytes": 6598,
+          "sha256": "ad6ddc832d3f1a54d4fbb673cd356f84ed5286e1dfde9d6efaed8b77b8dc8d2b",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-16/ref.bennett",
+          "bytes": 6598,
+          "sha256": "f9652869343359f4d82ad6f1989aeb37826ab2ff67eb275d7a7ef049c4e829e5",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-17/ref.bennett",
+          "bytes": 6598,
+          "sha256": "0d6c84e0c0b170e37fe7cc8c5d3bd770b797747c79f018510b05d972ba6b42fe",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-18/ref.bennett",
+          "bytes": 6598,
+          "sha256": "ecf74ccc0fa7d1ae0bb0a86ff75cc975ed53fb42f4ed3cc3390a564606842042",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-19/ref.bennett",
+          "bytes": 6598,
+          "sha256": "5dc5a4ceb64145875a0fa0999805415a9d8095d64f61db235ac629d51de7dd81",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-2/ref.bennett",
+          "bytes": 2020,
+          "sha256": "9589fcd8b9e76e51a55c72a4053f8020c749b8efe1862f1c55f96932078424e4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-20/ref.bennett",
+          "bytes": 6598,
+          "sha256": "d86680af3a26171b45f3c8fbfeb3c3d6ed61db39ef7b931df71e66d65020a3a4",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-21/ref.bennett",
+          "bytes": 6598,
+          "sha256": "e39f7434b377f16a0b6ed614078565af140578954bc3a7f204bd830ee2341c4c",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-22/ref.bennett",
+          "bytes": 6598,
+          "sha256": "7ab17f69df84d1e0d5d35aed7dde0c09b3da1b887a99ba7914bf32c1ad192d63",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-23/ref.bennett",
+          "bytes": 6598,
+          "sha256": "85d284fe57b34f71d19121740a623d1eae9b72f3c9874d85dff09a926d44205d",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-24/ref.bennett",
+          "bytes": 6598,
+          "sha256": "6f14ef74fe98d47e72301b9690a0017b94c0541255c8642c1c4425cedd2fd755",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-25/ref.bennett",
+          "bytes": 6598,
+          "sha256": "adabd67208cbfeafd4ad1491740833b26a876d2663f346740391daf9114a43d9",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-26/ref.bennett",
+          "bytes": 6597,
+          "sha256": "a145bf61e9c57b91790d63fd87754f7bb339b5e51e427d15cba832152a546e7d",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-27/ref.bennett",
+          "bytes": 6597,
+          "sha256": "7786b805d4a2c9127aec61ab88f8f8273c1dcf6cb0911870ec47db80f4fcc5eb",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-28/ref.bennett",
+          "bytes": 6597,
+          "sha256": "cc874762013310d25c45074f687194f0babc55d4ebbb040efcd76cb9d98dfe6c",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-29/ref.bennett",
+          "bytes": 6597,
+          "sha256": "e414c21a6ea30249ad49239661fe8a14f5f2babc4735de734ecd1ff3eb6a6046",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-3/ref.bennett",
+          "bytes": 6598,
+          "sha256": "42bd74f6f710953d8a6bae95bcdc4ae6c0532c8bcb16154a9731ba4926584586",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-30/ref.bennett",
+          "bytes": 6597,
+          "sha256": "426fb658bae92aebdcc23597837530e0648649fc08c88894aa3dae4a328deeb2",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-31/ref.bennett",
+          "bytes": 6597,
+          "sha256": "49a42fa4036286dd6df02a3cdc54783857ef357773ccd04231749d3c711f5bdf",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-32/ref.bennett",
+          "bytes": 6597,
+          "sha256": "4fe065057c724073a1714f2382cad76fa11e92123f2dc66fe7e00b0d722266f2",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-33/ref.bennett",
+          "bytes": 6597,
+          "sha256": "e246db327ce95f212bcae8bff8fffe63761e9f0ae13687d5d15271ecac299368",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-34/ref.bennett",
+          "bytes": 6597,
+          "sha256": "57710420c144157a20fc99d0d680ff98ec4aa909100ac48a6f526072a5400c51",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-35/ref.bennett",
+          "bytes": 6586,
+          "sha256": "7a92f8aa6f1246f87c085c7d53052015a19241dd1a25844ce2a29429cce7258d",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-4/ref.bennett",
+          "bytes": 6598,
+          "sha256": "5e72fff3a56130ab14ade06c95864f55ec08663f895b794d721be7a9ab03d7b6",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-5/ref.bennett",
+          "bytes": 6598,
+          "sha256": "375c2e888eaa73c35de1e9b441141b8d5e074e88a8b9bc7cf0e870e005ae4b9f",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-6/ref.bennett",
+          "bytes": 6598,
+          "sha256": "145fcb576c3e7de7377175d9dcf46e3e163ba2808663fd9df8cb18c83792020d",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-7/ref.bennett",
+          "bytes": 6598,
+          "sha256": "6c78c3e0566a88e468640e7e0dcc01716c75e03dc5e4fa66e4174340d10efc65",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-8/ref.bennett",
+          "bytes": 6598,
+          "sha256": "bc54279636df8dffc4118cd970f85840d8c0abd5f3780e68adeabb34e81dac35",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/device-model/out/top/oracle-9/ref.bennett",
+          "bytes": 6598,
+          "sha256": "ae4e6d059559e98957290b71707eb09de2a41df640332552e5f6933e29ba0cd9",
+          "published_golden": null
+        },
+        {
           "object": "production-dispatch/finite-kind/out/top/launch.bennett",
           "bytes": 6729,
           "sha256": "7706247f043ee9473b685793bf02f902873ccba8e08a70d9fcbb31deac7c99a1",
@@ -558,6 +1091,60 @@
           "object": "production-dispatch/finite-kind/out/top/oracle-3/ref.bennett",
           "bytes": 970,
           "sha256": "bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/input-width/out/top/launch.bennett",
+          "bytes": 6551,
+          "sha256": "0ee74b9d86ff226a23131f5e1fe23a8c4962b13707763b533c358efa24ece0cd",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/input-width/out/top/oracle-0/ref.bennett",
+          "bytes": 899,
+          "sha256": "33a9720a9933b45728ad3a6981a3bb0161ff698d5a95da4befac56fe797d6549",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/input-width/out/top/oracle-1/ref.bennett",
+          "bytes": 931,
+          "sha256": "80af738e374ef86fa25c19a88d96d6fd50f3230f4b07c5073a50e122de460572",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/memory-width-size/out/top/launch.bennett",
+          "bytes": 7404,
+          "sha256": "8f819454c2a088a3f1d42d4ceb100cf9f7093099228a6c0786978e3af3307b55",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/memory-width-size/out/top/oracle-0/ref.bennett",
+          "bytes": 1040,
+          "sha256": "aa8fddd878a0ef6d78a233aa7df6643268e3f12557bd6a48f96a833cc30df746",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/memory-width-size/out/top/oracle-1/ref.bennett",
+          "bytes": 1040,
+          "sha256": "9915a0b7cc0b73a87bb5a60ef9496f393df92be7bbda0a8d56d85ce2d4c09801",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/retired-descriptor-handle/out/top/launch.bennett",
+          "bytes": 5001,
+          "sha256": "ae81a7551f6ca0d97fff2da80862e76a13815367826d75b8ab3cd044d2e1b1c0",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/retired-descriptor-handle/out/top/oracle-0/ref.bennett",
+          "bytes": 899,
+          "sha256": "33a9720a9933b45728ad3a6981a3bb0161ff698d5a95da4befac56fe797d6549",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/retired-descriptor-handle/out/top/oracle-1/ref.bennett",
+          "bytes": 931,
+          "sha256": "80af738e374ef86fa25c19a88d96d6fd50f3230f4b07c5073a50e122de460572",
           "published_golden": null
         },
         {
@@ -606,6 +1193,24 @@
           "object": "production-dispatch/runtime-kind/out/top/oracle-3/ref.bennett",
           "bytes": 970,
           "sha256": "bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/runtime-size/out/top/launch.bennett",
+          "bytes": 7399,
+          "sha256": "2f1bcddec2b1643c581e25c0f9a36a18b6ae26b7db1796a6b574261f3713dbc7",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/runtime-size/out/top/oracle-0/ref.bennett",
+          "bytes": 1040,
+          "sha256": "aa8fddd878a0ef6d78a233aa7df6643268e3f12557bd6a48f96a833cc30df746",
+          "published_golden": null
+        },
+        {
+          "object": "production-dispatch/runtime-size/out/top/oracle-1/ref.bennett",
+          "bytes": 1040,
+          "sha256": "9915a0b7cc0b73a87bb5a60ef9496f393df92be7bbda0a8d56d85ce2d4c09801",
           "published_golden": null
         },
         {
@@ -808,56 +1413,5 @@
         }
       ]
     }
-  },
-  "previous_passes": [
-    {
-      "pass": "first",
-      "date": "2026-10-30",
-      "gate_run_agree_deferred_blocked_diverge": "66/63/-/-/-",
-      "object_pairs": "9 scalar objects matching published hashes (no cross-major pair table)",
-      "commits": "4ef1e0c..3be37ba"
-    },
-    {
-      "pass": "second",
-      "date": "2026-10-30",
-      "gate_run_agree_deferred_blocked_diverge": "66/63/1/2/0",
-      "object_pairs": "11 scalar objects byte-exact on both majors (no pair table)",
-      "commits": "f7e1b1e..716df23"
-    },
-    {
-      "pass": "third",
-      "date": "2026-10-31",
-      "gate_run_agree_deferred_blocked_diverge": "66/65/1/0/0",
-      "object_pairs": "12 exact scalar objects, 35 vectors",
-      "commits": "e1e06b8..2d5f323"
-    },
-    {
-      "pass": "fourth",
-      "date": "2026-10-31",
-      "gate_run_agree_deferred_blocked_diverge": "66/65/1/0/0",
-      "object_pairs": "12 exact scalar objects unchanged; all-fixture key audit red 18/49, 19/50",
-      "commits": "95fa83f,91a0d7d"
-    },
-    {
-      "pass": "fifth",
-      "date": "2026-10-31",
-      "gate_run_agree_deferred_blocked_diverge": "66/65/1/0/0",
-      "object_pairs": "16 exact scalar objects, 40 vectors per major",
-      "commits": "384dd54,c91c288,a2bce18"
-    },
-    {
-      "pass": "sixth",
-      "date": "2026-10-31",
-      "gate_run_agree_deferred_blocked_diverge": "66/65/1/0/0",
-      "object_pairs": "17 cross-major byte-equal pairs (scalar CC launches, 5 published-exact references)",
-      "commits": "bc14d48,563ca6a,32427ed"
-    },
-    {
-      "pass": "seventh",
-      "date": "2026-10-31",
-      "gate_run_agree_deferred_blocked_diverge": "66/65/1/0/0",
-      "object_pairs": "51 cross-major byte-identical, 24 equal published fixtures",
-      "commits": "55d3b0d,ba7f0d8,c8b477b,c9b1b7d"
-    }
-  ]
+  }
 }
