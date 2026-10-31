@@ -1,3 +1,11 @@
+# Eighth pass in progress
+
+bp-dw4 remains open. Sub-item 1: runtime integer kind/mode/header compare trees
+and runtime ARG value/size carriers; three checked objects and nine executions
+per LLVM 18/23. General candidates/width/model/memory dispatch remain required.
+Baseline full gate exit 0 (66/65/1/0/0 both majors); final gate pending.
+No push. Accepted dialect/ISA pins unchanged. Continue sub-items 2–5.
+
 # Handoff: bennett-plugin
 
 Seventh pass finished at implementation head **c8b477b** (base 32427ed).

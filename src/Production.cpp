@@ -244,7 +244,94 @@ struct Entry {
       unimplemented("§6.5 handle not in live register environment", 1, at);
     return names[r];
   }
+  // Call-local reaching definitions are a virtual descriptor load. Never use
+  // a flow-insensitive union as the runtime field value.
+  Value *fieldValue(CallBase &c, uint64_t off, Type *t) {
+    auto base = a.get(c.getArgOperand(2));
+    if (base.top || base.atoms.size() != 1) unimplemented("§8.1 runtime descriptor address", 1, &c);
+    auto p = *base.atoms.begin();
+    for (auto it = c.getIterator(); it != c.getParent()->begin();) {
+      auto &i = *--it;
+      if (auto *st = dyn_cast<StoreInst>(&i)) {
+        auto dst = a.get(st->getPointerOperand());
+        if (dst.top) break;
+        for (auto &d : dst.atoms) if (d.object == p.object) {
+          auto bytes = m.getDataLayout().getTypeStoreSize(st->getValueOperand()->getType()).getFixedValue();
+          if (d.stride || (d.offset < int64_t(p.offset + off + m.getDataLayout().getTypeStoreSize(t).getFixedValue()) &&
+                          d.offset + int64_t(bytes) > int64_t(p.offset + off))) {
+            if (!d.stride && dst.atoms.size() == 1 && d.offset == int64_t(p.offset + off) && st->getValueOperand()->getType() == t)
+              return st->getValueOperand();
+            unimplemented("§8.1 runtime overlapping descriptor store", 1, st);
+          }
+        }
+      } else if (auto *call = dyn_cast<CallBase>(&i)) {
+        auto *g = call->getCalledFunction();
+        if (!g || (!g->getName().starts_with("__bennett_") && !g->getName().starts_with("llvm.lifetime."))) break;
+      }
+    }
+    unimplemented("§8.1 runtime descriptor memory load", 1, &c);
+  }
+  std::map<uint64_t, AV> selectedFields;
+  unsigned dispatchBlock = 0;
   void descriptor(CallBase &c) {
+    auto &ctx = m.getContext();
+    auto *u32 = Type::getInt32Ty(ctx), *u64 = Type::getInt64Ty(ctx);
+    auto *ptr = PointerType::get(ctx, 0);
+    auto *h = StructType::get(ctx, {u32,u32,u32,u32,ptr,ptr});
+    auto *b = StructType::get(ctx, {u32,u32,ptr,u64,u64});
+    auto *hl = m.getDataLayout().getStructLayout(h), *bl = m.getDataLayout().getStructLayout(b);
+    std::vector<std::pair<uint64_t,std::vector<uint64_t>>> fields;
+    auto domain = [&](uint64_t off, Type *t, std::vector<uint64_t> valid) {
+      auto v = a.readAt(c,c.getArgOperand(2),off,t);
+      if (!v.top && v.atoms.size() == 1) return;
+      if (!v.top) {
+        std::vector<uint64_t> finite;
+        for (auto &x : v.atoms) if (x.kind == Atom::Int &&
+            std::find(valid.begin(),valid.end(),x.integer.getLimitedValue()) != valid.end()) finite.push_back(x.integer.getLimitedValue());
+        valid = finite;
+      }
+      fields.push_back({off, valid});
+    };
+    auto candidates = a.candidates(c.getArgOperand(0));
+    if (candidates.size() != 1) unimplemented("§7.2 production region dispatch",1,&c);
+    auto *callee = *candidates.begin();
+    domain(0,u32,{2}); domain(4,u32,{callee->arg_size()}); domain(12,u32,{0});
+    unsigned idx = 0;
+    for (auto &p : callee->args()) {
+      auto off = hl->getSizeInBytes() + idx++ * bl->getSizeInBytes();
+      domain(off,u32,p.getType()->isPointerTy() ? std::vector<uint64_t>{1,2,3,4} : std::vector<uint64_t>{1,2});
+      domain(off+4,u32,{0,1});
+    }
+    if (fields.empty()) { descriptorLeaf(c); return; }
+    auto id = std::to_string(dispatchBlock++), done = "dispatch" + id + "done", bad = "dispatch" + id + "bad";
+    std::function<void(unsigned)> select = [&](unsigned index) {
+      if (index == fields.size()) { descriptorLeaf(c); rows.push_back("br ^" + done + "()"); return; }
+      auto off = fields[index].first;
+      auto value = operand(fieldValue(c,off,u32));
+      auto &keys = fields[index].second;
+      std::function<void(unsigned,unsigned)> tree = [&](unsigned lo,unsigned hi) {
+        if (lo == hi) { rows.push_back("br ^" + bad + "()"); return; }
+        auto mid = (lo+hi)/2; auto key = keys[mid];
+        auto k = operand(ConstantInt::get(u32,key)), eq = fresh("i1");
+        auto leaf = "dispatch" + std::to_string(dispatchBlock++), rest = leaf + "rest";
+        rows.push_back(eq + " = icmp.eq " + value + " " + k);
+        rows.push_back("br " + eq + " ^" + leaf + "() ^" + rest + "()");
+        rows.push_back("^" + leaf + "():");
+        Atom atom; atom.kind = Atom::Int; atom.integer = APInt(32,key); AV v; v.atoms.insert(atom); selectedFields[off] = v;
+        select(index+1); selectedFields.erase(off);
+        rows.push_back("^" + rest + "():");
+        if (hi-lo == 1) { rows.push_back("br ^" + bad + "()"); return; }
+        auto lt = fresh("i1"), left = rest + "left", right = rest + "right";
+        rows.push_back(lt + " = icmp.ult " + value + " " + k);
+        rows.push_back("br " + lt + " ^" + left + "() ^" + right + "()");
+        rows.push_back("^" + left + "():"); tree(lo,mid);
+        rows.push_back("^" + right + "():"); tree(mid+1,hi);
+      };
+      tree(0,keys.size());
+    };
+    select(0); rows.push_back("^" + bad + "():"); rows.push_back("trap"); rows.push_back("^" + done + "():");
+  }
+  void descriptorLeaf(CallBase &c) {
     auto *desc = c.getArgOperand(2);
     auto &ctx = m.getContext();
     auto *u32 = Type::getInt32Ty(ctx), *u64 = Type::getInt64Ty(ctx);
@@ -254,7 +341,7 @@ struct Entry {
     auto &dl = m.getDataLayout();
     auto *hl = dl.getStructLayout(h), *bl = dl.getStructLayout(b);
     auto field = [&](uint64_t off, Type *t) {
-      return a.readAt(c, desc, off, t);
+      return selectedFields.count(off) ? selectedFields.at(off) : a.readAt(c, desc, off, t);
     };
     if (integer(field(0, u32), &c) != 2 || integer(field(12, u32), &c) != 0)
       fail("T-IFACE", "§8.1 descriptor header", &c);
@@ -290,12 +377,27 @@ struct Entry {
         ins.push_back(handle(q, &c));
       } else if (kind == 2) {
         auto w = width(p.getType());
-        auto lo = integer(field(off + bl->getElementOffset(3), u64), &c),
-             hi = integer(field(off + bl->getElementOffset(4), u64), &c);
-        APInt val = APInt(128, lo) | (APInt(128, hi) << 64);
-        auto n = fresh("i" + std::to_string(w));
-        rows.push_back(n + " = const.i" + std::to_string(w) + " " +
-                       decimal(val.zextOrTrunc(w)));
+        auto low = field(off + bl->getElementOffset(3), u64), high = field(off + bl->getElementOffset(4), u64);
+        auto singleton = [](AV v) { return !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int; };
+        std::string n;
+        if (singleton(low) && singleton(high)) {
+          APInt val = APInt(128,integer(low,&c)) | (APInt(128,integer(high,&c)) << 64);
+          n = fresh("i" + std::to_string(w));
+          rows.push_back(n + " = const.i" + std::to_string(w) + " " + decimal(val.zextOrTrunc(w)));
+        } else {
+          auto cast = [&](std::string x, unsigned from) {
+            if (w == from) return x;
+            auto d = fresh("i" + std::to_string(w));
+            rows.push_back(d + (w < from ? " = trunc.i" : " = zext.i") + std::to_string(w) + " " + x); return d;
+          };
+          auto part = [&](AV v, uint64_t offset) { return singleton(v) ? operand(ConstantInt::get(u64,integer(v,&c))) : operand(fieldValue(c,offset,u64)); };
+          n = cast(part(low,off+bl->getElementOffset(3)),64);
+          if (w > 64) {
+            auto hi = cast(part(high,off+bl->getElementOffset(4)),64);
+            auto shift = operand(ConstantInt::get(IntegerType::get(ctx,w),64)), bits = fresh("i"+std::to_string(w)), combined = fresh("i"+std::to_string(w));
+            rows.push_back(bits + " = shl " + hi + " " + shift); rows.push_back(combined + " = or " + n + " " + bits); n = combined;
+          }
+        }
         args.push_back(n);
         current += "ARG(" + std::to_string(w) + ")";
       } else if (kind == 3 || kind == 4) {

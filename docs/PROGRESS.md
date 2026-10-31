@@ -1,3 +1,17 @@
+# Eighth pass — bp-dw4 (in progress) — 2026-10-31
+
+Sub-item 1 adds runtime compare-tree selection for integer parameter kinds and
+modes and version/flags/arity, plus runtime 128-bit ARG assembly from value/size.
+Call-local reaching stores implement virtual descriptor loads; general memory,
+region candidates, handle widths, model/size dispatch are still required.
+Three production objects check on both majors; nine executions per major verify
+observed IN/ARG results, runtime ARG values and invalid-kind traps. No paired
+published CC golden exists (bp-95o); cross-major bytes are recorded separately.
+The original finite-kind red is in seventh_pass and was reproduced. A strengthened
+harness initially had LLVM syntax errors, corrected before green; those errors
+are not claimed as implementation failures. Full before gate exit 0, both majors
+66/65/1/0/0; after gate pending. No deferrals added. See verification eighth_pass.
+
 # Seventh pass final evidence — 2026-10-31
 
 **bp-2zv remains OPEN; this pass does not complete M1 or any full acceptance
