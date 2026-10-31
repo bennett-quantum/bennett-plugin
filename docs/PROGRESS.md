@@ -6,21 +6,21 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch, the published replay/lift inventory and staged shadow-stack budgets are complete (bp-kv5, bp-311 and bp-piq closed);** next work is `bd ready`. Obligations live only in bd (`bd list`).
+(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch, the published replay/lift inventory and staged shadow-stack budgets are complete (bp-kv5, bp-311 and bp-piq closed);** The reference audit now has independent V1–V16 validation and three more materialised key witnesses; bp-3w4 remains open and bp-tye is closed. Next work is `bd ready`. Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
   pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
   the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
   and 23 recognition, analysis_edges, reference_images, materialisation, region_keys, scalars, descriptors,
-  production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate.
+  production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate. The gate also runs the full key audit with explicit bd accounting and independent V1–V16 validation.
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
 Counts (LLVM 18 and 23, each): legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge
-(cells 920/924 on 18, 788/792 on 23); recognition 73/73 on 18, 74/74 on 23; analysis_edges 17/17; reference_images 6/6;
-materialisation and region_keys 14/14 on 18, 15/15 on 23; 22 scalar objects byte-exact with 70 run vectors; 232/232 object
-pairs byte-identical across majors, 45 equal to published fixtures; all 222 prior hashes preserved.
+(cells 920/924 on 18, 788/792 on 23); recognition 73/73 on 18, 74/74 on 23; analysis_edges 17/17; reference_images 10/10; independent validation 46/46;
+materialisation and region_keys 17/17 on 18, 18/18 on 23; full keys 21/49 and 22/50 (28 unequal witnesses accounted in bd); 22 scalar objects byte-exact with 70 run vectors; 232/232 object
+pairs byte-identical across majors, 45 equal to published fixtures; all 232 prior hashes preserved.
 Descriptor dispatch: 23 cases / 55 vectors per major. Budget staging: H16→H32 byte-exact,
 316/316 step-budget prefixes and the published 316-step vector per major. Full object sizes, hashes and goldens are in
 `docs/verification.json` (latest pass only). Sole deferral:
@@ -95,3 +95,9 @@ Final gate exit 0, 66/65/1/0/0 each, no new deferrals; 222 equal pairs, 40 publi
 §17.3 private single-frame bookkeeping proof; contained program accesses; H16→H32 objects byte-exact on LLVM 18/23 against pinned-checker goldens.
 Five staging cases, four unsafe-proof refusals and all 316 row-budget prefixes per major; published final run code=0, payload=7, steps=316.
 One final gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal pairs, 45 published matches, all 222 previous hashes preserved.
+
+### Pass 12 - 2026-10-31 - 88649d6, d946f36, 58b7817, 540d57a, 1f45b38 (bp-3w4 open; bp-tye closed)
+PT2 finite Cartesian modulo-I GEP images and exact bound intersections, PT12 wrap unions, explicit scalar-entry seeds; reference_images 10/10 per major.
+N21 packed i24 memory and bitcast geometry: materialisation/keys 17/17 on LLVM 18, 18/18 on 23; independent V1–V16 reader 46/46 each.
+Full raw key audit 18/49→21/49 and 19/50→22/50; all 28 unequal witnesses have determining-sentence beads; raw audit stays red, no completion claimed.
+Final gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal object pairs, 45 published matches, all 232 previous hashes preserved.

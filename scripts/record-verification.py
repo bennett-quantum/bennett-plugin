@@ -91,7 +91,7 @@ def main():
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
         audit = read(f'key-audit-{m}.json')
         assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
-        c['full-key-audit'] = audit
+        c['full-key-audit'] = {k: audit[k] for k in ('cases', 'matched', 'unmatched', 'accounted', 'unaccounted')}
         d = read(f'descriptors-{m}.json')
         assert d['descriptor_inc8_equal'] and d['production_complete'] and d['production_exit'] == 0
         c['descriptors'] = {'descriptor_inc8_equal': True, 'production_complete': True}

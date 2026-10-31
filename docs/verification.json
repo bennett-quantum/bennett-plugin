@@ -1,19 +1,23 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "eleventh",
+    "name": "m2-fourth-bp-3w4",
     "date": "2026-10-31",
     "commits": [
-      "c63c721"
+      "88649d6",
+      "d946f36",
+      "58b7817",
+      "540d57a",
+      "1f45b38"
     ],
-    "code_head": "c63c721c9f075055f96e5e7ba4591b6e7bd6bac0",
-    "recorded_at": "2026-10-31T17:13:13+00:00",
+    "code_head": "1f45b38be1d5e574353aa00b64660760bfa561b4",
+    "recorded_at": "2026-10-31T17:31:50+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
     "plugin_sha256": {
-      "18": "9fa328d0191c8d684845cdd9e97524cac3acaa69eb1518197eaab4113606c8b1",
-      "23": "a8549a3085fd880833cde022a3f642bea30ac26cc9c4125c78d10977ef28725d"
+      "18": "94d9946fba5d8cc23484b8da0ceb22316f2b758d566c9c3c5c95a7d0bf538c56",
+      "23": "64433760b8c1c666846213609e89781801c8db0567cbebdee4cc0ff6f397befa"
     },
     "gate": {
       "command": "scripts/gate",
@@ -87,16 +91,27 @@
           "passed": 17
         },
         "reference-images": {
-          "cases": 6,
-          "passed": 6
+          "cases": 10,
+          "passed": 10
         },
         "materialisation": {
-          "cases": 14,
-          "passed": 14
+          "cases": 17,
+          "passed": 17
         },
         "region-keys": {
-          "cases": 14,
-          "passed": 14
+          "cases": 17,
+          "passed": 17
+        },
+        "validation": {
+          "cases": 46,
+          "passed": 46
+        },
+        "full-key-audit": {
+          "cases": 49,
+          "matched": 21,
+          "unmatched": 28,
+          "accounted": 28,
+          "unaccounted": []
         },
         "descriptors": {
           "descriptor_inc8_equal": true,
@@ -164,16 +179,27 @@
           "passed": 17
         },
         "reference-images": {
-          "cases": 6,
-          "passed": 6
+          "cases": 10,
+          "passed": 10
         },
         "materialisation": {
-          "cases": 15,
-          "passed": 15
+          "cases": 18,
+          "passed": 18
         },
         "region-keys": {
-          "cases": 15,
-          "passed": 15
+          "cases": 18,
+          "passed": 18
+        },
+        "validation": {
+          "cases": 46,
+          "passed": 46
+        },
+        "full-key-audit": {
+          "cases": 50,
+          "matched": 22,
+          "unmatched": 28,
+          "accounted": 28,
+          "unaccounted": []
         },
         "descriptors": {
           "descriptor_inc8_equal": true,
@@ -251,7 +277,7 @@
       "byte_identical": true,
       "published_matches": 45,
       "production_cross_major_pairs": 147,
-      "preserved_previous_objects": 222,
+      "preserved_previous_objects": 232,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
