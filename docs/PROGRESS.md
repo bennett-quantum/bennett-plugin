@@ -6,7 +6,7 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch is complete (bp-kv5 closed);** next work is `bd ready`. Obligations live only in bd (`bd list`).
+(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch and the published replay/lift inventory are complete (bp-kv5 and bp-311 closed);** next work is `bd ready`. Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
@@ -19,8 +19,8 @@ Build and gate (headless, rule 11), repo root:
 
 Counts (LLVM 18 and 23, each): legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge
 (cells 920/924 on 18, 788/792 on 23); recognition 73/73; analysis_edges 17/17; reference_images 6/6;
-materialisation 14/14; region_keys 14/14; 17 scalar objects byte-exact with 40 run vectors; 198/198 object
-pairs byte-identical across majors, 31 equal to published fixtures; all 97 prior hashes preserved.
+materialisation 14/14; region_keys 14/14; 22 scalar objects byte-exact with 70 run vectors; 222/222 object
+pairs byte-identical across majors, 40 equal to published fixtures; all 198 prior hashes preserved.
 Descriptor dispatch: 23 cases / 55 vectors per major. Full object sizes, hashes and goldens are in
 `docs/verification.json` (latest pass only). Sole deferral:
 fp-rot-fastmath-reassoc (bp-7ni).
@@ -81,3 +81,10 @@ General descriptor memory reads across blocks/loops and selected/phi/global desc
 Finite allocation/handle widths, memory sizes and device models dispatch by §8.4/§14.2; runtime CLOCK arguments.
 LLVM 18/23: 23 dispatch cases and 55 vectors each; four published binding objects byte-exact through production.
 One final gate exit 0, 66/65/1/0/0 each; no new deferrals; 198 equal object pairs, all 97 prior hashes unchanged.
+
+### Pass 10 - 2026-10-31 - d6f39b9..de2e44a (bp-311 closed)
+Closure-wide lifting: direct/recursive/indirect calls, alloc/free, SCC identity, explicit replay and comparison-layout inputs.
+entry-replay-byte, rung4-mini, rung8-mini, listsum and entry-stack byte-exact on LLVM 18/23; all 30 new vectors match.
+N24 static/dynamic frames, idempotent init, zero fill, logical bounds and save/restore; nine stack cases and a production launch per major.
+Receipt caught an unused ENTROPY prologue byte drift; restored it and added prior-object preservation to the gate before the corpus.
+Final gate exit 0, 66/65/1/0/0 each, no new deferrals; 222 equal pairs, 40 published matches, all 198 previous hashes preserved.
