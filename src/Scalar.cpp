@@ -357,7 +357,8 @@ struct Scalar {
             lines.push_back("fault " + number(c->getValue()));
             break;
           }
-          auto *g = resolve(call->getCalledOperand());
+          auto *g = call->getCalledFunction();
+          if(!g)g=resolve(call->getCalledOperand());
           std::vector<std::string> args;
           for (Value *v : call->args()) args.push_back(value(v));
           auto name = g ? g->getName() : StringRef();
@@ -583,7 +584,8 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if(!g || g->isDeclaration() || functions.count(g)) return;
     functions[g]="L"+std::to_string(functions.size()+1);closure.push_back(g);
     for(Instruction &i:instructions(g)) if(auto *c=dyn_cast<CallBase>(&i)) {
-      if(auto *target=resolve(c->getCalledOperand())) collect(target);
+      if(auto *target=c->getCalledFunction()) collect(target);
+      else if(auto *target=resolve(c->getCalledOperand())) collect(target);
       else {
         auto targets=analysis.candidates(c->getCalledOperand(),c->getFunctionType());
         std::vector<Function *> sorted(targets.begin(),targets.end());

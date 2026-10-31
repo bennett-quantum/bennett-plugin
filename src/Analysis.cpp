@@ -1033,6 +1033,25 @@ void Analysis::step(Instruction &i) {
       for (Value *v : p->incoming_values())
         if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); }))
           a.top = true;
+    // Exact finite additive closure, including small counters: enumerate the
+    // subgroup once instead of waiting one whole-program round per element.
+    if (!a.top && p->getType()->isIntegerTy()) {
+      unsigned width=p->getType()->getIntegerBitWidth();
+      for(Value *v:p->incoming_values()) if(auto *b=dyn_cast<BinaryOperator>(v)) {
+        Value *step=nullptr;
+        if((b->getOpcode()==Instruction::Add || b->getOpcode()==Instruction::Sub) && b->getOperand(0)==p) step=b->getOperand(1);
+        else if(b->getOpcode()==Instruction::Add && b->getOperand(1)==p) step=b->getOperand(0);
+        if(!step)continue;
+        auto increments=get(step);unsigned zeros=width;
+        for(auto &x:increments.atoms)if(x.kind==Atom::Int)zeros=std::min(zeros,x.integer.countr_zero());
+        if(width-zeros>12 || zeros==width)continue;
+        auto seeds=a.atoms;APInt delta=APInt::getOneBitSet(width,zeros);
+        for(auto &seed:seeds)if(seed.kind==Atom::Int) {
+          APInt next=seed.integer;
+          do {a.merge(integer(next));next+=delta;}while(next!=seed.integer);
+        }
+      }
+    }
   } else if (auto *s = dyn_cast<SelectInst>(&i)) {
     a = get(s->getTrueValue());
     a.merge(get(s->getFalseValue()));
