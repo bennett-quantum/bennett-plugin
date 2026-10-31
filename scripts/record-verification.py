@@ -85,10 +85,13 @@ def main():
     checks, scalars = {}, {}
     for m in MAJORS:
         c = {}
-        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'region-keys'):
+        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'region-keys', 'validation'):
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
+        audit = read(f'key-audit-{m}.json')
+        assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
+        c['full-key-audit'] = audit
         d = read(f'descriptors-{m}.json')
         assert d['descriptor_inc8_equal'] and d['production_complete'] and d['production_exit'] == 0
         c['descriptors'] = {'descriptor_inc8_equal': True, 'production_complete': True}

@@ -14,19 +14,26 @@ define internal i8 @frozen(i8 %x) { %v = freeze i8 %x
  ret i8 %v }
 define internal i8 @identity(i8 %x) { ret i8 %x }
 define internal i8 @charged(i8 %x) { ret i8 %x, !bennett.rstep !0 }
+@plain_alias = internal alias i8 (i8), ptr @plain
+define internal i8 @plain_thunk(i8 %x) {
+ %r = tail call i8 @plain(i8 %x)
+ ret i8 %r
+}
 define void @top() {
  call void @__bennett_oracle(ptr @flags,ptr null,ptr null)
  call void @__bennett_oracle(ptr @plain,ptr null,ptr null)
  call void @__bennett_oracle(ptr @frozen,ptr null,ptr null)
  call void @__bennett_oracle(ptr @identity,ptr null,ptr null)
  call void @__bennett_oracle(ptr @charged,ptr null,ptr null)
+ call void @__bennett_oracle(ptr @plain_alias,ptr null,ptr null)
+ call void @__bennett_oracle(ptr @plain_thunk,ptr null,ptr null)
  ret void }
 !0 = !{}
 ''')
 x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-S',str(source),'-o',str(out)],capture_output=True,text=True)
 keys=[r['candidates'][0]['key'] for r in json.loads(report.read_text())['regions']] if x.returncode==0 else []
-checks={'flags':len(keys)==5 and keys[0]==keys[1],'freeze':len(keys)==5 and keys[2]==keys[3],
-        'rstep_preserved':len(keys)==5 and keys[3]!=keys[4],
+checks={'flags':len(keys)==7 and keys[0]==keys[1]==keys[5]==keys[6],'freeze':len(keys)==7 and keys[2]==keys[3],
+        'rstep_preserved':len(keys)==7 and keys[3]!=keys[4],
         'host_preserved':x.returncode==0 and 'add nsw' in out.read_text() and 'freeze i8' in out.read_text()}
 # Compare source closures against independently published materialised closures.
 # An absent transform is a failure; equality of two raw source keys is no witness.
