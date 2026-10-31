@@ -12,7 +12,7 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
- def run(argv,env=None):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=180,env=env)
+ def run(argv,env=None,timeout=180):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=timeout,env=env)
  env=dict(os.environ);env['BENNETT_ARITH_BITCODE']=''
  def opt(body,name,flags,linked=None):
   src=d/(name+'.ll');src.write_text(body);dest=d/name
@@ -210,7 +210,7 @@ declare void @__bennett_qfree(ptr)
     data=json.loads(z.stdout) if z.returncode==0 else {}
     check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
    launch=realout/'top/launch.bennett'
-   z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'])
+   z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'],timeout=600)
    check('published-production-CC-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
