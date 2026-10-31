@@ -28,7 +28,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
       bool abiAlign = attrs.hasAttributeAtIndex(idx,Attribute::ByVal) || attrs.hasAttributeAtIndex(idx,Attribute::ByRef) || attrs.hasAttributeAtIndex(idx,Attribute::StructRet) || attrs.hasAttributeAtIndex(idx,Attribute::InAlloca) || attrs.hasAttributeAtIndex(idx,Attribute::Preallocated);
       auto old = attrs.getAttributes(idx);
       for (Attribute a : old)
-        if (a.isEnumAttribute() || a.isIntAttribute() || a.isTypeAttribute()) {
+        if (!a.isStringAttribute()) {
           auto name = Attribute::getNameFromAttrKind(a.getKindAsEnum());
           if (erased.count(name.str()) && !(name=="align" && abiAlign))
             attrs = attrs.removeAttributeAtIndex(f.getContext(),idx,a.getKindAsEnum());
