@@ -28,6 +28,7 @@ for major in 18 23; do
   python3 "$root/tests/production_shapes.py" --major "$major"
   python3 "$root/tests/production_budgets.py" --major "$major"
   python3 "$root/tests/production_records.py" --major "$major"
+  python3 "$root/tests/production_lifts.py" --major "$major" --case entry-replay-byte --case rung4-mini --case rung8-mini
 done
 python3 "$root/tests/production_cross_major.py"
 python3 "$root/tests/corpus_gate.py"
