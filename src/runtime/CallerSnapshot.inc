@@ -42,6 +42,15 @@
       }
     };
     for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle")for(auto *target:a.candidates(c->getArgOperand(0)))regionVisit(target);
+    bool regionStack=false;
+    for(auto *fn:region)for(auto &i:instructions(fn)) {
+      regionStack|=isa<AllocaInst>(i);
+      if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction()) {auto name=c->getCalledFunction()->getName();regionStack|=name.starts_with("__bennett_rt_ss_") || name.starts_with("llvm.stacksave") || name.starts_with("llvm.stackrestore");}
+    }
+    // Include the implicit N24 materialisation, even before allocas have
+    // become calls. These helpers' private writes do not constitute a caller
+    // entry-state dependency when the caller has no stack state of its own.
+    if(regionStack)for(auto &fn:m)if(fn.getName().starts_with("__bennett_rt_ss_"))regionVisit(&fn);
     // ss_init is an implicit wrapper-prologue member of the L closure.
     regionVisit(m.getFunction("__bennett_rt_ss_init"));
     for(auto &fn:m)if(!region.count(&fn))for(auto &i:instructions(fn))if(auto *st=dyn_cast<StoreInst>(&i))
