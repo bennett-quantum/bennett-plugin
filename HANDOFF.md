@@ -37,7 +37,9 @@ remaining lifts were not widened. Existing linked launch-library/checked-claim
 acceptance gaps remain. Grover over unmodified SQLite remains core.
 
 Run the gate with DISPLAY, WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS and BROWSER
-unset, TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp:
-/home/tobias/Projects/bennett-workspace/bennett-plugin/scripts/pre-push
+unset: `scripts/pre-push` checks out the sha being pushed (HEAD when run directly) into a
+detached worktree `.tmp/gate-<sha>`, builds and gates it there with TMPDIR inside it,
+removes it, and exits with the gate's status. `scripts/gate` runs the same sequence in the
+current tree for iteration only.
 
 Never LLVM -view-*. Export Beads and commit explicit paths. Never push.

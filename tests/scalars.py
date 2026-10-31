@@ -2,10 +2,10 @@
 """Compare independently generated scalar objects with published object fixtures."""
 import argparse,json,os,re,subprocess
 from pathlib import Path
-from contracts import dialect_text
+from contracts import dialect_text,SIBLINGS
 R=Path(__file__).resolve().parents[1]
-SPEC=R.parent/'bennett-dialect-spec/spec/Bennett-Dialect-Spec.md'
-REF=R.parent/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+SPEC=SIBLINGS/'bennett-dialect-spec/spec/Bennett-Dialect-Spec.md'
+REF=SIBLINGS/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
 def run(cmd):
  try:return subprocess.run(list(map(str,cmd)),text=True,capture_output=True,timeout=60)
  except subprocess.TimeoutExpired:return subprocess.CompletedProcess(cmd,124,'','timeout after 60 seconds')

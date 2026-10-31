@@ -15,10 +15,9 @@ import argparse, datetime, hashlib, json, os, re, subprocess, sys
 from pathlib import Path
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / 'tests'))
-from contracts import PIN, dialect_text, drift
+from contracts import PIN, SIBLINGS, dialect_text, drift
 
 MAJORS = (18, 23)
-SIBLINGS = Path(os.environ.get('BENNETT_SIBLINGS') or R.parent)
 ISA_REF = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
 SUMMARY_KEYS = ('cases_run', 'cases_agree', 'cases_deferred', 'cases_blocked', 'cases_diverge')
 

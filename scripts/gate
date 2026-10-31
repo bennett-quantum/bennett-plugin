@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The full gate, run in the tree this script lives in. Prefer scripts/pre-push, which
+# gates a clean checkout of the commit being pushed (or HEAD). Use this directly only
+# to iterate on a dirty tree; its results are not a push gate.
+set -euo pipefail
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+root="$(cd "$script_dir/.." && pwd)"
+unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS BROWSER
+export TMPDIR="${TMPDIR:-$root/.tmp}"
+export BENNETT_SIBLINGS="${BENNETT_SIBLINGS:-$(dirname "$root")}"
+mkdir -p "$TMPDIR"
+"$root/scripts/build"
+python3 "$root/tests/smoke.py"
+python3 "$root/tests/gate_policy.py"
+python3 "$root/tests/contract_policy.py"
+for major in 18 23; do
+  python3 "$root/tests/recognition.py" --major "$major"
+  python3 "$root/tests/analysis_edges.py" --major "$major"
+  python3 "$root/tests/reference_images.py" --major "$major"
+  python3 "$root/tests/materialisation.py" --major "$major"
+  python3 "$root/tests/region_keys.py" --major "$major"
+  python3 "$root/tests/scalars.py" --major "$major"
+  python3 "$root/tests/descriptors.py" --major "$major"
+  python3 "$root/tests/production.py" --major "$major"
+  python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console --case inplace-inout --case inplace-not-inverse --case inplace-small-budget --case inplace-second-small-budget --case memory-layouts --case wide-output --case unnamed-layouts
+  python3 "$root/tests/production_dispatch.py" --major "$major"
+  python3 "$root/tests/production_shapes.py" --major "$major"
+  python3 "$root/tests/production_budgets.py" --major "$major"
+  python3 "$root/tests/production_records.py" --major "$major"
+done
+python3 "$root/tests/production_cross_major.py"
+python3 "$root/tests/corpus_gate.py"

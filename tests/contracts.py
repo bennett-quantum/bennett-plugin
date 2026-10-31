@@ -4,7 +4,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os.environ.pop(key,None)
 (ROOT/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(ROOT/'.tmp')
-DIALECT=ROOT.parent/'bennett-dialect-spec'
+SIBLINGS=Path(os.environ.get('BENNETT_SIBLINGS') or ROOT.parent)
+DIALECT=SIBLINGS/'bennett-dialect-spec'
 PIN='023f5a771a814270634db3be9cfde88ded69f975'
 def dialect_text():
  return subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/Bennett-Dialect-Spec.md'],text=True)

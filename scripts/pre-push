@@ -1,29 +1,46 @@
 #!/usr/bin/env bash
+# Push gate: checks out the commit being pushed (local sha read from the refs git
+# supplies on stdin; HEAD when run directly) into a temporary detached worktree and
+# runs the full gate there, so the gate tests exactly the pushed tree, never the
+# dirty working tree. Exit status is the gate's.
 set -euo pipefail
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
 script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 root="$(git -C "$script_dir" rev-parse --show-toplevel)"
 unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS BROWSER
-export TMPDIR="$root/.tmp"
-mkdir -p "$TMPDIR"
-"$root/scripts/build"
-python3 "$root/tests/smoke.py"
-python3 "$root/tests/gate_policy.py"
-python3 "$root/tests/contract_policy.py"
-for major in 18 23; do
-  python3 "$root/tests/recognition.py" --major "$major"
-  python3 "$root/tests/analysis_edges.py" --major "$major"
-  python3 "$root/tests/reference_images.py" --major "$major"
-  python3 "$root/tests/materialisation.py" --major "$major"
-  python3 "$root/tests/region_keys.py" --major "$major"
-  python3 "$root/tests/scalars.py" --major "$major"
-  python3 "$root/tests/descriptors.py" --major "$major"
-  python3 "$root/tests/production.py" --major "$major"
-  python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console --case inplace-inout --case inplace-not-inverse --case inplace-small-budget --case inplace-second-small-budget --case memory-layouts --case wide-output --case unnamed-layouts
-  python3 "$root/tests/production_dispatch.py" --major "$major"
-  python3 "$root/tests/production_shapes.py" --major "$major"
-  python3 "$root/tests/production_budgets.py" --major "$major"
-  python3 "$root/tests/production_records.py" --major "$major"
+shas=()
+if [ ! -t 0 ]; then
+  # git writes "<local ref> <local sha> <remote ref> <remote sha>" lines then closes stdin.
+  while read -r -t 10 _ref sha _rref _rsha; do
+    case "$sha" in ''|*[!0-9a-f]*|0000000000000000000000000000000000000000) continue;; esac
+    shas+=("$sha")
+  done || true
+fi
+if [ "${#shas[@]}" -eq 0 ]; then shas=("$(git -C "$root" rev-parse HEAD)"); fi
+declare -A seen=()
+status=0
+for sha in "${shas[@]}"; do
+  sha="$(git -C "$root" rev-parse --verify "${sha}^{commit}")"
+  [ -n "${seen[$sha]:-}" ] && continue
+  seen[$sha]=1
+  wt="$root/.tmp/gate-$sha"
+  cleanup() {
+    git -C "$root" worktree remove --force "$wt" >/dev/null 2>&1 || true
+    rm -rf "$wt"
+    git -C "$root" worktree prune
+  }
+  cleanup
+  mkdir -p "$root/.tmp"
+  trap cleanup EXIT
+  git -C "$root" worktree add --detach "$wt" "$sha" >/dev/null
+  echo "pre-push: gating $sha in $wt" >&2
+  mkdir -p "$wt/.tmp"
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+      -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER \
+      TMPDIR="$wt/.tmp" BENNETT_SIBLINGS="$(dirname "$root")" \
+      "$wt/scripts/gate" || status=$?
+  cleanup
+  trap - EXIT
+  [ "$status" -eq 0 ] || break
 done
-python3 "$root/tests/production_cross_major.py"
-python3 "$root/tests/corpus_gate.py"
+exit "$status"

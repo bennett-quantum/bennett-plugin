@@ -6,15 +6,15 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, see `docs/PLAN.md`). Next: **M2, starting with bp-kv5**. Obligations live only in bd
-(`bd ready`, `bd list --all`); this file keeps no obligation list.
+(2026-10-31, `docs/PLAN.md`). Next: **M2, starting with bp-kv5**. Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
-- Full gate (builds both majors first, `scripts/build`): `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR=$PWD/.tmp scripts/pre-push`.
-  It builds, then runs smoke, gate_policy, contract_policy, and per major 18 and 23 recognition,
-  analysis_edges, reference_images, materialisation, region_keys, scalars, descriptors, production
-  and production_{environments,dispatch,shapes,budgets,records}, then production_cross_major and
-  corpus_gate. Sibling black boxes: `../bennett-isa-spec` reference CLI, `../bennett-dialect-spec` corpus.
+- Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
+  pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
+  the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
+  and 23 recognition, analysis_edges, reference_images, materialisation, region_keys, scalars, descriptors,
+  production and production_{environments,dispatch,shapes,budgets,records}, then production_cross_major, corpus_gate.
+  Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
 Counts (LLVM 18 and 23, each): legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge

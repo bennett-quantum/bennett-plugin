@@ -15,7 +15,7 @@ import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys,tarf
 from pathlib import Path
 from contracts import drift,PIN
 R=Path(__file__).resolve().parents[1]
-CORPUS=R.parent/'bennett-dialect-spec/corpus/legality'
+CORPUS=Path(os.environ.get('BENNETT_SIBLINGS') or R.parent)/'bennett-dialect-spec/corpus/legality'
 def run(args,timeout=30):
  try:
   x=subprocess.run(list(map(str,args)),capture_output=True,text=True,errors="replace",timeout=timeout)
