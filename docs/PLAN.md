@@ -4,8 +4,10 @@ Contract: dialect **0.2.10**, accepted commit **023f5a771a814270634db3be9cfde88d
 ISA **0.8**. The full draft string is the compatibility unit. Published contracts,
 fixtures and executable black boxes are the only sibling dependencies.
 
-M1 acceptance is still open; [PROGRESS.md](PROGRESS.md) distinguishes verified
-slices from outstanding obligations and records the final pinned corpus matrix.
+**M1 is complete on the plan's own definition (2026-10-31).** What M1 delivered
+and what moved to M2/M3/M4 is under "M1 closure and moved work" below;
+[PROGRESS.md](PROGRESS.md) is the resume block, and `bd ready` is the only
+obligation list.
 
 ## Architecture
 
@@ -94,70 +96,50 @@ These messages must never be confused with implemented blocked compilation: §1.
 requires actual objects with precise blocker traps and exit 3. M3 supplies bounded
 realisations; until then the compiler reports unavailable lowering explicitly.
 
-## Third-pass delivery and remaining acceptance (2026-10-31)
+## M1 closure and moved work (2026-10-31)
 
-Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
-ISA 0.8. Draft 0.2.11 is not adopted. The gate checks the accepted registry and
-pinned blob SHA-256; it reports later unaccepted HEAD/worktree text separately.
-The opaque corpus runtime/harness/header and all cases use that same immutable pin.
+Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**
+(the full draft string is the compatibility unit; draft 0.2.11 is not adopted).
+The gate checks the accepted registry and pinned blob SHA-256 and reports later
+unaccepted HEAD/worktree text separately.
 
-Delivered: verified CMake 3.28.3 dual-major superbuild; 23-marker recognition;
-73/74 applicable published recognition examples (18/23); 12 analysis regressions
-including zero initial images, geometry-changing/fixed-vscale bitcasts, sub-byte
-packing, Cartesian alternatives and N9 cmpxchg domains; five materialisation
-fixtures; scalar materialised closure keys; 12 exact reference objects and all
-published vectors; static descriptor inc8 reference extraction. The legality gate
-is 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge per major.
+**M1 is complete on the plan's definition** (milestone list above: dual-major
+build, exact ABI recognition, device fixpoint, bitwise handle provenance, region
+candidates/content keys, corpus gate on both majors, and scalar integer reference
+objects checked/hash/run against the ISA binary). Declared by the maintainer's
+2026-10-31 ruling (bennett `docs/council/README.md`, watcher pass 4): milestones
+mean what this plan says, and rule 10 forbids dropping capability, not deferring
+mechanics to the milestone that owns them. Delivered:
 
-**M1 is not delivered.** Brief 1b item 3 remains open for general reference
-analysis (PT2/PT4/PT5 represented-address images, composites/atomics, exact tier and
-boundary seeding), all-rule materialised keys (**bp-3w4**) and production scalar
-descriptor/CC objects, launches, host entry replacement and records (**bp-2zv**).
-The test-only descriptor path is not production acceptance. Pull forward that
-scalar CC work from M3; general generation/TDL remains M3. No unfinished M1
-obligation has been moved to M2 in this pass.
+- 17 scalar reference objects byte-exact on LLVM 18 and 23 (16 published lifts plus
+  C -O3 inc8), 40 run vectors per major, independently checked and hashed;
+- legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge per major
+  (sole deferral fp-rot-fastmath-reassoc, bp-7ni, M2);
+- production scalar launches: CC launch objects, host ABI stubs, budget tables,
+  build/coverage sidecars, plus the sole-INOUT, combined-device, multi-output and
+  heterogeneous-layout slices (97 cross-major object pairs byte-identical).
 
-Brief 1b item 4 now checks untrimmed fixture bytes and all stated hashes/vectors
-for 12/20 lift examples. Eight scalar-typed examples and the two object-only
-integration vectors remain inventoried with exact missing rows in PROGRESS and
-verification.json. Every scalar `spec-*` case is inventoried: the pin has six
-quantum action cases and no scalar oracle case.
+Work the plan assigns to later milestones, moved there (labels `m2`/`m3`/`m4` in bd):
 
-Existing mechanical deferrals (none removes a source capability):
-
-| Work | Owning sentence / rows | Bead |
+| Milestone | Work | Bead |
 |---|---|---|
-| M2 soft-float and native comparison closure | §13.1: “The entry points are defined by bennett-arith and are part of its bitcode the driver links.” | bp-7ni |
-| M2 memory/replay/device bindings/calls, eight lift examples and entry-stack | §8.5: “The region function runs on a private copy of the caller's whole classical memory at the call”; §16.2 prologue, §16.4 load/store/alloc/calls | bp-311 |
-| M3 arena-o1 outlining | TDL-4: “The objects in any may-Co set of MC are placed in the arena”; §16.2 hidden pointer and §16.4 memory | bp-qql |
+| M2 | General descriptor dispatch: candidate pointers, widths, sizes, device model, arbitrary descriptor memory loads (§8.4, §14.2 compare trees) | bp-kv5 |
+| M2 | Budget-stage shadow-stack vector: entry-state replay and §17.3 shadow stack | bp-piq |
+| M2 | Replay, device bindings and lifted memory/call objects: entry-replay-byte, rung4-mini, rung8-mini, listsum, entry-stack (§8.5, §16.2, §16.4, §17.3) | bp-311 |
+| M2 | Soft-float and native comparison closure (§13) | bp-7ni |
+| M3 | General handle environments: N(s), cyclic/recursive, persistent/heap files, call environments (§6.5, §17.4) | bp-rbl |
+| M3 | Parameterised INOUT, sampled inverse verification and budget minima (§8.7, §9) | bp-65x |
+| M3 | arena-o1 action outlining and hidden arena pointer (TDL-4, §16.2) | bp-qql |
+| M4 | Published executable certificate reproduction and checker fixture (ISA §12.3, dialect §19.9) | bp-o7f |
 
-The sole gate deferral is fp-rot-fastmath-reassoc (L5; bp-7ni), printed on every
-run. The two ABI-v0 runtime blockers and G0/G1 ambiguity are resolved at the new
-pin (bp-c2i/bp-p26 closed); the CMake validation bead bp-ahz is closed.
-Full N0–N35/V1–V16, entry-state replay, comparison link and frontend envelopes
-remain scheduled. General Grover over unmodified SQLite stays the core target.
+bp-dw4 is closed; its remainder is tracked by bp-kv5, bp-rbl and bp-65x. bp-95o
+is closed: dialect §17.4 makes CC/R lowering plugin-defined, so no published golden
+is owed; the plugin's committed CC objects plus cross-major equality are the
+reference. Not moved by the ruling and still open under their own text: bp-2zv
+(production descriptor/CC umbrella), bp-3w4 (general reference audit and
+materialised keys) and bp-tr5 (thunk identity question).
 
+The M2/M3 rows are mechanical deferrals only; none removes a source capability.
+Their determining sentences are recorded on the beads.
 
-## Fourth-pass audit (2026-10-31; M1 still open)
-
-Item 1 advanced: 17 analysis regressions and six represented-address witnesses
-per major; 14/15 published materialisation fixtures and 14/15 key assertions
-(LLVM 18/23). New fixes cover constant narrow-index GEP wrap, width-changing
-object provenance with numerical EXT separated from host escape, PT3 address
-space copying, PT8 runtime helper spellings, pointer xchg/N9 select unions,
-undefined shuffle masks, rstep preservation and repeated N14 patterns.
-
-The all-fixture materialised-key audit remains red: 18/49 on LLVM 18, 19/50
-on LLVM 23, including four base assertions. All 31 failed obligations are
-recorded in verification.json. General symbolic/residue images, full atomic /
-composite transfer and precise entry/host/boundary/generation tier seeding
-remain M1 under bp-3w4. Independent V1–V16 validation is not implemented.
-New bp-tr5 requests clarification of §7.2 thunk resolution versus N0's
-materialisation of declared intrinsics and §5.2's pre-verdict value effects.
-It is an M1 contract question, not an M2 deferral.
-
-Items 2 and 3 have not been delivered in this pass. Production scalar
-descriptor/CC launches, stubs and records remain bp-2zv. Eight lifts plus
-entry-stack/arena-o1 remain acceptance obligations with the existing exact
-sentences and mechanical owners above. No M1 requirement has been moved to
-M2, no output is declared out of scope, and no M1 completion is claimed.
+General Grover over unmodified SQLite stays the core target.
