@@ -47,9 +47,25 @@ bool AV::merge(const AV &v) {
     top = true;
     change = true;
   }
-  for (auto &a : v.atoms)
-    if (!(top && a.kind == Atom::Int))
-      change |= atoms.insert(a).second;
+  if(&v==this)return change;
+  for (auto a : v.atoms) {
+    if(top && a.kind==Atom::Int)continue;
+    if(a.kind==Atom::Ptr) {
+      auto cover=a;cover.offset=0;cover.stride=-1;
+      if(atoms.count(cover))continue;
+      if(a.stride==-1) {
+        a.offset=0;
+        // (X,*) already denotes every specific/residue offset of the same
+        // provenance. Canonicalise this exact union; never widen a finite
+        // domain or remove ROOT, object identity or numerical-origin flags.
+        for(auto it=atoms.begin();it!=atoms.end();) {
+          if(it->kind==Atom::Ptr && it->object==a.object && it->numerical==a.numerical && it->integer==a.integer)it=atoms.erase(it);
+          else ++it;
+        }
+      }
+    }
+    change |= atoms.insert(a).second;
+  }
   unsigned n = 0;
   if (atoms.size() > 4096)
     for (auto &a : atoms)
@@ -1396,7 +1412,15 @@ void Analysis::step(Instruction &i) {
         a.merge(integer(APInt(m->getBitWidth(), k)));
     } else {
       a.top = x.top || y.top;
-      for (auto &v : x.atoms)
+      for (auto &v : x.atoms) {
+        // For these operations the pointer transfer is independent of the
+        // right atom. Emit its identical conservative image once, rather than
+        // a Cartesian product of logical-stack address histories. Keep the
+        // empty-domain behaviour and all INT/INT finite transfers unchanged.
+        if(v.kind==Atom::Ptr && i.getOpcode()!=Instruction::Add && i.getOpcode()!=Instruction::Sub) {
+          if(!y.atoms.empty()) {auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);}
+          continue;
+        }
         for (auto &w : y.atoms) {
           if (v.kind == Atom::Int && w.kind == Atom::Int &&
               v.integer.getBitWidth() == w.integer.getBitWidth()) {
@@ -1470,6 +1494,7 @@ void Analysis::step(Instruction &i) {
                              v.integer.getBitWidth(),false));
           }
         }
+      }
     }
   done:;
     if (isa<ICmpInst>(i) && a.atoms.empty() &&
