@@ -1,28 +1,24 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "thirteenth",
+    "name": "fourteenth",
     "date": "2026-10-31",
     "commits": [
-      "8511b3a",
-      "0b38364",
-      "f64706d",
-      "6315583",
-      "610365b",
-      "923900c",
-      "3530bdf",
-      "0881670",
-      "ed5ae4e",
-      "d592014"
+      "40439e3",
+      "7c3e9be",
+      "ef3b387",
+      "3e96314",
+      "65b7b2d",
+      "f45bdc1"
     ],
-    "code_head": "d5920147cc14a87789f602c10974aec4dd24a40a",
-    "recorded_at": "2026-10-31T18:08:36+00:00",
+    "code_head": "f45bdc1a1528d4d72ba5b92429c8dd41326eaa21",
+    "recorded_at": "2026-10-31T19:31:27+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
     "plugin_sha256": {
-      "18": "50c587b7738c3386b1af732cc2196ffc445187a1f3a91206c29f3ee3b4dce0fb",
-      "23": "b74ca7ff6d1e2fbd2a20ad9ca715df2d8ed27e75ddeffde372822ebca85d05d9"
+      "18": "6f256fb24b0faed6358461c98e9b30afb6cc3ff0bab279eb0df3665098753a95",
+      "23": "5dd0ece524076dc0befe4b1935d74fd547912f183dac301a8e83fd5a06933223"
     },
     "gate": {
       "command": "scripts/gate",
@@ -157,6 +153,13 @@
           "ok": 5,
           "expected_rejections": 0
         },
+        "entry-snapshot": {
+          "cases": 11,
+          "ok": 11,
+          "expected_rejections": 0,
+          "isa_ref": "/home/tobias/Projects/bennett-workspace/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+          "isa_ref_sha256": "33e5d84245a0a20022daf63819a02d8714a8464b0e14f3cc4663e3a33945c056"
+        },
         "shadow-stack": {
           "cases": 9,
           "ok": 9,
@@ -245,6 +248,13 @@
           "ok": 5,
           "expected_rejections": 0
         },
+        "entry-snapshot": {
+          "cases": 11,
+          "ok": 11,
+          "expected_rejections": 0,
+          "isa_ref": "/home/tobias/Projects/bennett-workspace/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+          "isa_ref_sha256": "33e5d84245a0a20022daf63819a02d8714a8464b0e14f3cc4663e3a33945c056"
+        },
         "shadow-stack": {
           "cases": 9,
           "ok": 9,
@@ -278,10 +288,10 @@
       }
     },
     "object_pairs": {
-      "count": 232,
+      "count": 260,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 147,
+      "production_cross_major_pairs": 175,
       "preserved_previous_objects": 232,
       "rows": [
         {
@@ -1675,6 +1685,174 @@
           "bytes": 4749,
           "sha256": "dd9d07ce7be157ced9f13e3200ee9e6be265ebc6fcbd3dab6cf3bf867bc5aed6",
           "published_golden": "budget-stage-16"
+        },
+        {
+          "object": "entry-snapshot/address-observation/out/top/launch.bennett",
+          "bytes": 128499,
+          "sha256": "6489d8e4f181c741ec12f6b60e67f7fd9e8dabbc693f293609580d96bcca8565",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/address-observation/out/top/oracle-0/ref.bennett",
+          "bytes": 4816,
+          "sha256": "ec609ddcb496a67daab8144856b3812e863b1d4ab6ae7bb2bdd9cf5679a11892",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/allocator-only/out/top/launch.bennett",
+          "bytes": 129244,
+          "sha256": "de77d1564830abea653e739578c4c85d56bdd769399d4183d98be530f24828d0",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/allocator-only/out/top/oracle-0/ref.bennett",
+          "bytes": 4881,
+          "sha256": "cd57312cfb6251fc3df62ea9e0f7324b0b5379300f3b550a52947265226a3507",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/dead-entry/out/top/launch.bennett",
+          "bytes": 129648,
+          "sha256": "324728bf350bc3c13fb07f314beaadc648c48d201de3041aa13668e8425a3dc2",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/dead-entry/out/top/oracle-0/ref.bennett",
+          "bytes": 4799,
+          "sha256": "008622f5324a280fc3999a1cb98823169f00ca11cef48a95691e0ceccd29638c",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/global/out/top/launch.bennett",
+          "bytes": 59278,
+          "sha256": "8686fdbf883afb669d83497496ce3f35f2dfccb604c2325b75d41fdba383df84",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/global/out/top/oracle-0/ref.bennett",
+          "bytes": 6452,
+          "sha256": "5fb39378183463026cb897ddb3cae4be494f3c1398dc4b99511c1967eca864cb",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/handle-input/out/top/launch.bennett",
+          "bytes": 60460,
+          "sha256": "bb8deb8cc10a57971e87a3286378474de13df54f04482222893651c7973d275f",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/handle-input/out/top/oracle-0/ref.bennett",
+          "bytes": 6447,
+          "sha256": "3c4faf6e1cdf6287f51c859544b8c88ce343656ae48be5afa97adc7a274256cd",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/heap-history/out/top/launch.bennett",
+          "bytes": 129332,
+          "sha256": "18c4d639e0c4873847c8d0a64546a73267497d827cefdb2f67a3f326aae89ccc",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/heap-history/out/top/oracle-0/ref.bennett",
+          "bytes": 4883,
+          "sha256": "ac523049977b9f3190c6118dd928262d1091227a195f53f14d18bc8500273461",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/logical-stack/out/top/launch.bennett",
+          "bytes": 601082,
+          "sha256": "6c734b4ac5a907ba838f4672897bb71cc88864843fd1455fb85f58ad79c157dd",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/logical-stack/out/top/oracle-0/ref.bennett",
+          "bytes": 21568,
+          "sha256": "2e68106a62bdb849799a1107e1a97a9776bb303b261d46bf4290931d8ab41290",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/logical-stack/out/top/oracle-1/ref.bennett",
+          "bytes": 21601,
+          "sha256": "ef1bb970aa41c16233f10b96fe1cc5ea20384a45b7af64ac40413b73bb144e8e",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/popped-frame/out/top/launch.bennett",
+          "bytes": 599994,
+          "sha256": "715ee51a6bf9053a8fbd0038c4c82f1f66b46e78e0d837573e35fce39d9ea52b",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/popped-frame/out/top/oracle-0/ref.bennett",
+          "bytes": 21568,
+          "sha256": "2e68106a62bdb849799a1107e1a97a9776bb303b261d46bf4290931d8ab41290",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/popped-frame/out/top/oracle-1/ref.bennett",
+          "bytes": 21601,
+          "sha256": "ef1bb970aa41c16233f10b96fe1cc5ea20384a45b7af64ac40413b73bb144e8e",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/restored-allocation/out/top/launch.bennett",
+          "bytes": 601140,
+          "sha256": "ce256e5f7b1facb9a8e7501801a11eed0753b580e9eb202665a1c654bc09c733",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/restored-allocation/out/top/oracle-0/ref.bennett",
+          "bytes": 21568,
+          "sha256": "2e68106a62bdb849799a1107e1a97a9776bb303b261d46bf4290931d8ab41290",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/restored-allocation/out/top/oracle-1/ref.bennett",
+          "bytes": 21601,
+          "sha256": "ef1bb970aa41c16233f10b96fe1cc5ea20384a45b7af64ac40413b73bb144e8e",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/save-state/out/top/launch.bennett",
+          "bytes": 364106,
+          "sha256": "b3ede7de2162f3da4035fc29ad02901b2469a93f23f723683ab1c0ebbdc19d58",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/save-state/out/top/oracle-0/ref.bennett",
+          "bytes": 23522,
+          "sha256": "b4631cf80f5178da5688382ccc47e6a89fc76b1e473abfec7a28b0cd02fa3f58",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/save-state/out/top/oracle-1/ref.bennett",
+          "bytes": 23555,
+          "sha256": "ee9a6f8b9d05e141c6fb310e4facf6a08b52f6c560279ea0d9c523702bafe86c",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/several-entries/out/first/launch.bennett",
+          "bytes": 59176,
+          "sha256": "c2dfa6d2f20535884ce4d9c58648a544e39fb3a89fe55e3d7411e2fe1876fd79",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/several-entries/out/first/oracle-0/ref.bennett",
+          "bytes": 6346,
+          "sha256": "52edc74d6186919a74e35debb44d08c55778fe66f33665cf94ff7ca78e76a8cd",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/several-entries/out/second/launch.bennett",
+          "bytes": 59179,
+          "sha256": "858da83ad173964eca052f6dc1728f429b2fefbac266aa2eb3b1dea9f236c850",
+          "published_golden": null
+        },
+        {
+          "object": "entry-snapshot/several-entries/out/second/oracle-0/ref.bennett",
+          "bytes": 6346,
+          "sha256": "52edc74d6186919a74e35debb44d08c55778fe66f33665cf94ff7ca78e76a8cd",
+          "published_golden": null
         }
       ]
     }

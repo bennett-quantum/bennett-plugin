@@ -107,3 +107,9 @@ PT2/PT5 symbolic finite and wide images, PT8 partial copies/PT12 opaque transfer
 N21 VP/vector and N27 integer expansions; indirect/helper/thunk closure keys 31/31 on LLVM 18, 32/32 on 23; automatic L validator 49/49 each.
 Full raw key audit 21/49→26/49 and 22/50→27/50 stays red; all 23 remainders per major have exact determining sentences and concrete reasons in open bd owners.
 Final complete gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal pairs, 45 published matches, all 232 previous hashes preserved; earlier boundary/pruning failures fixed.
+
+### Pass 14 - 2026-10-31 - 40439e3..f45bdc1 (bp-2mg closed)
+Automatic CC whole-memory, complete allocation-history and handle snapshots; concat preparation, ordered replay, logical-state adoption and clean 128-bit xor128 release.
+LLVM 18/23: 11 production witnesses and 14 vectors each, including dead/zero/address-only histories, multiple entries, saved-point roundtrips and pop/restore faults.
+Exact wildcard-union canonicalisation removes restore analysis blowup; stopped a partial gate to add conservative dependency guards; published replay bytes unchanged.
+Final complete gate exit 0, 66/65/1/0/0 each, no new deferrals; 260 equal pairs, 45 published matches, all 232 previous hashes preserved.
