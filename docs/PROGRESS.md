@@ -1,3 +1,28 @@
+# Seventh pass — 2026-10-31 (in progress, bp-2zv remains open)
+
+Base 32427ed. Unchanged full headless gate exits 0: both majors
+66/65/1/0/0 run/agree/deferred/blocked/diverge; cells 920/924 (18),
+788/792 (23). No new deferrals, push, sibling changes or repin.
+
+Group 1 red→green on LLVM 18 and 23: four production binding descriptors
+(OUT, CLOCK, BLOCK, CONSOLE), MEM_IN, two distinct scalar reference symbols
+sharing a layout, and direct handle/scalar phi block environments. Seven new
+objects independently check and execute per major, with equal cross-major bytes.
+Four emitted binding references equal the complete published bytes; the existing
+16 scalar objects / 40 vectors and three measured inc8 fixtures also pass.
+The five production inc8 references remain exact. The absent paired CC golden
+is still bp-95o; cross-major equality does not replace published-byte equality.
+
+Group 1 is partial acceptance: finite descriptor/candidate dispatch (§8.4),
+static register files and general memory/call environments (§6.5), combined device
+bindings/null console (§8.3), multiple output slices (§8.6), and heterogeneous
+multi-region layout linking (§16.3) remain implementation obligations. Determining
+§17.4: “marker calls lower to the region calls and `qreg.*` instructions of §18.3
+with the handle register environment of §6.5”. No capability is out of scope.
+Budget tables and checked executable certificates/records are the next groups.
+
+---
+
 # Sixth pass — 2026-10-31 (scalar CC launches landed; bp-2zv acceptance still open)
 
 Started at **a2bce18**. Implementation **bc14d48**, native ABI fix **563ca6a**.

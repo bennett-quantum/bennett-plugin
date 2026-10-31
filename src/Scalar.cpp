@@ -500,7 +500,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   std::smatch dev;
   if (!device.empty()) {
-    if (!std::regex_match(device, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE)\(([0-9]+)\))")))
+    if (!std::regex_match(device, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE|ENTROPY)\(([0-9]+)\))")))
       unimplemented("§8.3 device binding combination", 2, &f);
     deviceSize = std::stoull(dev[2]);
     device = dev[1];
@@ -523,6 +523,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     return g;
   };
   if (device == "CLOCK") deviceGlobal("clock_c");
+  if (device == "ENTROPY") { deviceGlobal("entropy_base"); deviceGlobal("entropy_size"); deviceGlobal("entropy_pos"); }
   if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
   if (device == "CONSOLE") {
     deviceGlobal("console_buf"); deviceGlobal("console_L"); deviceGlobal("console_n");
@@ -532,16 +533,17 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   // pointer supplied by OUT or read from this invocation's model buffer does
   // not name caller memory. An arbitrary ARG/loaded pointer still needs replay.
   std::set<const Argument *> privateArguments;
-  std::regex bindingPattern(R"((IN|ARG|OUT)\([^)]*\))");
+  std::regex bindingPattern(R"((IN|ARG|OUT|MEM_IN)\([^)]*\))");
   unsigned bindingIndex = 0;
   for (std::sregex_iterator it(d.begin(),d.end(),bindingPattern),end;it!=end;++it,++bindingIndex)
-    if ((*it)[1] == "OUT" && bindingIndex < f.arg_size()) privateArguments.insert(f.getArg(bindingIndex));
+    if (((*it)[1] == "OUT" || (*it)[1] == "MEM_IN") && bindingIndex < f.arg_size()) privateArguments.insert(f.getArg(bindingIndex));
   auto privatePointer = [&](Value *p) {
     auto *root = getUnderlyingObject(p);
     if (auto *a = dyn_cast<Argument>(root)) return privateArguments.count(a) != 0;
     if (auto *load = dyn_cast<LoadInst>(root)) {
       auto *g = dyn_cast<GlobalVariable>(getUnderlyingObject(load->getPointerOperand()));
-      return g && ((device == "BLOCK" && g->getName() == "__bennett_dev_block_base") ||
+      return g && ((device == "ENTROPY" && g->getName() == "__bennett_dev_entropy_base") ||
+                   (device == "BLOCK" && g->getName() == "__bennett_dev_block_base") ||
                    (device == "CONSOLE" && g->getName() == "__bennett_dev_console_buf"));
     }
     return false;
@@ -579,7 +581,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   if (tgt == 0 || tgt > 128)
     unimplemented("§8.6 wide outputs", 2, &f);
-  std::regex pat(R"((IN|ARG|OUT)\((\d+)(?:,(zext|sext))?\))");
+  std::regex pat(R"((IN|ARG|OUT|MEM_IN)\((\d+)(?:,(zext|sext))?\))");
   std::sregex_iterator it(bindings.begin(), bindings.end(), pat), end;
   std::vector<std::string> ins, args, invoke, insWidths, paramWidths, argTypes,
       wrapperRegs, wrapperRows, mems, memSigs;
@@ -600,6 +602,13 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   if (device == "CLOCK") {
     auto c = prologue("lift.const.i64 " + std::to_string(deviceSize));
     devStore("clock_c", c);
+  } else if (device == "ENTROPY") {
+    if (deviceSize > 54) fail("shape", "ENTROPY extent exceeds address space");
+    mems.push_back("e0:region[" + std::to_string(deviceSize) + ",8] in");
+    memSigs.push_back("{\"A\":" + std::to_string(deviceSize) + ",\"W\":8,\"role\":\"in\"}");
+    auto p = prologue("lift.addr @e0"); devStore("entropy_base", p);
+    auto n = prologue("lift.const.i64 " + std::to_string(uint64_t(1) << deviceSize)); devStore("entropy_size", n);
+    auto z = prologue("lift.const.i64 0"); devStore("entropy_pos", z);
   } else if (device == "BLOCK") {
     if (deviceSize > 54) fail("shape", "BLOCK extent exceeds address space");
     mems.push_back("k0:region[" + std::to_string(deviceSize + 9) + ",8] in");
@@ -640,6 +649,16 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
         n = loc;
       }
       invoke.push_back(n);
+    } else if ((*it)[1] == "MEM_IN") {
+      if (!f.getArg(idx)->getType()->isPointerTy() || !isPowerOf2_64(w))
+        fail("shape", "MEM_IN requires a pointer and power-of-two size");
+      auto n = "m" + std::to_string(idx), loc = "w" + std::to_string(idx);
+      auto a = Log2_64(w);
+      mems.push_back(n + ":region[" + std::to_string(a) + ",8] in");
+      memSigs.push_back("{\"A\":" + std::to_string(a) + ",\"W\":8,\"role\":\"in\"}");
+      wrapperRegs.push_back(loc + ":reg[64]");
+      wrapperRows.push_back(loc + " = lift.addr @" + n);
+      invoke.push_back(loc);
     } else if ((*it)[1] == "OUT") {
       if (!f.getArg(idx)->getType()->isPointerTy()) fail("shape", "OUT requires a pointer parameter");
       if (!buffer.empty()) unimplemented("§8.6 common multi-output delivery", 2, &f);
@@ -739,6 +758,16 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     regionLayout = "\"k0\":" + leaf;
     regionHashLeaves = "layout interface_regions.ref.k0 " + leaf + "\n";
     endAddress = regionBase + size;
+  }
+  for (auto &mem : mems) {
+    std::smatch parts;
+    if (!std::regex_search(mem, parts, std::regex(R"(([me][0-9]+):region\[([0-9]+),8\])"))) continue;
+    uint64_t size = uint64_t(1) << std::stoul(parts[2]);
+    auto leaf = "{\"base\":" + std::to_string(alignTo(endAddress, size)) + "}";
+    if (!regionLayout.empty()) regionLayout += ",";
+    regionLayout += "\"" + parts[1].str() + "\":" + leaf;
+    regionHashLeaves += "layout interface_regions.ref." + parts[1].str() + " " + leaf + "\n";
+    endAddress = alignTo(endAddress, size) + size;
   }
   while((uint64_t(1)<<h)<endAddress)++h;
   while((uint64_t(1)<<at)<data.size()+mems.size()+heapLimit)++at;

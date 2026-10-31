@@ -92,6 +92,7 @@ struct Entry {
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
+  std::vector<std::string> references;
   json::Array coverage;
   std::map<std::string, std::pair<std::string, std::string>> actions;
   unsigned next = 0, ordinal = 0;
@@ -122,10 +123,21 @@ struct Entry {
     return v.atoms.begin()->object;
   }
   unsigned qwidth(AV v, const Value *at) {
-    auto *c = dyn_cast<CallBase>(root(v, at));
-    if (!c)
-      unimplemented("§6.6 scalar boundary handles", 1, at);
-    return integer(a.get(c->getArgOperand(1)), at);
+    unsigned width = 0;
+    if (v.top || v.atoms.empty()) unimplemented("§6.5 handle width dispatch", 1, at);
+    for (auto &atom : v.atoms) {
+      auto *c = atom.kind == Atom::Root ? dyn_cast<CallBase>(atom.object) : nullptr;
+      if (!c) unimplemented("§6.6 scalar boundary handles", 1, at);
+      auto w = integer(a.get(c->getArgOperand(1)), at);
+      if (width && width != w) unimplemented("§6.5 mixed-width handle dispatch", 1, at);
+      width = w;
+    }
+    return width;
+  }
+  std::string type(Value *v) {
+    if (v->getType()->isPointerTy() && a.get(v).roots())
+      return "qreg[" + std::to_string(qwidth(a.get(v), v)) + "]";
+    return "i" + std::to_string(width(v->getType()));
   }
   std::string handle(AV v, const Value *at) {
     auto *r = root(v, at);
@@ -147,8 +159,7 @@ struct Entry {
     };
     if (integer(field(0, u32), &c) != 2 || integer(field(12, u32), &c) != 0)
       fail("T-IFACE", "§8.1 descriptor header", &c);
-    if (integer(field(8, u32), &c) != 0)
-      unimplemented("§8.3 production device bindings", 1, &c);
+    auto ndev = integer(field(8, u32), &c);
     auto candidates = a.candidates(c.getArgOperand(0));
     if (candidates.size() != 1)
       unimplemented("§7.2 production region dispatch", 1, &c);
@@ -162,7 +173,9 @@ struct Entry {
     bool discard = !target.top && target.atoms.size() == 1 &&
                    target.atoms.begin()->kind == Atom::Int &&
                    target.atoms.begin()->integer.isZero();
-    std::vector<std::string> ins, args;
+    std::vector<std::string> ins, args, mems;
+    AV output = target;
+    bool bufferOutput = false;
     std::string current;
     unsigned index = 0;
     for (Argument &p : callee->args()) {
@@ -186,12 +199,56 @@ struct Entry {
                        decimal(val.zextOrTrunc(w)));
         args.push_back(n);
         current += "ARG(" + std::to_string(w) + ")";
+      } else if (kind == 3 || kind == 4) {
+        if (!p.getType()->isPointerTy() || mode)
+          fail("T-IFACE", "§8.2 memory binding carrier/mode", &c);
+        auto q = field(off + bl->getElementOffset(2), ptr);
+        auto size = integer(field(off + bl->getElementOffset(4), u64), &c);
+        if (!size || size > UINT64_MAX / 8 || qwidth(q, &c) != size * 8)
+          fail("T-SIZE", "§8.2 memory binding width", &c);
+        if (kind == 3) {
+          if (!isPowerOf2_64(size)) fail("T-SIZE", "§8.2 MEM_IN power of two", &c);
+          current += "MEM_IN(" + std::to_string(size) + ")";
+          mems.push_back(handle(q, &c));
+        } else {
+          current += "OUT(" + std::to_string(size) + ")";
+          if (!discard || bufferOutput)
+            unimplemented("§8.6 multiple output slices", 1, &c);
+          output = q; bufferOutput = true;
+        }
       } else
-        unimplemented("§8.2 production MEM_IN/OUT/INOUT descriptor bindings", 1,
-                      &c);
+        fail("T-IFACE", "§8.2 oracle binding kind", &c);
     }
+    std::set<uint64_t> models;
+    for (unsigned j = 0; j < ndev; ++j) {
+      auto off = hl->getSizeInBytes() + index * bl->getSizeInBytes() + j * 24;
+      auto model = integer(field(off, u32), &c);
+      if (!models.insert(model).second || integer(field(off + 4, u32), &c))
+        fail("T-IFACE", "§8.3 duplicate model or device mode", &c);
+      auto q = field(off + 8, ptr);
+      auto value = integer(field(off + 16, u64), &c);
+      if (ndev != 1) unimplemented("§8.3 combined device models", 1, &c);
+      if (model == 3) current += ";dev=CLOCK(" + std::to_string(value) + ")";
+      else if (model == 2 || model == 1) {
+        auto w = qwidth(q, &c), bytes = w / 8;
+        auto unit = model == 2 ? 512 : 1;
+        if (w % 8 || bytes < unit || !isPowerOf2_64(bytes / unit))
+          fail("T-SIZE", "§8.3 device input extent", &c);
+        current += std::string(";dev=") + (model == 2 ? "BLOCK(" : "ENTROPY(") +
+                   std::to_string(Log2_64(bytes / unit)) + ")";
+        mems.push_back(handle(q, &c));
+      } else if (model == 4) {
+        if (!discard || bufferOutput)
+          unimplemented("§8.6 multiple output slices", 1, &c);
+        auto w = qwidth(q, &c);
+        if (w % 8) fail("T-SIZE", "§8.3 console width", &c);
+        current += ";dev=CONSOLE(" + std::to_string(w / 8) + ")";
+        output = q; bufferOutput = true;
+      } else fail("T-IFACE", "§8.3 unknown device model", &c);
+    }
+    discard = discard && !bufferOutput;
     current += ";tgt=" + (discard ? std::string("null")
-                                  : std::to_string(qwidth(target, &c)));
+                                  : std::to_string(qwidth(output, &c)));
     // Null selects the resolved default. Explicit records use the published
     // four i64 fields + fault handle; all-ones means table/default lookup.
     std::vector<uint64_t> budget = defaults;
@@ -203,29 +260,20 @@ struct Entry {
           budget[i] = n;
       }
     }
-    if (reference.empty()) {
-      shape = current;
-      refPath = out + "/oracle-0";
-      ValueToValueMapTy vm;
-      auto clone = CloneModule(m, vm);
-      auto *cf = cast<Function>(vm[callee]);
-      normaliseScalar(*cf);
-      lowerScalar(*clone, *cf, current, refPath, budget[2], budget[1]);
-      reference = read(refPath + "/ref.bennett");
-      // Identity includes the normalised reference body, not the source name.
-    } else if (shape != current)
-      unimplemented("§8.4 multiple production scalar shapes", 1, &c);
-    else {
-      ValueToValueMapTy vm;
-      auto clone = CloneModule(m, vm);
-      auto *cf = cast<Function>(vm[callee]);
-      normaliseScalar(*cf);
-      lowerScalar(*clone, *cf, current, out + "/candidate", budget[2],
-                  budget[1]);
-      if (read(out + "/candidate/ref.bennett") != reference)
-        unimplemented("§7.3 multiple production scalar regions", 1, &c);
-      sys::fs::remove_directories(out + "/candidate");
-    }
+    std::string refName = "ref";
+    ValueToValueMapTy vm;
+    auto clone = CloneModule(m, vm);
+    auto *cf = cast<Function>(vm[callee]);
+    normaliseScalar(*cf);
+    auto path = out + "/oracle-" + std::to_string(references.size());
+    lowerScalar(*clone, *cf, current, path, budget[2], budget[1]);
+    auto candidate = read(path + "/ref.bennett");
+    auto it = std::find(references.begin(), references.end(), candidate);
+    unsigned ri = it - references.begin();
+    if (it == references.end()) references.push_back(candidate);
+    else sys::fs::remove_directories(path);
+    if (ri) refName += std::to_string(ri);
+    if (reference.empty()) { reference = candidate; shape = current; refPath = path; }
     // Tokens are minted by the host, positional launch parameters per ISA §10.
     std::string tk = "tk" + std::to_string(budgets.size());
     params.push_back(tk + ":token");
@@ -236,14 +284,15 @@ struct Entry {
                                    {"stack", std::to_string(budget[2])},
                                    {"depth", std::to_string(budget[3])},
                                    {"sstack", std::to_string(budget[4])}});
+    if (refName != "ref") budgets.back()["region"] = refName;
     std::string tgt;
     if (discard) {
       tgt = fresh("qreg[1]");
       rows.push_back(tgt + " = qreg.new any 1");
     } else
-      tgt = handle(target, &c);
-    rows.push_back("oracle_call @ref " + tk + " (" + join(ins) + ") " + tgt +
-                   " " + handle(fault, &c) + " () (" + join(args) + ")");
+      tgt = handle(output, &c);
+    rows.push_back("oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt +
+                   " " + handle(fault, &c) + " (" + join(mems) + ") (" + join(args) + ")");
     if (discard)
       rows.push_back("qreg.free " + tgt);
   }
@@ -265,7 +314,7 @@ struct Entry {
     auto i = integer(a.get(c.getArgOperand(measurement ? 1 : 2)), &c);
     if (i >= w)
       fail("T-INDEX", "§18.3 gate/measurement index", &c);
-    auto src = handle(q, &c);
+    auto src = operand(c.getArgOperand(measurement ? 0 : 1));
     if (measurement) {
       auto name =
           action("d:wire[1] mut", "s:wire[" + std::to_string(w) + "] in", "1",
@@ -342,8 +391,17 @@ struct Entry {
     unsigned bn = 0;
     for (BasicBlock &bb : f)
       blocks[&bb] = "b" + std::to_string(bn++);
+    for (BasicBlock &bb : f)
+      for (PHINode &p : bb.phis()) names[&p] = fresh(type(&p));
+    auto edge = [&](BasicBlock *to, BasicBlock *from) {
+      std::vector<std::string> values;
+      for (PHINode &p : to->phis()) values.push_back(operand(p.getIncomingValueForBlock(from)));
+      return "^" + blocks[to] + ("(" + join(values) + ")");
+    };
     for (BasicBlock &bb : f) {
-      rows.push_back("^" + blocks[&bb] + "():");
+      std::vector<std::string> bindings;
+      for (PHINode &p : bb.phis()) bindings.push_back(names[&p] + ":" + type(&p));
+      rows.push_back("^" + blocks[&bb] + "(" + join(bindings) + "):");
       ordinal = 0;
       for (Instruction &i : bb) {
         bool record = false;
@@ -354,7 +412,7 @@ struct Entry {
               getUnderlyingObject(s->getPointerOperand()));
         if (auto *al = dyn_cast<AllocaInst>(&i))
           record = descriptorObjects.count(al);
-        if (record)
+        if (record || isa<PHINode>(i))
           continue;
         if (auto *c = dyn_cast<CallBase>(&i)) {
           auto *g = c->getCalledFunction();
@@ -376,7 +434,7 @@ struct Entry {
             rows.push_back(q + " = qreg.new any " + std::to_string(w));
           } else if (n == "__bennett_qfree")
             rows.push_back("qreg.free " +
-                           handle(a.get(c->getArgOperand(0)), c));
+                           operand(c->getArgOperand(0)));
           else if (n == "__bennett_oracle")
             descriptor(*c);
           else if (n == "__bennett_gate" || n == "__bennett_measure")
@@ -388,11 +446,11 @@ struct Entry {
           rows.push_back("ret" + (v.empty() ? "" : " " + v));
         } else if (auto *br = dyn_cast<BranchInst>(&i)) {
           if (br->isUnconditional())
-            rows.push_back("br ^" + blocks[br->getSuccessor(0)]);
+            rows.push_back("br " + edge(br->getSuccessor(0), &bb));
           else {
             auto p = operand(br->getCondition());
-            rows.push_back("br " + p + " ^" + blocks[br->getSuccessor(0)] +
-                           " ^" + blocks[br->getSuccessor(1)]);
+            auto yes = edge(br->getSuccessor(0), &bb), no = edge(br->getSuccessor(1), &bb);
+            rows.push_back("br " + p + " " + yes + " " + no);
           }
         } else if (auto *b = dyn_cast<BinaryOperator>(&i)) {
           auto x = operand(b->getOperand(0)), y = operand(b->getOperand(1)),
@@ -463,6 +521,68 @@ std::string launchObject(Entry &e, json::Object &record,
   for (auto &s : *so)
     if (s.second.getAsObject()->getString("name") == "ref")
       oracleHash = s.second.getAsObject()->getString("interface_hash")->str();
+  std::map<std::string, std::string> referenceHashes;
+  referenceHashes["ref"] = oracleHash;
+  for (unsigned i = 1; i < e.references.size(); ++i) {
+    std::map<std::string, std::string> extra;
+    auto text = e.references[i];
+    size_t p = text.find("\n\nsection ");
+    while (p != std::string::npos) {
+      auto start = p + 10, end = text.find('\n', start), next = text.find("\n\nsection ", end);
+      extra[text.substr(start, end - start)] = StringRef(text.substr(end + 1, next == std::string::npos ? next : next - end - 1)).rtrim().str();
+      p = next;
+    }
+    if (extra["layout"] != sections["layout"] || (extra.count("data") ? extra.at("data") : "") != (sections.count("data") ? sections.at("data") : ""))
+      unimplemented("§16.3 multi-region unified layout", 1, &e.f);
+    auto suffix = std::to_string(i);
+    auto syms = parse(extra["symbols"]);
+    for (auto &v : *syms.getAsObject()) {
+      auto *sym = v.second.getAsObject();
+      auto name = sym->getString("name")->str();
+      if (name == "ref" || name == "L1") {
+        auto renamed = name == "ref" ? "ref" + suffix : "L1_" + suffix;
+        extra["functions"] = std::regex_replace(extra["functions"], std::regex("@" + name + "\\b"), "@" + renamed);
+        // Definition names participate in the envelope; recompute both hashes.
+        (*sym)["name"] = renamed;
+      } else continue; // shared data was checked byte-identical above
+    }
+    // Rehash in dependency order, retaining the reference envelope's layout.
+    std::map<std::string, std::string> changed;
+    for (auto name : {"L1_" + suffix, "ref" + suffix}) {
+      json::Object *sym = nullptr;
+      for (auto &v : *syms.getAsObject())
+        if (v.second.getAsObject()->getString("name") == name) sym = v.second.getAsObject();
+      auto begin = extra["functions"].find(name[0] == 'L' ? "lproc @" + name : "oracle @" + name);
+      auto end = extra["functions"].find("\nlproc @", begin + 1);
+      auto body = extra["functions"].substr(begin, end == std::string::npos ? end : end - begin);
+      // For memory-free lprocs only signatures/body/references enter; oracle
+      // envelopes include all scalar layout leaves, as in lowerScalar.
+      std::string env = "isa=0.8\nptr_width=" + std::to_string(e.m.getDataLayout().getPointerSizeInBits()) + "\n" + jcs(*sym->get("signature")) + "\n";
+      std::string refs;
+      for (auto &x : changed) {
+        if (body.find("@" + x.first) != std::string::npos) refs += x.second + "\n";
+        body = std::regex_replace(body, std::regex("@" + x.first + "\\b"), "@" + x.second);
+      }
+      env += body + "\n";
+      if (name[0] != 'L') {
+        auto layout = parse(extra["layout"]);
+        std::map<std::string, std::string> leaves;
+        for (auto &v : *layout.getAsObject()) {
+          if (v.first == "globals" || v.first == "interface_regions") {
+            if (v.first == "globals" && !v.second.getAsObject()->empty()) unimplemented("§16.3 multi-region data layout", 1, &e.f);
+            if (v.first == "interface_regions") for (auto &r : *v.second.getAsObject())
+              if (!r.second.getAsObject()->empty()) unimplemented("§16.3 multi-region interface layout", 1, &e.f);
+          } else leaves[v.first.str()] = jcs(v.second);
+        }
+        for (auto &v : leaves) env += "layout " + v.first + " " + v.second + "\n";
+      }
+      changed[name] = hash(env + refs);
+      (*sym)["interface_hash"] = changed[name];
+      (*so)[std::to_string(so->size())] = parse(jcs(json::Value(std::move(*sym))));
+    }
+    referenceHashes["ref" + suffix] = changed["ref" + suffix];
+    sections["functions"] += "\n" + extra["functions"];
+  }
   json::Array pt, rt;
   for (auto &x : e.paramTypes)
     pt.push_back(x);
@@ -477,7 +597,7 @@ std::string launchObject(Entry &e, json::Object &record,
                      ") (" + join(e.results) + ") () () ()\n";
   body += join(e.rows, "\n");
   std::map<std::string, std::string> hashes;
-  hashes["ref"] = oracleHash;
+  hashes = referenceHashes;
   std::string actionBodies;
   for (auto &x : e.actions) {
     auto ah = hash("isa=0.8\nptr_width=" +
@@ -493,7 +613,7 @@ std::string launchObject(Entry &e, json::Object &record,
   }
   std::string canonical, refs;
   std::set<std::string> referenced;
-  std::regex token(R"(@(ref|M[0-9]+)\b)");
+  std::regex token(R"(@(ref[0-9]*|M[0-9]+)\b)");
   size_t last = 0;
   for (std::sregex_iterator it(body.begin(), body.end(), token), end; it != end;
        ++it) {
@@ -687,7 +807,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
     };
     status(b.CreateCall(
         api("bennett_budget", i32, {ptr, ptr, i64, i64, i64, i64, ptr}),
-        {p, string("ref"), number("steps"), number("heap"), number("stack"),
+        {p, string(budget->getString("region").value_or("ref")), number("steps"), number("heap"), number("stack"),
          number("depth"), tk}));
     status(b.CreateCall(
         api("bennett_args_set_token", i32, {ptr, size, i64}),

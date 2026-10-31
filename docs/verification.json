@@ -6951,5 +6951,227 @@
       "Target/schedule-bound checked executable certificate claims and full record/coverage acceptance (dialect 19.9; ISA 9.2,12).",
       "Paired published production CC byte fixture (bp-95o; dialect 17.4 plugin-defined lowering)."
     ]
+  },
+  "seventh_pass": {
+    "base": "32427ed",
+    "before_gate": {
+      "exit": 0,
+      "summary": {
+        "18": {
+          "cases_run": 66,
+          "cells_run": 924,
+          "cells_agree": 920,
+          "cases_agree": 65,
+          "cases_deferred": 1,
+          "cases_blocked": 0,
+          "cases_diverge": 0
+        },
+        "23": {
+          "cases_run": 66,
+          "cells_run": 792,
+          "cells_agree": 788,
+          "cases_agree": 65,
+          "cases_deferred": 1,
+          "cases_blocked": 0,
+          "cases_diverge": 0
+        }
+      }
+    },
+    "group1": {
+      "18": {
+        "major": 18,
+        "cases": [
+          {
+            "name": "binding-out-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-out-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-out-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d",
+            "check": true,
+            "check_output": "{\"object_hash\":\"7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f\",\"interface_hash\":\"d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f\"},\"ref\":{\"closure_hash\":\"53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91\",\"interface_hash\":\"53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91\"},\"top\":{\"closure_hash\":\"06483f2c461eeb4dd21675d943226a073c20d01271c1abf30e7e0670ccbafafe\",\"interface_hash\":\"06483f2c461eeb4dd21675d943226a073c20d01271c1abf30e7e0670ccbafafe\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "binding-clock-read",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-clock-read/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-clock-read/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45",
+            "check": true,
+            "check_output": "{\"object_hash\":\"be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"L1\":{\"closure_hash\":\"96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48\",\"interface_hash\":\"96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48\"},\"ref\":{\"closure_hash\":\"27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73\",\"interface_hash\":\"27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73\"},\"top\":{\"closure_hash\":\"5205f2ac035f9cf7f33ae3288a5385db4cbedaf71215a3c038bf4eef31a8d4dc\",\"interface_hash\":\"5205f2ac035f9cf7f33ae3288a5385db4cbedaf71215a3c038bf4eef31a8d4dc\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"3d1d8e9e602015e74735d3f7a7ea7a3a0774ad4e9d51fb902a6fcf81d19b1155\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"3d1d8e9e602015e74735d3f7a7ea7a3a0774ad4e9d51fb902a6fcf81d19b1155\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "binding-block-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-block-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-block-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c",
+            "check": true,
+            "check_output": "{\"object_hash\":\"493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"L1\":{\"closure_hash\":\"f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0\",\"interface_hash\":\"f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0\"},\"ref\":{\"closure_hash\":\"04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4\",\"interface_hash\":\"04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4\"},\"top\":{\"closure_hash\":\"ad16d8bab60d7ee06b51ab382c62be11699284c4d54bc150c99ac29ca3fe516f\",\"interface_hash\":\"ad16d8bab60d7ee06b51ab382c62be11699284c4d54bc150c99ac29ca3fe516f\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"61795fb51b8a7bcb7937e64501568f16040091c5505ae576e2eaf9b563431bb9\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"61795fb51b8a7bcb7937e64501568f16040091c5505ae576e2eaf9b563431bb9\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+            "run": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "binding-console-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-console-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/binding-console-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963",
+            "check": true,
+            "check_output": "{\"object_hash\":\"3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"G3\":{\"closure_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\",\"interface_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\"},\"L1\":{\"closure_hash\":\"e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db\",\"interface_hash\":\"e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db\"},\"ref\":{\"closure_hash\":\"82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5\",\"interface_hash\":\"82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5\"},\"top\":{\"closure_hash\":\"4f1ae04c85b968661d68bd8d75ecc9b5030e41981b3a4d24e13d87f52ede148b\",\"interface_hash\":\"4f1ae04c85b968661d68bd8d75ecc9b5030e41981b3a4d24e13d87f52ede148b\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"6ea297ba868d4362c8ed465ad4bf4051fb41402668b4b88e8fa85bdc229bf28f\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"6ea297ba868d4362c8ed465ad4bf4051fb41402668b4b88e8fa85bdc229bf28f\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "mem-in",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/mem-in/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/mem-in/out/top/oracle-1/ref.bennett\n",
+            "sha256": "9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7",
+            "check": true,
+            "check_output": "{\"object_hash\":\"9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"07d2e7377e562b91c9533777b58bca681153ababad85b0fec7a23e381cf5430b\",\"interface_hash\":\"07d2e7377e562b91c9533777b58bca681153ababad85b0fec7a23e381cf5430b\"},\"ref\":{\"closure_hash\":\"a885f4092428bbdd3142e990e48b67b41c3657a57e586bdcf64b024def03b019\",\"interface_hash\":\"a885f4092428bbdd3142e990e48b67b41c3657a57e586bdcf64b024def03b019\"},\"top\":{\"closure_hash\":\"9d7695e3aaff7f43da7cc830982e840f234df02d6b0d8bd11a7ab298d406ad8a\",\"interface_hash\":\"9d7695e3aaff7f43da7cc830982e840f234df02d6b0d8bd11a7ab298d406ad8a\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+            "run": true,
+            "reference_exact": null,
+            "no_published_golden": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "two-regions",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/two-regions/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/two-regions/out/top/oracle-1/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/two-regions/out/top/oracle-2/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/18/two-regions/out/top/oracle-2/ref.bennett\n",
+            "sha256": "fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8",
+            "check": true,
+            "check_output": "{\"object_hash\":\"fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e\",\"interface_hash\":\"a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e\"},\"L1_1\":{\"closure_hash\":\"127f13a27a337617f4b3b8dc533aeaef5b6459a6701b85b55c30b7e2e3ad5a6e\",\"interface_hash\":\"127f13a27a337617f4b3b8dc533aeaef5b6459a6701b85b55c30b7e2e3ad5a6e\"},\"ref\":{\"closure_hash\":\"3efd817f87f4d692dd8e96f19a62491fc3082ca7ec54e0494ccf305abfd12f86\",\"interface_hash\":\"3efd817f87f4d692dd8e96f19a62491fc3082ca7ec54e0494ccf305abfd12f86\"},\"ref1\":{\"closure_hash\":\"a56351ac7fd160c347503e048f238591879940aedf99ac0ff613a66505f7eb75\",\"interface_hash\":\"a56351ac7fd160c347503e048f238591879940aedf99ac0ff613a66505f7eb75\"},\"top\":{\"closure_hash\":\"ee7fd6b6c9b13fedd94e6696a951b63964a0d1bd96e9e6cf86537189f660a59e\",\"interface_hash\":\"ee7fd6b6c9b13fedd94e6696a951b63964a0d1bd96e9e6cf86537189f660a59e\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":11,\"tape\":[]}\n",
+            "run": true,
+            "reference_exact": null,
+            "no_published_golden": true,
+            "cross_major_byte_equal": true
+          },
+          {
+            "name": "handle-phi",
+            "exit": 0,
+            "diagnostic": "",
+            "no_published_golden": true,
+            "sha256": "0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1",
+            "check": true,
+            "check_output": "{\"object_hash\":\"0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"583b8a518e7c1fe0593b32bb23eeb12149d10f064f28c1f13115aa270b8ad34d\",\"interface_hash\":\"583b8a518e7c1fe0593b32bb23eeb12149d10f064f28c1f13115aa270b8ad34d\"}},\"unresolved_imports\":[]}\n",
+            "runs": [
+              {
+                "output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(2))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i8\",\"value\":\"9\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":10,\"tape\":[]}\n",
+                "ok": true
+              },
+              {
+                "output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i8\",\"value\":\"7\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":10,\"tape\":[]}\n",
+                "ok": true
+              }
+            ],
+            "run": true,
+            "cross_major_byte_equal": true
+          }
+        ]
+      },
+      "23": {
+        "major": 23,
+        "cases": [
+          {
+            "name": "binding-out-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-out-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-out-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d",
+            "check": true,
+            "check_output": "{\"object_hash\":\"7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f\",\"interface_hash\":\"d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f\"},\"ref\":{\"closure_hash\":\"53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91\",\"interface_hash\":\"53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91\"},\"top\":{\"closure_hash\":\"06483f2c461eeb4dd21675d943226a073c20d01271c1abf30e7e0670ccbafafe\",\"interface_hash\":\"06483f2c461eeb4dd21675d943226a073c20d01271c1abf30e7e0670ccbafafe\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "binding-clock-read",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-clock-read/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-clock-read/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45",
+            "check": true,
+            "check_output": "{\"object_hash\":\"be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"L1\":{\"closure_hash\":\"96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48\",\"interface_hash\":\"96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48\"},\"ref\":{\"closure_hash\":\"27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73\",\"interface_hash\":\"27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73\"},\"top\":{\"closure_hash\":\"5205f2ac035f9cf7f33ae3288a5385db4cbedaf71215a3c038bf4eef31a8d4dc\",\"interface_hash\":\"5205f2ac035f9cf7f33ae3288a5385db4cbedaf71215a3c038bf4eef31a8d4dc\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"3d1d8e9e602015e74735d3f7a7ea7a3a0774ad4e9d51fb902a6fcf81d19b1155\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"3d1d8e9e602015e74735d3f7a7ea7a3a0774ad4e9d51fb902a6fcf81d19b1155\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "binding-block-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-block-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-block-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c",
+            "check": true,
+            "check_output": "{\"object_hash\":\"493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"L1\":{\"closure_hash\":\"f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0\",\"interface_hash\":\"f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0\"},\"ref\":{\"closure_hash\":\"04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4\",\"interface_hash\":\"04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4\"},\"top\":{\"closure_hash\":\"ad16d8bab60d7ee06b51ab382c62be11699284c4d54bc150c99ac29ca3fe516f\",\"interface_hash\":\"ad16d8bab60d7ee06b51ab382c62be11699284c4d54bc150c99ac29ca3fe516f\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"61795fb51b8a7bcb7937e64501568f16040091c5505ae576e2eaf9b563431bb9\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"61795fb51b8a7bcb7937e64501568f16040091c5505ae576e2eaf9b563431bb9\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "binding-console-byte",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-console-byte/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/binding-console-byte/out/top/oracle-1/ref.bennett\n",
+            "reference_exact": true,
+            "sha256": "3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963",
+            "check": true,
+            "check_output": "{\"object_hash\":\"3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963\",\"status\":\"ok\",\"symbols\":{\"G1\":{\"closure_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\",\"interface_hash\":\"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"G3\":{\"closure_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\",\"interface_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\"},\"L1\":{\"closure_hash\":\"e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db\",\"interface_hash\":\"e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db\"},\"ref\":{\"closure_hash\":\"82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5\",\"interface_hash\":\"82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5\"},\"top\":{\"closure_hash\":\"4f1ae04c85b968661d68bd8d75ecc9b5030e41981b3a4d24e13d87f52ede148b\",\"interface_hash\":\"4f1ae04c85b968661d68bd8d75ecc9b5030e41981b3a4d24e13d87f52ede148b\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":1,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"6ea297ba868d4362c8ed465ad4bf4051fb41402668b4b88e8fa85bdc229bf28f\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"6ea297ba868d4362c8ed465ad4bf4051fb41402668b4b88e8fa85bdc229bf28f\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":7,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "mem-in",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/mem-in/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/mem-in/out/top/oracle-1/ref.bennett\n",
+            "sha256": "9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7",
+            "check": true,
+            "check_output": "{\"object_hash\":\"9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"07d2e7377e562b91c9533777b58bca681153ababad85b0fec7a23e381cf5430b\",\"interface_hash\":\"07d2e7377e562b91c9533777b58bca681153ababad85b0fec7a23e381cf5430b\"},\"ref\":{\"closure_hash\":\"a885f4092428bbdd3142e990e48b67b41c3657a57e586bdcf64b024def03b019\",\"interface_hash\":\"a885f4092428bbdd3142e990e48b67b41c3657a57e586bdcf64b024def03b019\"},\"top\":{\"closure_hash\":\"9d7695e3aaff7f43da7cc830982e840f234df02d6b0d8bd11a7ab298d406ad8a\",\"interface_hash\":\"9d7695e3aaff7f43da7cc830982e840f234df02d6b0d8bd11a7ab298d406ad8a\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+            "run": true,
+            "reference_exact": null,
+            "no_published_golden": true
+          },
+          {
+            "name": "two-regions",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/two-regions/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/two-regions/out/top/oracle-1/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/two-regions/out/top/oracle-2/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-shapes/23/two-regions/out/top/oracle-2/ref.bennett\n",
+            "sha256": "fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8",
+            "check": true,
+            "check_output": "{\"object_hash\":\"fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8\",\"status\":\"ok\",\"symbols\":{\"L1\":{\"closure_hash\":\"a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e\",\"interface_hash\":\"a8c86313c60cd75a4f013bdaaa43ed5db78c444b0338a3d41d98a3871929250e\"},\"L1_1\":{\"closure_hash\":\"127f13a27a337617f4b3b8dc533aeaef5b6459a6701b85b55c30b7e2e3ad5a6e\",\"interface_hash\":\"127f13a27a337617f4b3b8dc533aeaef5b6459a6701b85b55c30b7e2e3ad5a6e\"},\"ref\":{\"closure_hash\":\"3efd817f87f4d692dd8e96f19a62491fc3082ca7ec54e0494ccf305abfd12f86\",\"interface_hash\":\"3efd817f87f4d692dd8e96f19a62491fc3082ca7ec54e0494ccf305abfd12f86\"},\"ref1\":{\"closure_hash\":\"a56351ac7fd160c347503e048f238591879940aedf99ac0ff613a66505f7eb75\",\"interface_hash\":\"a56351ac7fd160c347503e048f238591879940aedf99ac0ff613a66505f7eb75\"},\"top\":{\"closure_hash\":\"ee7fd6b6c9b13fedd94e6696a951b63964a0d1bd96e9e6cf86537189f660a59e\",\"interface_hash\":\"ee7fd6b6c9b13fedd94e6696a951b63964a0d1bd96e9e6cf86537189f660a59e\"}},\"unresolved_imports\":[]}\n",
+            "run_output": "{\"budgets\":[{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000},{\"depth\":8,\"heap\":0,\"stack\":128,\"steps\":1000}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"350127a053e8a354f3475ebcbf812da7799348bf6e3bb4db2f7825df122abe66\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":11,\"tape\":[]}\n",
+            "run": true,
+            "reference_exact": null,
+            "no_published_golden": true
+          },
+          {
+            "name": "handle-phi",
+            "exit": 0,
+            "diagnostic": "",
+            "no_published_golden": true,
+            "sha256": "0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1",
+            "check": true,
+            "check_output": "{\"object_hash\":\"0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"583b8a518e7c1fe0593b32bb23eeb12149d10f064f28c1f13115aa270b8ad34d\",\"interface_hash\":\"583b8a518e7c1fe0593b32bb23eeb12149d10f064f28c1f13115aa270b8ad34d\"}},\"unresolved_imports\":[]}\n",
+            "runs": [
+              {
+                "output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(2))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i8\",\"value\":\"9\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":10,\"tape\":[]}\n",
+                "ok": true
+              },
+              {
+                "output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"4b922dee8937df5dcf1e86c6d9c904afdd9f28ee91703cfc1d96f8f28204aae5\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i8\",\"value\":\"7\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":10,\"tape\":[]}\n",
+                "ok": true
+              }
+            ],
+            "run": true
+          }
+        ]
+      }
+    },
+    "status": "partial; exact remaining acceptance obligations tracked by bp-2zv; no new deferral"
   }
 }

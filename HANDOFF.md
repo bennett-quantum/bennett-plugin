@@ -1,3 +1,13 @@
+Seventh pass in progress from 32427ed. Group 1 adds production binding
+OUT/MEM_IN/CLOCK/BLOCK/CONSOLE, same-layout multiple reference symbols and direct
+handle/scalar phi block parameters. New tests/production_shapes.py: 7/7 independent
+ISA check/run cases on LLVM 18 and 23, four published binding references exact,
+all seven launch pairs equal across majors. Unchanged full baseline gate exit 0,
+66/65/1/0/0 each. bp-2zv stays open: remaining finite dispatch, static files/general
+memory/call environments, combined devices/multiple outputs/unified layouts;
+then staged budgets and checked target/schedule-bound certificates/records.
+No new deferral, push, repin or sibling modification. Prior evidence follows.
+
 # Handoff: bennett-plugin
 
 State (2026-10-31): scalar launch implementation **bc14d48**, host ABI fix
