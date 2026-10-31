@@ -237,9 +237,10 @@ std::string regionKey(Function *f) {
   std::set<Function *> included;
   for(auto *g:order) {auto *c=cast<Function>(map[g]);materialised.push_back(c);included.insert(c);}
   for(unsigned n=0;n<materialised.size();++n) {
-    auto *g=materialised[n];normaliseScalar(*g);
+    auto *g=materialised[n];materialiseIntegerRuntime(*g);normaliseScalar(*g);
     for(auto &i:instructions(g))if(auto *call=dyn_cast<CallBase>(&i))
       if(auto *target=resolve(call->getCalledOperand())) {
+        materialiseIntegerRuntime(*target);
         if(target->getFunctionType()==call->getFunctionType())call->setCalledFunction(target);
         if(!target->isDeclaration() && included.insert(target).second)materialised.push_back(target);
       }

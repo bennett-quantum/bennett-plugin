@@ -44,8 +44,12 @@ void normaliseWideFP(Function &f) {
     auto *v=access(t,l?l->getPointerOperand():s->getPointerOperand(),s?s->getValueOperand():nullptr,0);
     if(l)l->replaceAllUsesWith(v);i->eraseFromParent();
   }
-  // Resolve projections of freshly scalarised aggregate loads.
-  if(aggregateMemory)for(auto &i:instructions(f))if(auto *e=dyn_cast<ExtractValueInst>(&i)) {
+  std::function<bool(Type *)> hasWide=[&](Type *t) {if(wide(t))return true;if(auto *s=dyn_cast<StructType>(t)) {for(auto *e:s->elements())if(hasWide(e))return true;}if(auto *a=dyn_cast<ArrayType>(t))return hasWide(a->getElementType());return false;};
+  bool wideAggregate=false;
+  // Resolve projections of freshly scalarised aggregate loads and N27 limb tuples.
+  for(auto &i:instructions(f))if(auto *e=dyn_cast<ExtractValueInst>(&i)) {
+    if(!aggregateMemory && !hasWide(e->getAggregateOperand()->getType()))continue;
+    wideAggregate=true;
     Value *v=e->getAggregateOperand();
     while(auto *in=dyn_cast<InsertValueInst>(v)) {
       if(in->getIndices()==e->getIndices()) {e->replaceAllUsesWith(in->getInsertedValueOperand());break;}
@@ -53,7 +57,7 @@ void normaliseWideFP(Function &f) {
       v=in->getAggregateOperand();
     }
   }
-  bool cleanup=aggregateMemory;while(cleanup) {SmallVector<Instruction *> erase;for(auto &i:instructions(f))if(i.use_empty() && (isa<ExtractValueInst>(i)||isa<InsertValueInst>(i)))erase.push_back(&i);for(auto *i:erase)i->eraseFromParent();cleanup=!erase.empty();}
+  bool cleanup=aggregateMemory||wideAggregate;while(cleanup) {SmallVector<Instruction *> erase;for(auto &i:instructions(f))if(i.use_empty() && (isa<ExtractValueInst>(i)||isa<InsertValueInst>(i)))erase.push_back(&i);for(auto *i:erase)i->eraseFromParent();cleanup=!erase.empty();}
   // Byte-rounded accesses also include the slots introduced below.
   auto byteMemory=[&]() {
   SmallVector<Instruction *> accesses;for(auto &i:instructions(f))accesses.push_back(&i);
@@ -159,8 +163,24 @@ void normaliseWideFP(Function &f) {
         for(unsigned k=0;k<count;++k)out.push_back(b.CreateLoad(b.getIntNTy(std::min(64u,n-64*k)),b.CreateGEP(b.getInt64Ty(),dst,b.getInt64(k))));
         b.CreateCall(pop,{pb});b.CreateCall(pop,{pa});b.CreateCall(pop,{dst});
       }
-    } else if(auto *c=dyn_cast<CallBase>(i);c && c->getCalledFunction() && c->getCalledFunction()->isIntrinsic()) {
-      unimplemented("§12.8 N27 wide integer intrinsic (bp-jx3): the fixed expansions of §12.8",2,i);
+    } else if(auto *c=dyn_cast<CallBase>(i);c && c->getCalledFunction() && c->getCalledFunction()->getName().starts_with("__bennett_rt_")) {
+      auto rtname=c->getCalledFunction()->getName().str();auto suffix="_i"+std::to_string(n);
+      if(rtname.size()<=suffix.size() || rtname.substr(rtname.size()-suffix.size())!=suffix)unimplemented("§12.8 slot runtime name",2,i);
+      auto op=rtname.substr(13,rtname.size()-13-suffix.size());
+      auto push=m.getOrInsertFunction("__bennett_rt_ss_push",b.getPtrTy(),b.getInt64Ty(),b.getInt64Ty());auto pop=m.getOrInsertFunction("__bennett_rt_ss_pop",b.getVoidTy(),b.getPtrTy());
+      auto slot=[&](StringRef suffix) {return b.CreateCall(push,{b.getInt64(8*count),b.getInt64(8)},"nz."+suffix+"."+r);};
+      auto *dst=slot("d");SmallVector<Value *> args{dst},slots;SmallVector<Type *> types;
+      unsigned index=0;
+      for(auto &u:c->args()) {
+        if(wide(u->getType())) {
+          auto a=split(u);auto label="s"+std::to_string(index++);auto *p=slot(label);slots.push_back(p);args.push_back(p);
+          for(unsigned k=0;k<a.size();++k)b.CreateStore(a[k],b.CreateGEP(b.getInt64Ty(),p,b.getInt64(k),"nz."+label+std::to_string(k)+"."+r))->setAlignment(Align(8));
+        } else args.push_back(u);
+      }
+      for(auto *v:args)types.push_back(v->getType());
+      b.CreateCall(m.getOrInsertFunction("__bennett_rt_i"+std::to_string(n)+"_"+op,FunctionType::get(b.getVoidTy(),types,false)),args);
+      for(unsigned k=0;k<count;++k) {auto *v=b.CreateLoad(b.getIntNTy(std::min(64u,n-64*k)),b.CreateGEP(b.getInt64Ty(),dst,b.getInt64(k),"nz.rp"+std::to_string(k)+"."+r),"nz.rm"+std::to_string(k)+"."+r);v->setAlignment(Align(8));out.push_back(v);}
+      for(auto it=slots.rbegin();it!=slots.rend();++it)b.CreateCall(pop,{*it});b.CreateCall(pop,{dst});
     } else unimplemented("§12 N22 general wide limb operation",2,i);
     parts[v]=out;dead.push_back(i);return out;
   };

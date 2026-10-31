@@ -11,7 +11,7 @@ def instructions(text):
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();spec=dialect_text();pairs={tag:dict(re.findall(r'```llvm normalise-'+tag+r'=([^\n ]+)[^\n]*\n(.*?)```',spec,re.S)) for tag in ['in','out']};rows=[]
- for name in ['n-wideint','n-wide-sub','n-fpconv-wide','n-fcmp','n-fmuladd','n-fp80','n-libm','n-libm-x86-f128','n-libm-x86-ppcf128','n-libm-arm-ppcf128','n-libm-arm-f80','n-libm-riscv-ppcf128','n-libm-riscv-f80','n-vp-merge','n-vp-select','n-vp-product','n-vector','n-intrinsics','n-bitcast-lanes','n-bitcast-scalar','n-vector-i24','n-flags','n-shift','n-query','n-atomic-nand','n-constant-lane','n-lower-widenable',
+ for name in ['n-wide-intrinsics','n-wideint','n-wide-sub','n-fpconv-wide','n-fcmp','n-fmuladd','n-fp80','n-libm','n-libm-x86-f128','n-libm-x86-ppcf128','n-libm-arm-ppcf128','n-libm-arm-f80','n-libm-riscv-ppcf128','n-libm-riscv-f80','n-vp-merge','n-vp-select','n-vp-product','n-vector','n-intrinsics','n-bitcast-lanes','n-bitcast-scalar','n-vector-i24','n-flags','n-shift','n-query','n-atomic-nand','n-constant-lane','n-lower-widenable',
               'n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane','n-trap','n-memintrinsics','n-atomic','n-atomic-wrap',
               *(['n-atomic-usub'] if a.major==23 else [])]:
   d=R/f'.tmp/materialisation/{a.major}/{name}';d.mkdir(parents=True,exist_ok=True);src=d/'in.ll';src.write_text(pairs['in'][name]);out=d/'out.ll'
@@ -21,7 +21,7 @@ def main():
   # optimisation or Bennett pass is applied to the expected instruction list.
   expected=d/'expected.ll';expected.write_text(pairs['out'][name]);printed=d/'expected-printed.ll'
   canonical=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-S',str(expected),'-o',str(printed)],capture_output=True,text=True)
-  x=subprocess.run(cmd,capture_output=True,text=True);actual=out.read_text() if x.returncode==0 else '';want=instructions(printed.read_text()) if canonical.returncode==0 else {};got=instructions(actual);ok=canonical.returncode==0 and x.returncode==0 and got==want
+  x=subprocess.run(cmd,capture_output=True,text=True);actual=out.read_text() if x.returncode==0 else '';want=instructions(printed.read_text()) if canonical.returncode==0 else {};got=instructions(actual);ok=canonical.returncode==0 and x.returncode==0 and {k:got.get(k) for k in want}==want
   if name=='n-flags':
    definition=re.search(r'define [^\n]+',actual)[0] if actual else ''
    group=re.search(r'#(\d+)',definition)

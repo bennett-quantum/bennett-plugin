@@ -439,44 +439,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
     } else unimplemented("§12 N26 memory intrinsic family",2,m);
     m->eraseFromParent();
   }
-  SmallVector<IntrinsicInst *> integerIntrinsics;
-  for(Instruction &i:instructions(f))if(auto *c=dyn_cast<IntrinsicInst>(&i))integerIntrinsics.push_back(c);
-  for(auto *c:integerIntrinsics) {
-    auto name=Intrinsic::getBaseName(c->getIntrinsicID()).drop_front(5);
-    bool extrema=name=="smax"||name=="smin"||name=="umax"||name=="umin";
-    bool overflow=name=="uadd.with.overflow"||name=="usub.with.overflow"||name=="sadd.with.overflow"||name=="ssub.with.overflow";
-    if(!extrema && !overflow)continue;
-    auto *a=c->getArgOperand(0),*d=c->getArgOperand(1);
-    if(!a->getType()->isIntegerTy())continue;
-    IRBuilder<NoFolder> b(c);auto r=c->getName().str();c->setName("");Value *result;
-    if(extrema) {
-      auto predicate=name=="smax"?CmpInst::ICMP_SGT:name=="smin"?CmpInst::ICMP_SLT:name=="umax"?CmpInst::ICMP_UGT:CmpInst::ICMP_ULT;
-      auto *cmp=b.CreateICmp(predicate,a,d,"nz.c."+r);result=b.CreateSelect(cmp,a,d,r);
-    } else {
-      bool sub=name.contains("sub"),sign=name.starts_with("s");
-      auto *sum=sub?b.CreateSub(a,d,"nz.s."+r):b.CreateAdd(a,d,"nz.s."+r);Value *flag;
-      if(sign) {
-        auto *x=b.CreateXor(a,sum,"nz.x."+r);
-        auto *y=b.CreateXor(sub?a:d,sub?d:sum,"nz.y."+r);
-        auto *w=b.CreateAnd(x,y,"nz.w."+r);
-        flag=b.CreateICmpSLT(w,Constant::getNullValue(a->getType()),"nz.c."+r);
-      } else flag=b.CreateICmpULT(sub?a:sum,sub?d:a,"nz.c."+r);
-      auto *first=b.CreateInsertValue(Constant::getNullValue(c->getType()),sum,0,"nz.a."+r);
-      result=b.CreateInsertValue(first,flag,1,r);
-    }
-    c->replaceAllUsesWith(result);c->eraseFromParent();
-  }
-  // N27 scalar count helpers (wide limb-slot ABI remains a separate rule).
-  SmallVector<IntrinsicInst *> counts;
-  for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
-    auto n=c->getCalledFunction()->getName();
-    if((n.starts_with("llvm.ctlz.") || n.starts_with("llvm.cttz.") || n.starts_with("llvm.ctpop.")) && c->getType()->isIntegerTy() && c->getType()->getIntegerBitWidth()<=128) counts.push_back(c);
-  }
-  for(auto *c:counts) {
-    auto n=c->getCalledFunction()->getName();auto op=n.starts_with("llvm.ctlz.")?"ctlz":n.starts_with("llvm.cttz.")?"cttz":"ctpop";
-    auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_"+std::string(op)+"_i"+std::to_string(c->getType()->getIntegerBitWidth()),c->getFunctionType());
-    IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *replacement=b.CreateCall(helper,args);replacement->takeName(c);c->replaceAllUsesWith(replacement);c->eraseFromParent();
-  }
+  normaliseInteger(f);
 
   normaliseFP(f);
   if(wide)normaliseWideFP(f);

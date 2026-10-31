@@ -602,6 +602,10 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
   if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));
   for(auto &g:m)if(!g.isDeclaration())normaliseFP(g);
+  normaliseWideABI(m);
+  // N27 closure must precede N24 stack preparation (slot helpers introduce pushes).
+  for(auto &g:m)if(!g.isDeclaration())normaliseScalar(g);
+  for(auto &g:m)if(!g.use_empty())materialiseIntegerRuntime(g);
   bool singleFrame=prepareStack(m,f,sstack);
   if(autoSnapshot) {
     // CC assembly storage has no L users and is not part of caller memory.

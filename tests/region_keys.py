@@ -45,7 +45,7 @@ checks['stripped_function_identity']=stripped.returncode==0 and stripped_keys==k
 # An absent transform is a failure; equality of two raw source keys is no witness.
 spec=dialect_text()
 pairs={tag:dict(re.findall(r'```llvm normalise-'+tag+r'=([^\n ]+)[^\n]*\n(.*?)```',spec,re.S)) for tag in ['in','out']}
-fixtures=['n-wideint','n-wide-sub','n-fpconv-wide','n-fcmp','n-fmuladd','n-fp80','n-libm','n-libm-x86-f128','n-libm-x86-ppcf128','n-libm-arm-ppcf128','n-libm-arm-f80','n-libm-riscv-ppcf128','n-libm-riscv-f80','n-constant-lane','n-query','n-atomic-nand','n-gep-index','n-vp-merge','n-vp-select','n-vp-product','n-vector','n-intrinsics','n-bitcast-lanes','n-bitcast-scalar','n-vector-i24','n-flags','n-shift','n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane',
+fixtures=['n-wide-intrinsics','n-wideint','n-wide-sub','n-fpconv-wide','n-fcmp','n-fmuladd','n-fp80','n-libm','n-libm-x86-f128','n-libm-x86-ppcf128','n-libm-arm-ppcf128','n-libm-arm-f80','n-libm-riscv-ppcf128','n-libm-riscv-f80','n-constant-lane','n-query','n-atomic-nand','n-gep-index','n-vp-merge','n-vp-select','n-vp-product','n-vector','n-intrinsics','n-bitcast-lanes','n-bitcast-scalar','n-vector-i24','n-flags','n-shift','n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane',
           'n-trap','n-memintrinsics','n-atomic','n-atomic-wrap',
           *(['n-atomic-usub'] if a.major==23 else [])]
 if a.all_fixtures:
