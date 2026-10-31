@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+root="$(git -C "$script_dir" rev-parse --show-toplevel)"
 unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS BROWSER
 export TMPDIR="$root/.tmp"
 mkdir -p "$TMPDIR"
