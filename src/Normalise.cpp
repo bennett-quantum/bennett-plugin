@@ -304,6 +304,87 @@ void normaliseScalar(Function &f) {
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/SourceMgr.h"
 namespace bennett {
+// A proof for §9.2's fixed, single-frame linked runtime. The template proves
+// only backing/header/zero-fill accesses. Program accesses are separately
+// proved below and again by prepareStack's ordinary range proof. Matching a
+// runtime name or a caller-supplied annotation grants no exemption here.
+static bool proveSingleFrame(Module &m, Function &root, uint64_t capacity) {
+  if (root.size()!=1 || !m.getDataLayout().isLittleEndian() ||
+      m.getDataLayout().getPointerSizeInBits()!=64 || m.getDataLayout().getIndexSizeInBits(0)!=64 ||
+      capacity>UINT64_MAX/2) return false;
+  std::string source=
+#include "runtime/SingleFrame.inc"
+  ;
+  SMDiagnostic error;auto expected=parseAssemblyString(source,error,m.getContext());
+  if(!expected)fail("output","invalid single-frame proof template");
+  std::set<Function *> helpers;
+  auto body=[](Function &f) {
+    std::string s;raw_string_ostream out(s);
+    for(auto &b:f)b.print(out);
+    return s;
+  };
+  for(auto &e:*expected)if(!e.isDeclaration()) {
+    auto *f=m.getFunction(e.getName());
+    if(!f || f->getFunctionType()!=e.getFunctionType() || body(*f)!=body(e))return false;
+    helpers.insert(f);
+  }
+  for(auto &e:expected->globals()) {
+    auto *g=m.getGlobalVariable(e.getName(),true);
+    if(!g || !g->hasLocalLinkage() || g->getValueType()!=e.getValueType() ||
+        !g->hasInitializer() || g->getInitializer()!=e.getInitializer() || g->isThreadLocal())return false;
+    for(auto *u:g->users()) {
+      auto *i=dyn_cast<Instruction>(u);
+      if(!i || !helpers.count(i->getFunction()))return false;
+    }
+  }
+  auto *push=m.getFunction("__bennett_rt_ss_push");
+  auto *pop=m.getFunction("__bennett_rt_ss_pop");
+  auto *init=m.getFunction("__bennett_rt_ss_init");
+  // Init is used only by the generated wrapper; no arbitrary source entry.
+  if(!init->use_empty())return false;
+  CallBase *frame=nullptr,*release=nullptr;
+  uint64_t extent=0;
+  for(auto &i:instructions(root)) {
+    if(auto *c=dyn_cast<CallBase>(&i)) {
+      if(c->getCalledFunction()==push && !frame && !release) {
+        auto *n=dyn_cast<ConstantInt>(c->getArgOperand(0));
+        auto *a=dyn_cast<ConstantInt>(c->getArgOperand(1));
+        if(!n || !a || !isPowerOf2_64(a->getZExtValue()) ||
+            a->getZExtValue()>4096 || n->getZExtValue()>UINT64_MAX/2-8192)return false;
+        frame=c;extent=n->getZExtValue();
+      } else if(c->getCalledFunction()==pop && frame && !release && c->getArgOperand(0)==frame)release=c;
+      else return false;
+    } else if(isa<LoadInst>(i)||isa<StoreInst>(i)) {
+      if(!frame || release)return false;
+      Value *p;Type *t;
+      if(auto *l=dyn_cast<LoadInst>(&i)){p=l->getPointerOperand();t=l->getType();if(l->isVolatile()||l->isAtomic())return false;}
+      else {auto *s=cast<StoreInst>(&i);p=s->getPointerOperand();t=s->getValueOperand()->getType();if(s->isVolatile()||s->isAtomic())return false;}
+      APInt offset(64,0);auto *base=p->stripAndAccumulateConstantOffsets(m.getDataLayout(),offset,true);
+      auto bytes=m.getDataLayout().getTypeStoreSize(t).getFixedValue();
+      if(base!=frame || offset.isNegative() || offset.getLimitedValue()>extent || bytes>extent-offset.getLimitedValue())return false;
+    }
+    // No source escape of a backing pointer, including ptrtoint/return/store.
+    if(i.getType()->isPointerTy()) {
+      if(&i!=frame && !isa<GetElementPtrInst>(i))return false;
+      for(auto *u:i.users()) {
+        if(auto *g=dyn_cast<GetElementPtrInst>(u);g && g->getPointerOperand()==&i)continue;
+        if(auto *l=dyn_cast<LoadInst>(u);l && l->getPointerOperand()==&i)continue;
+        if(auto *s=dyn_cast<StoreInst>(u);s && s->getPointerOperand()==&i && s->getValueOperand()!=&i)continue;
+        if(auto *c=dyn_cast<CallBase>(u);c && c->getCalledFunction()==pop && c->getArgOperand(0)==frame)continue;
+        return false;
+      }
+    }
+  }
+  if(!frame || !release)return false;
+  for(auto *f:{push,pop})for(auto *u:f->users()) {
+    auto *c=dyn_cast<CallBase>(u);
+    if(!c || c->getCalledFunction()!=f || c->getFunction()!=&root)return false;
+  }
+  // Each helper's body is verified, its globals private, its sole frame owner
+  // nonescaping and balanced. The saved-sp header and zero loop are internal.
+  for(auto *f:helpers)f->addFnAttr("bennett.stack.internal");
+  return true;
+}
 void normaliseStack(Function &f) {
   // Stack save/restore are calls into the same logical lifetime machinery.
   SmallVector<CallInst *> intrinsics;
@@ -348,7 +429,7 @@ void normaliseStack(Function &f) {
   auto pop=m.getOrInsertFunction("__bennett_rt_ss_pop",b.getVoidTy(),ptr);
   for(auto &i:instructions(f))if(isa<ReturnInst>(i)) {b.SetInsertPoint(&i);b.CreateCall(pop,{fp});}
 }
-void prepareStack(Module &m,Function &root,uint64_t capacity) {
+bool prepareStack(Module &m,Function &root,uint64_t capacity) {
   std::set<Function *> closure;std::function<void(Function *)> visit=[&](Function *f) {
     if(!f || f->isDeclaration() || !closure.insert(f).second)return;
     for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))visit(c->getCalledFunction());
@@ -356,8 +437,9 @@ void prepareStack(Module &m,Function &root,uint64_t capacity) {
   for(auto *f:closure)normaliseStack(*f);
   bool needed=false;
   for(auto *f:closure)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())needed|=g->getName()=="__bennett_rt_ss_push";
-  if(!needed)return;
+  if(!needed)return false;
   auto *init=m.getFunction("__bennett_rt_ss_init");
+  bool singleFrame=init && !init->isDeclaration() && proveSingleFrame(m,root,capacity);
   if(!init || init->isDeclaration()) {
     std::string source=
 #include "runtime/ShadowStack.inc"
@@ -398,5 +480,6 @@ void prepareStack(Module &m,Function &root,uint64_t capacity) {
       b.CreateCall(check,{p,b.getInt64(m.getDataLayout().getTypeStoreSize(type).getFixedValue())});
     }
   }
+  return singleFrame;
 }
 } // namespace bennett

@@ -600,7 +600,7 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack) {
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
-  prepareStack(m,f,sstack);
+  bool singleFrame=prepareStack(m,f,sstack);
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
   Analysis analysis(m); analysis.run();
@@ -751,7 +751,9 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   if(initialise) {
     wrapperRegs.push_back("c0:reg[64]");wrapperRows.push_back("c0 = lift.const.i64 "+std::to_string(sstack));
-    auto loc=snapshot?"d1":"t0";wrapperRegs.push_back(std::string(loc)+":reg[1]");
+    // The fixed §9.2 linked-input wrapper spells its init result d0.
+    // Keep existing object bytes for all other wrappers.
+    auto loc=snapshot?"d1":singleFrame?"d0":"t0";wrapperRegs.push_back(std::string(loc)+":reg[1]");
     wrapperRows.push_back(std::string(loc)+" = lift.call @"+functions.at(m.getFunction("__bennett_rt_ss_init"))+" (c0)");
   }
   std::string buffer;

@@ -1,0 +1,121 @@
+bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 coverage=0.8 target=0.8 ptr_width=64
+
+section symbols
+{"0":{"interface_hash":"4162aa7c5cf3b7bed36162dd7c0f123e26e0606a8bc118184d9f7acaab0786ce","kind":"oracle","name":"ref","signature":{"abi":"0.8","args":[],"fault":4,"in":[8],"kind":"oracle","mem":[],"tgt":8,"tier":"q"}},"1":{"interface_hash":"20f4ecaba12012d640eaacd35a6ddac66c53fbd4bdb08ee2df59157146aa4d0d","kind":"lproc","name":"L1","signature":{"abi":"0.8","kind":"lproc","params":[64],"result":1,"tier":"q"}},"2":{"interface_hash":"19dd4b63e4eba275fbd86c344f42b9836f82f822a327fcddbaea2ad14d7d9da5","kind":"lproc","name":"L2","signature":{"abi":"0.8","kind":"lproc","params":[8],"result":8,"tier":"q"}},"3":{"interface_hash":"cef0cab255bc6d45909918ba4f8b080951ff43fd44d5b2cddb5a2c7914d223d2","kind":"lproc","name":"L3","signature":{"abi":"0.8","kind":"lproc","params":[64,64],"result":64,"tier":"q"}},"4":{"interface_hash":"a0996efd06de810f0081629bd06e7165b7914f4e14b31e5c4bc5fbdf6ba73d2b","kind":"lproc","name":"L4","signature":{"abi":"0.8","kind":"lproc","params":[64],"result":1,"tier":"q"}},"5":{"interface_hash":"3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8","kind":"data","name":"G1","signature":{"abi":"0.8","kind":"data","size":8,"tier":"-"}},"6":{"interface_hash":"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e","kind":"data","name":"G2","signature":{"abi":"0.8","kind":"data","size":8,"tier":"-"}},"7":{"interface_hash":"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550","kind":"data","name":"G3","signature":{"abi":"0.8","kind":"data","size":8,"tier":"-"}}}
+
+section functions
+oracle @ref (x0:wire[8] in) (tgt:wire[8]) (fault:wire[4]) () ()
+regs { c0:reg[64], d0:reg[1], r:reg[8] }
+^entry():
+c0 = lift.const.i64 16
+d0 = lift.call @L1 (c0)
+r = lift.call @L2 (x0)
+lift.retval r
+lproc @L1 (a0:reg[64]) (r:reg[1]) () () ()
+regs { c0:reg[64], v0:reg[64], c1:reg[64], v1:reg[1], v2:reg[64], c2:reg[64], c3:reg[64], c4:reg[64], c5:reg[64] }
+^b0():
+c0 = lift.addr @G1
+lift.boundscheck c0 8
+v0 = lift.load.i64 c0
+c1 = lift.const.i64 0
+v1 = lift.icmp.eq v0 c1
+qbranch v1 ^b1 ^b2
+^b1():
+v2 = lift.alloc a0
+c2 = lift.addr @G1
+lift.boundscheck c2 8
+lift.store.i64 c2 v2
+c3 = lift.addr @G2
+lift.boundscheck c3 8
+lift.store.i64 c3 a0
+c4 = lift.const.i64 0
+c5 = lift.addr @G3
+lift.boundscheck c5 8
+lift.store.i64 c5 c4
+qjump ^b2
+^b2():
+lift.ret r
+lproc @L2 (a0:reg[8]) (r:reg[8]) () () ()
+regs { c0:reg[64], c1:reg[64], v0:reg[64], v1:reg[64], v2:reg[8], t0:reg[1] }
+^b0():
+c0 = lift.const.i64 24
+c1 = lift.const.i64 8
+v0 = lift.call @L3 (c0, c1)
+v1 = lift.mov v0
+lift.boundscheck v1 1
+lift.store.i8 v1 a0
+lift.boundscheck v1 1
+v2 = lift.load.i8 v1
+t0 = lift.call @L4 (v0)
+lift.ret v2
+lproc @L3 (a0:reg[64], a1:reg[64]) (r:reg[64]) () () ()
+regs { c0:reg[64], v0:reg[64], c1:reg[64], v1:reg[64], c2:reg[64], v2:reg[64], v3:reg[64], c3:reg[64], v4:reg[64], v5:reg[64], v6:reg[64], c4:reg[64], v7:reg[64], v8:reg[1], c5:reg[64], v9:reg[64], c6:reg[64], v10:reg[64], v11:reg[64], c7:reg[64], v12:reg[64], c8:reg[64], v13:reg[64], v14:reg[1], v15:reg[64], c9:reg[8], c10:reg[64], v16:reg[64] }
+^b0():
+c0 = lift.addr @G3
+lift.boundscheck c0 8
+v0 = lift.load.i64 c0
+c1 = lift.const.i64 8
+v1 = lift.add v0 c1
+c2 = lift.const.i64 1
+v2 = lift.sub a1 c2
+v3 = lift.add v1 v2
+c3 = lift.const.i64 0
+v4 = lift.sub c3 a1
+v5 = lift.and v3 v4
+v6 = lift.add v5 a0
+c4 = lift.addr @G2
+lift.boundscheck c4 8
+v7 = lift.load.i64 c4
+v8 = lift.icmp.ult v7 v6
+qbranch v8 ^b1 ^b2
+^b1():
+fault 2
+^b2():
+c5 = lift.addr @G1
+lift.boundscheck c5 8
+v9 = lift.load.i64 c5
+c6 = lift.const.i64 8
+v10 = lift.sub v5 c6
+v11 = lift.add v9 v10
+lift.boundscheck v11 8
+lift.store.i64 v11 v0
+c7 = lift.addr @G3
+lift.boundscheck c7 8
+lift.store.i64 c7 v6
+v12 = lift.add v9 v5
+c8 = lift.const.i64 0
+(v13) = lift.parmov (c8)
+qjump ^b3
+^b3():
+v14 = lift.icmp.eq v13 a0
+qbranch v14 ^b5 ^b4
+^b4():
+v15 = lift.add v12 v13
+c9 = lift.const.i8 0
+lift.boundscheck v15 1
+lift.store.i8 v15 c9
+c10 = lift.const.i64 1
+v16 = lift.add v13 c10
+(v13) = lift.parmov (v16)
+qjump ^b3
+^b5():
+lift.ret v12
+lproc @L4 (a0:reg[64]) (r:reg[1]) () () ()
+regs { c0:reg[64], v0:reg[64], v1:reg[64], c1:reg[64] }
+^b0():
+c0 = lift.const.i64 18446744073709551608
+v0 = lift.add a0 c0
+lift.boundscheck v0 8
+v1 = lift.load.i64 v0
+c1 = lift.addr @G3
+lift.boundscheck c1 8
+lift.store.i64 c1 v1
+lift.ret r
+
+section data
+G1 0000000000000000
+G2 0000000000000000
+G3 0000000000000000
+
+section layout
+{"A_tab":7,"H":14,"S_cells":9,"globals":{"G1":{"base":4096,"image":"G1","size":8},"G2":{"base":4104,"image":"G2","size":8},"G3":{"base":4112,"image":"G3","size":8}},"heap_base":8192,"heap_limit_max":64,"interface_regions":{"ref":{}},"null_size":4096,"ptr_width":64}

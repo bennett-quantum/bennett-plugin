@@ -55,7 +55,7 @@ def object_paths(tmp, major, scalars):
         for rel in ('launch.bennett', 'oracle-0/ref.bennett'):
             out.append((f'production/{case}/{rel}', tmp / f'production/{major}/{case}/out/top/{rel}'))
     out.append(('production/abi/launch.bennett', tmp / f'production/{major}/abi/out/abi/launch.bennett'))
-    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack'):
+    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage'):
         base = tmp / f'{family}/{major}'
         for p in sorted(base.rglob('*.bennett')):
             out.append((f'{family}/{p.relative_to(base)}', p))
@@ -101,6 +101,15 @@ def main():
         ss = read(f'shadow-stack-{m}.json')
         assert all(r.get('check') and r.get('ok') for r in ss['cases'])
         c['shadow-stack'] = check_rows(ss['cases'])
+        stage = read(f'budget-stage-{m}.json')
+        assert all(r.get('ok') and r.get('check') for r in stage['cases'])
+        assert all(r['ok'] for r in stage['proof_cases'])
+        final = next(r for r in stage['cases'] if r['name'] == 'identity-once')
+        assert final['reference_exact'] and final['prefix_vectors'] == 316 and final['prefixes_ok'] and final['tokens_final']
+        shape = final['build']['budget_table']['shapes'][0]
+        c['budget-stage'] = dict(check_rows(stage['cases']), proof_cases=len(stage['proof_cases']),
+                                prefix_vectors=316, reference_exact=True, tokens_final=True,
+                                selection_identity=shape['selection_identity'], identity=shape['identity'])
         checks[str(m)] = c
         sc = read(f'scalars-{m}.json')
         assert sc['c_inc8_equal'] and sc['passed'] == 21
@@ -111,6 +120,8 @@ def main():
     assert scalars['18'] == scalars['23']
 
     fixtures = {n: b.encode() for n, b in re.findall(r'```isa object=([^\n ]+)\n(.*?)```', dialect_text(), re.S)}
+    for size in (16, 32):
+        fixtures[f'budget-stage-{size}'] = (R / f'tests/fixtures/budget-stage-{size}.bennett').read_bytes()
     sc18 = read('scalars-18.json')
     by_major = {m: dict(object_paths(tmp, m, sc18)) for m in MAJORS}
     assert by_major[18].keys() == by_major[23].keys()

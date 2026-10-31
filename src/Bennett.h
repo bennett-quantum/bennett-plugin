@@ -82,7 +82,7 @@ void lowerProduction(llvm::Module &, Analysis &, llvm::StringRef, unsigned, llvm
 std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
 void normaliseScalar(llvm::Function &);
-void prepareStack(llvm::Module &, llvm::Function &, uint64_t);
+bool prepareStack(llvm::Module &, llvm::Function &, uint64_t);
 void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,
                  llvm::StringRef out, unsigned stackCells, uint64_t heapCapacity = 0, int projection = -1, std::map<std::string,std::string> *globalNames = nullptr, uint64_t sstack = 0);
 } // namespace bennett

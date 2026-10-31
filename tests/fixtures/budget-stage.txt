@@ -1,0 +1,15 @@
+§9.2 budget-stage fixed linked input, dialect 0.2.10 @023f5a7.
+
+The accepted text publishes the runtime, table, H16/H32 identities and the
+316-step result in state=budget-stage. It does not inline an isa object block.
+These two canonical objects were obtained by executing that pinned release's
+public checker as an independent black box, with --family state (76/76 passed).
+They are test data only; the plugin neither reads nor substitutes them.
+
+budget-stage-16.bennett: ref interface hash
+4162aa7c5cf3b7bed36162dd7c0f123e26e0606a8bc118184d9f7acaab0786ce
+budget-stage-32.bennett: ref interface hash
+7486a0aa9e6711325475ffce67d6ec1bb3d4d4ec981eb3b755e171ba04819365
+
+The test checks exact object bytes, the published state, both LLVM majors,
+each of the 316 step-budget prefixes, and actual final-object launch tokens.

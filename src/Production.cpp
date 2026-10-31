@@ -753,6 +753,18 @@ struct Entry {
     table.overlay(budget, selection);
     for (unsigned i = 0; i < 5; ++i)
       if (explicitFields[i] != UINT64_MAX) budget[i] = explicitFields[i];
+    // §9.2: one overlay, then a fresh generation under the SAME capacities.
+    // Never reuse the provisional module: N24/runtime materialisation mutates it.
+    if (budget[4] != baseline[4]) {
+      ValueToValueMapTy finalMap;
+      auto finalModule = CloneModule(m, finalMap);
+      auto *finalFunction = cast<Function>(finalMap[callee]);
+      normaliseScalar(*finalFunction);
+      globalNames.clear();
+      lowerScalar(*finalModule, *finalFunction, current, path, capacities[2],
+                  capacities[1], projection, &globalNames, budget[4]);
+      candidate = read(path + "/ref.bennett");
+    }
     if (table.enabled) resolvedShapes.push_back(json::Object{
       {"region_key", regionKey(callee)}, {"symbol", callee->getName()}, {"shape", current},
       {"selection_identity", selection}, {"identity", oracleIdentity(candidate)},
@@ -768,6 +780,7 @@ struct Entry {
     params.push_back(tk + ":token");
     paramTypes.push_back("token");
     budgets.push_back(json::Object{{"token", tk},
+                                   {"selection_identity", selection},
                                    {"steps", std::to_string(budget[0])},
                                    {"heap", std::to_string(budget[1])},
                                    {"stack", std::to_string(budget[2])},
@@ -1563,7 +1576,7 @@ std::string launchObject(Entry &e, json::Object &record,
   json::Array budgets;
   for (auto &b : e.budgets) {
     auto name = b.getString("region").value_or("ref").str();
-    b["selection_identity"] = referenceHashes.at(name);
+    if (!b.get("selection_identity")) b["selection_identity"] = referenceHashes.at(name);
     b["identity"] = referenceHashes.at(name);
     budgets.push_back(std::move(b));
   }
