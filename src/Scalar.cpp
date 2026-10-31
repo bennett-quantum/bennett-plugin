@@ -603,7 +603,10 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   bool singleFrame=prepareStack(m,f,sstack);
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
-  Analysis analysis(m); analysis.run();
+  // The command/descriptor-selected internal oracle is an invocation entry,
+  // even when the input module has no host marker referring to it. PT11 must
+  // seed its parameters before the same fixpoint computes indirect domains.
+  Analysis analysis(m, &f); analysis.run();
   std::vector<Function *> closure;
   std::map<Function *,std::string> functions;
   std::function<void(Function *)> collect=[&](Function *g) {

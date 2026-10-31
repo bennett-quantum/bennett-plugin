@@ -1414,7 +1414,7 @@ void Analysis::run() {
     if (g.hasInitializer())
       seed(g.getInitializer(), &g, 0, g.getValueType());
   for (Function &f : M)
-    if (!f.isDeclaration() && (!f.hasLocalLinkage() || f.hasAddressTaken()))
+    if (!f.isDeclaration() && (!f.hasLocalLinkage() || f.hasAddressTaken() || &f==Entry))
       for (Argument &a : f.args()) {
         if (a.getType()->isPointerTy()) {
           values[&a].merge(atom(Atom::Ptr));
@@ -1461,6 +1461,7 @@ void Analysis::run() {
     if (!f.isDeclaration()) {
       if (!f.hasLocalLinkage())
         tiers[&f].insert("H");
+      if (&f==Entry)tiers[&f].insert("CC");
       for (Argument &a : f.args())
         if (get(&a).roots())
           tiers[&f].insert("CC");

@@ -44,6 +44,7 @@ struct Slot {
 };
 class Analysis {
   llvm::Module &M;
+  llvm::Function *Entry;
   bool changed = false;
   std::map<const llvm::Value *, AV> values;
   std::vector<Slot> slots;
@@ -66,7 +67,7 @@ class Analysis {
   void bind(llvm::CallBase &, llvm::Function *);
 
 public:
-  explicit Analysis(llvm::Module &m) : M(m) {}
+  explicit Analysis(llvm::Module &m, llvm::Function *entry = nullptr) : M(m), Entry(entry) {}
   AV get(const llvm::Value *);
   AV read(llvm::Value *, uint64_t, llvm::Type *);
   AV readAt(llvm::CallBase &, llvm::Value *, uint64_t, llvm::Type *);
