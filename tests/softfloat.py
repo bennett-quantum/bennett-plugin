@@ -69,6 +69,10 @@ def main():
   body='declare i16 @llvm.convert.to.fp16.f64(double)\ndeclare double @llvm.convert.from.fp16.f64(i16)\ndefine double @f(double %x) { %h = call i16 @llvm.convert.to.fp16.f64(double %x)\n %r = call double @llvm.convert.from.fp16.f64(i16 %h)\n ret double %r }'
   z,_=opt(body,'fp16',['-bennett-normalise-only','-S','-o','-'])
   check('fp16-conversion',z.returncode==0 and '@__bennett_sf_fptrunc_f64_f16' in z.stdout and '@__bennett_sf_fpext_f16_f64' in z.stdout,z.stderr)
+ # S2's private N9/N32 graph must not rewrite a host global's undef image.
+ body='@g = internal global double undef\ndefine double @top() { %r = atomicrmw fadd ptr @g, double 1.0 seq_cst\n ret double %r }'
+ z,_=opt(body,'host-image',['-bennett-analysis-only','-S','-o','-'])
+ check('S2-host-image-preserved',z.returncode==0 and '@g = internal global double undef' in z.stdout,z.stderr)
  # Bind every predicate, integer extension and introduced helper in the S2 fixpoint.
  library='''define internal i1 @predicate(i64 %a, i64 %b, i32 %p) { %r = icmp eq i32 %p, 14
  ret i1 %r }

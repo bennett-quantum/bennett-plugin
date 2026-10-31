@@ -87,7 +87,9 @@ void normaliseScalar(Function &f, bool wide) {
     if(auto *u=dyn_cast<User>(v))for(Value *x:u->operands())data(x);
   };
   for(Instruction *i:work)if(i)for(Value *v:i->operands())data(v);
-  for(auto *g:globals)if(g->hasInitializer())g->setInitializer(zero(g->getInitializer()));
+  // A private S2 transfer graph shares source operands; never mutate their
+  // globals. S2 already interprets undef/poison as zero in its initial images.
+  if(wide)for(auto *g:globals)if(g->hasInitializer())g->setInitializer(zero(g->getInitializer()));
   // N8.
   for (Instruction *&i : work) if (auto *z=dyn_cast_or_null<FreezeInst>(i)) {z->replaceAllUsesWith(z->getOperand(0));z->eraseFromParent();i=nullptr;}
   // N9, scalar atomics. LLVM's single-thread lowering is represented explicitly.
