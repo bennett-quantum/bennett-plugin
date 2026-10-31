@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 import contracts as c
+from unittest.mock import patch
 assert not c.drift(), 'accepted contract differs from pinned release'
 original=c.DIALECT
 text=c.dialect_text()
@@ -16,7 +17,10 @@ with tempfile.TemporaryDirectory(dir=c.ROOT/'.tmp') as d:
  (c.DIALECT/'SPEC_VERSIONS.toml').write_text('dialect="0.2.11"\nisa="0.8"\n')
  assert c.drift(), 'new accepted release was hidden'
  (c.DIALECT/'SPEC_VERSIONS.toml').write_text('dialect="0.2.10"\nisa="0.8"\n')
+ pin=c.tomllib.loads((c.ROOT/'SPEC_VERSIONS.toml').read_text());pin['dialect']='0.2.11'
+ with patch.object(c.tomllib,'loads',side_effect=[{'dialect':'0.2.11'},pin]):
+  assert c.drift(), 'version-only repin hid stale pinned content'
  c.dialect_text=lambda:text+'changed'
  assert c.drift(), 'pinned byte corruption was hidden'
 c.DIALECT=original
-print('contract policy: 4 assertions passed')
+print('contract policy: 5 assertions passed')

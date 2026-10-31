@@ -12,4 +12,8 @@ def drift():
  # An unaccepted working draft is not a change to the accepted contract.
  registry=tomllib.loads((DIALECT/'SPEC_VERSIONS.toml').read_text())
  pin=tomllib.loads((ROOT/'SPEC_VERSIONS.toml').read_text())
- return registry['dialect']!=pin['dialect'] or hashlib.sha256(dialect_text().encode()).hexdigest()!='d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206' or pin['commits']['bennett-dialect-spec']!=PIN
+ return (registry['dialect']!='0.2.10' or pin['dialect']!='0.2.10'
+         or pin['specs']['bennett-dialect-spec']!='0.2.10'
+         or pin['isa']!='0.8' or pin['specs']['bennett-isa-spec']!='0.8'
+         or hashlib.sha256(dialect_text().encode()).hexdigest()!='d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206'
+         or pin['commits']['bennett-dialect-spec']!=PIN)

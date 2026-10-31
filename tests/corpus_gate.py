@@ -13,10 +13,9 @@ additional failures, plugin errors, changed exits and missing checks exit 1.
 """
 import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys,tarfile,io
 from pathlib import Path
-from contracts import drift
+from contracts import drift,PIN
 R=Path(__file__).resolve().parents[1]
 CORPUS=R.parent/'bennett-dialect-spec/corpus/legality'
-PIN='023f5a771a814270634db3be9cfde88ded69f975'
 def run(args,timeout=30):
  try:
   x=subprocess.run(list(map(str,args)),capture_output=True,text=True,errors="replace",timeout=timeout)
