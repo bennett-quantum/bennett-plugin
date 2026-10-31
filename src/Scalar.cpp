@@ -531,7 +531,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     SmallVector<StringRef> parts; StringRef(device).split(parts,'+');
     for (auto part : parts) {
       std::smatch dev; auto value = part.str();
-      if (!std::regex_match(value, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE|ENTROPY)\(([0-9]+)\))")))
+      if (!std::regex_match(value, dev, std::regex(R"((CLOCK|CLOCK_ARG|BLOCK|CONSOLE|ENTROPY)\(([0-9]+)\))")))
         fail("shape","invalid device binding",&f);
       devices.push_back({dev[1],std::stoull(dev[2])});
     }
@@ -557,7 +557,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   };
   for (auto &d : devices) {
     auto &device = d.first; auto deviceSize = d.second;
-    if (device == "CLOCK") deviceGlobal("clock_c");
+    if (device == "CLOCK" || device == "CLOCK_ARG") deviceGlobal("clock_c");
     if (device == "ENTROPY") { deviceGlobal("entropy_base"); deviceGlobal("entropy_size"); deviceGlobal("entropy_pos"); }
     if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
     if (device == "CONSOLE") {
@@ -642,8 +642,9 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   std::pair<std::string,uint64_t> consoleBuffer;
   for (auto &d : devices) {
   auto &device = d.first; auto deviceSize = d.second;
-  if (device == "CLOCK") {
-    auto c = prologue("lift.const.i64 " + std::to_string(deviceSize));
+  if (device == "CLOCK" || device == "CLOCK_ARG") {
+    auto c = device=="CLOCK" ? prologue("lift.const.i64 " + std::to_string(deviceSize)) : prologue("lift.mov clock_initial");
+    if(device=="CLOCK_ARG"){args.push_back("clock_initial:i64");argTypes.push_back("\"i64\"");}
     devStore("clock_c", c);
   } else if (device == "ENTROPY") {
     if (deviceSize > 54) fail("shape", "ENTROPY extent exceeds address space");

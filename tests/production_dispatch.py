@@ -30,5 +30,7 @@ def main():
   build=json.loads((out/'top/build.json').read_text());nt=len(build['budgets'])
   for arg,success in inputs:
    z=run([REF,'run-program',obj,'top','--args',','.join(map(str,[arg]+[1000]*nt)),'--budget',('100000,4096,128,8' if name=='across-blocks' else '100000,0,128,8')]);v=json.loads(z.stdout) if z.returncode==0 else {};status=v.get('status','');row['runs'].append({'arg':arg,'exit':z.returncode,'output':z.stdout+z.stderr,'ok':(status=='COMPLETED' and v.get('results')==[{'type':'i1','value':str((arg+1)&1 if name=='runtime-arg' else (1-arg if name in ['finite-kind','across-blocks'] else int(arg!=1)))}]) if success else (status=='FAILED' and 'trap' in (z.stdout+z.stderr).lower())})
+ from general_dispatch import execute
+ cases.extend(execute(a.major,d))
  report={'major':a.major,'cases':cases};(R/f'.tmp/production-dispatch-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return not all(x.get('check') and all(r['ok'] for r in x['runs']) for x in cases)
 if __name__=='__main__':raise SystemExit(main())

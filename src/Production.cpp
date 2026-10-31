@@ -193,6 +193,10 @@ struct Entry {
   std::map<const BasicBlock *, std::string> blocks;
   std::set<const Value *> descriptorObjects;
   bool memoryDescriptors = false;
+  std::set<std::string> ccGlobals;
+  uint64_t ccHeapBytes = 0, allocatedBytes = 0;
+  const Value *activeRoot = nullptr;
+  bool generalUsed = false;
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
@@ -227,7 +231,7 @@ struct Entry {
       rows.push_back(live + " = icmp.ne " + liveTag + " " + zero);
       rows.push_back(ok + " = and " + eq + " " + live);
       rows.push_back("br " + ok + " ^" + leaf + "() ^" + next + "()");
-      rows.push_back("^" + leaf + "():"); body(slot.q);
+      rows.push_back("^" + leaf + "():"); activeRoot=site; body(slot.q); activeRoot=nullptr;
       if (retire) rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag + " " + zero);
       rows.push_back("br ^" + done + "(" + (result.empty() ? "" : names.at(returned)) + ")"); rows.push_back("^" + next + "():");
     }
@@ -257,6 +261,13 @@ struct Entry {
       rows.push_back(n+" = inttoptr "+address);return n;
     }
     if (auto *g=dyn_cast<ConstantExpr>(v);g && g->getOpcode()==Instruction::GetElementPtr)return gep(cast<GEPOperator>(g));
+    if(auto *g=dyn_cast<GlobalVariable>(v)) {
+      ccGlobals.insert(scalarGlobalKey(*g));auto n=fresh("ptr");
+      // Resolved by the unified object linker, in the same namespace as L.
+      auto pw=m.getDataLayout().getPointerSizeInBits();auto bits=fresh("i"+std::to_string(pw));
+      rows.push_back(bits+" = const.i"+std::to_string(pw)+" CCADDRESS"+std::to_string(std::distance(m.global_begin(),g->getIterator())));
+      rows.push_back(n+" = inttoptr "+bits);return n;
+    }
     if (isa<ConstantPointerNull>(v)) {
       auto n = fresh("ptr"); auto z = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
       rows.push_back(n + " = inttoptr " + z); return n;
@@ -272,6 +283,7 @@ struct Entry {
     unsigned width = 0;
     if (v.top || v.atoms.empty()) unimplemented("§6.5 handle width dispatch", 1, at);
     for (auto &atom : v.atoms) {
+      if(activeRoot && atom.kind==Atom::Root && atom.object!=activeRoot)continue;
       auto *c = atom.kind == Atom::Root ? dyn_cast<CallBase>(atom.object) : nullptr;
       if (!c && atom.kind == Atom::Int && atom.integer.isZero()) continue;
       if (!c) unimplemented("§6.6 scalar boundary handles", 1, at);
@@ -415,7 +427,7 @@ struct Entry {
     auto candidates=a.candidates(c.getArgOperand(0));
     auto *hl=m.getDataLayout().getStructLayout(StructType::get(ctx,{u32,u32,u32,u32,ptr,ptr}));
     auto *bl=m.getDataLayout().getStructLayout(StructType::get(ctx,{u32,u32,ptr,u64,u64}));
-    bool general=memoryDescriptors || candidates.size()!=1;
+    bool general=memoryDescriptors || candidates.size()!=1 || !resolve(c.getArgOperand(0));
     // Keep the established straight-line encoding exactly when no new shape
     // field requires dispatch. ARG value bits remain runtime arguments.
     for(auto *fn:candidates) {
@@ -438,7 +450,7 @@ struct Entry {
       }
     }
     if(!general){descriptorLegacy(c);return;}
-    generalDescriptor=true;
+    generalDescriptor=true; generalUsed=true;
     auto id=std::to_string(dispatchBlock++),done="dispatch"+id+"done",bad="dispatch"+id+"bad";
     auto field=[&](uint64_t off,Type *t){return a.readAt(c,c.getArgOperand(2),off,t);};
     auto pw=m.getDataLayout().getPointerSizeInBits();
@@ -459,9 +471,6 @@ struct Entry {
       compareTree(value,t->isPointerTy()?pw:width(t),keys,leaf,bad);
     };
     auto ints=[&](std::vector<uint64_t> ns,unsigned w){std::vector<AV> vs;for(auto n:ns)vs.push_back(intValue(n,w));return vs;};
-    auto finite=[&](uint64_t off,Type *t,std::vector<uint64_t> fallback) {
-      auto v=field(off,t);if(!v.top){fallback.clear();for(auto &x:v.atoms)if(x.kind==Atom::Int)fallback.push_back(x.integer.getLimitedValue());}return ints(fallback,width(t));
-    };
     auto handles=[&](uint64_t off,bool null,const std::function<bool(unsigned)> &valid) {
       auto v=field(off,ptr);std::vector<AV> vs;
       if(null)vs.push_back(intValue(0,pw));
@@ -476,14 +485,26 @@ struct Entry {
       choose(hl->getElementOffset(5),ptr,handles(hl->getElementOffset(5),false,[](unsigned w){return w==4;}),[&](AV){
         std::function<void(unsigned)> devices;
         devices=[&](unsigned j) {
-          if(j==integer(nd,&c)){descriptorLeaf(c);rows.push_back("br ^"+done+"()");return;}
+          if(j==integer(nd,&c)){
+            std::set<const Value *> used;
+            for(auto &v:selectedFields)for(auto &x:v.second.atoms)if(x.kind==Atom::Root) {
+              if(!used.insert(x.object).second){rows.push_back("br ^"+bad+"()");return;}
+              if(files.count(x.object)) {
+                auto &slot=files.at(x.object);auto live=fresh("i"+std::to_string(pw)),ok=fresh("i1"),next="dispatch"+std::to_string(dispatchBlock++);
+                rows.push_back(live+" = load.i"+std::to_string(pw)+" "+slot.tag);
+                rows.push_back(ok+" = icmp.eq "+live+" "+operand(ConstantInt::get(IntegerType::get(ctx,pw),slot.identity)));
+                rows.push_back("br "+ok+" ^"+next+"() ^"+bad+"()");rows.push_back("^"+next+"():");
+              }
+            }
+            descriptorLeaf(c);rows.push_back("br ^"+done+"()");return;
+          }
           auto off=hl->getSizeInBytes()+fn->arg_size()*bl->getSizeInBytes()+j*24;
           choose(off,u32,ints({1,2,3,4},32),[&](AV model){
             auto code=integer(model,&c);bool duplicate=false;
             for(unsigned k=0;k<j;++k)duplicate |= integer(selectedFields.at(off-(j-k)*24),&c)==code;
             if(duplicate){rows.push_back("br ^"+bad+"()");return;}
             choose(off+4,u32,ints({0},32),[&](AV){
-              if(code==3){choose(off+16,u64,finite(off+16,u64,{}),[&](AV){devices(j+1);});return;}
+              if(code==3){devices(j+1);return;}
               choose(off+8,ptr,handles(off+8,code==4,[&](unsigned w){auto unit=code==2?4096u:8u;return w%unit==0 && (code==4 || isPowerOf2_64(w/unit));}),[&](AV){
                 // value is reserved outside CLOCK and does not affect a shape.
                 selectedFields[off+16]=intValue(0);devices(j+1);selectedFields.erase(off+16);
@@ -672,9 +693,13 @@ struct Entry {
       if (!models.insert(model).second || integer(field(off + 4, u32), &c))
         fail("T-IFACE", "§8.3 duplicate model or device mode", &c);
       auto q = field(off + 8, ptr);
-      auto value = integer(field(off + 16, u64), &c);
+      auto clock=field(off+16,u64);
+      auto value = model==3 && singletonInt(clock) ? integer(clock,&c) : 0;
       auto separator = j ? std::string("+") : std::string(";dev=");
-      if (model == 3) current += separator + "CLOCK(" + std::to_string(value) + ")";
+      if (model == 3) {
+        if(singletonInt(clock))current += separator + "CLOCK(" + std::to_string(value) + ")";
+        else { current += separator + "CLOCK_ARG(0)"; args.insert(args.begin(),fieldOperand(c,off+16,u64)); }
+      }
       else if (model == 2 || model == 1) {
         auto w = qwidth(q, &c), bytes = w / 8;
         auto unit = model == 2 ? 512 : 1;
@@ -926,6 +951,7 @@ struct Entry {
             (c->getCalledFunction()->getName() == "__bennett_oracle" || c->getCalledFunction()->getName() == "__bennett_inplace")) {
           bool ip=c->getCalledFunction()->getName()=="__bennett_inplace";
           descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(ip?3:2)));
+          for(auto &base:a.get(c->getArgOperand(ip?3:2)).atoms)if(base.kind==Atom::Ptr && base.object)descriptorObjects.insert(base.object);
           if (!isa<ConstantPointerNull>(c->getArgOperand(ip?2:1)))
             descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(ip?2:1)));
         }
@@ -970,7 +996,9 @@ struct Entry {
       if (memoryDescriptors || !descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
         for (auto &x : a.get(st->getValueOperand()).atoms) if (x.kind == Atom::Root) memoryRoots.insert(x.object);
     for(Instruction &i:instructions(f)) if(isa<SelectInst>(i) || isa<PHINode>(i)) {
-      auto v=a.get(&i); if(v.roots())for(auto &x:v.atoms)if(x.kind==Atom::Root)memoryRoots.insert(x.object);
+      bool descriptorUse=i.getName().starts_with("width.handle");
+      for(auto *u:i.users())if(auto *st=dyn_cast<StoreInst>(u))descriptorUse |= descriptorObjects.count(getUnderlyingObject(st->getPointerOperand()));
+      auto v=a.get(&i); if(descriptorUse && v.roots())for(auto &x:v.atoms)if(x.kind==Atom::Root)memoryRoots.insert(x.object);
     }
     bool enlarged=true;
     while(enlarged) {
@@ -984,20 +1012,22 @@ struct Entry {
     if (!memoryRoots.empty()) {
       for (Instruction &i : instructions(f)) {
         if (auto *st = dyn_cast<StoreInst>(&i); st && a.get(st->getValueOperand()).roots() &&
-            !isa<AllocaInst>(getUnderlyingObject(st->getPointerOperand())))
+            !isa<AllocaInst>(getUnderlyingObject(st->getPointerOperand())) &&
+            !descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
           unimplemented("§6.5 persistent static-file tag allocator",1,st);
         if (auto *r = dyn_cast<ReturnInst>(&i); r && r->getReturnValue() && a.get(r->getReturnValue()).roots())
           unimplemented("§6.5 static-file result environment",1,r);
       }
       std::set<const BasicBlock *> visiting, visited;
-      std::function<bool(const BasicBlock *)> cycle = [&](const BasicBlock *b) {
-        if (visiting.count(b)) return true;
-        if (!visited.insert(b).second) return false;
-        visiting.insert(b);
-        for (auto *to : successors(b)) if (cycle(to)) return true;
-        visiting.erase(b); return false;
-      };
-      if (cycle(&f.getEntryBlock())) unimplemented("§6.5 cyclic static-file instance bound",1,&f);
+      for(auto *root:memoryRoots)if(auto *site=dyn_cast<Instruction>(root)) {
+        visiting.clear();visited.clear();
+        std::function<bool(const BasicBlock *)> returns=[&](const BasicBlock *block){
+          if(!visited.insert(block).second)return false;
+          for(auto *to:successors(block))if(to==site->getParent() || returns(to))return true;
+          return false;
+        };
+        if(returns(site->getParent()))unimplemented("§6.5 cyclic static-file instance bound",3,site);
+      }
       for (Instruction &i : instructions(f)) if (memoryRoots.count(&i)) {
         auto *r = &i;
         auto *call = dyn_cast<CallBase>(r);
@@ -1037,7 +1067,7 @@ struct Entry {
       if (&bb == &f.getEntryBlock()) for (auto *site : fileOrder) {
         auto zero = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
         auto size = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),m.getDataLayout().getPointerSize()));
-        auto p = files.at(site).tag; rows.push_back(p + " = alloc " + size); localMemory.push_back(p);
+        auto p = files.at(site).tag; rows.push_back(p + " = alloc " + size); localMemory.push_back(p); allocatedBytes+=m.getDataLayout().getPointerSize();
         rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + p + " " + zero);
       }
       for (Instruction &i : bb) {
@@ -1061,6 +1091,7 @@ struct Entry {
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
+          if (n == "llvm.trap") { rows.push_back("trap"); break; }
           if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
             auto cls = integer(a.get(c->getArgOperand(0)), c),
                  w = integer(a.get(c->getArgOperand(1)), c);
@@ -1094,7 +1125,7 @@ struct Entry {
           auto *count = dyn_cast<ConstantInt>(al->getArraySize());
           if (!count) unimplemented("§17.3 dynamic CC stack extent",1,al);
           auto bytes = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),n*count->getZExtValue()));
-          auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p);
+          auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p); allocatedBytes+=std::max(uint64_t(1),n*count->getZExtValue());
         } else if (auto *st = dyn_cast<StoreInst>(&i)) {
           auto value = operand(st->getValueOperand()), p = operand(st->getPointerOperand());
           auto w = st->getValueOperand()->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(st->getValueOperand()->getType());
@@ -1130,8 +1161,13 @@ struct Entry {
                x = operand(sel->getTrueValue()),
                y = operand(sel->getFalseValue()),
                d = fresh(type(sel));
+          if(sel->getType()->isPointerTy() && !tagged(a.get(sel))) {
+            auto pw=m.getDataLayout().getPointerSizeInBits();
+            auto xb=fresh("i"+std::to_string(pw)),yb=fresh("i"+std::to_string(pw)),bits=fresh("i"+std::to_string(pw));
+            rows.push_back(xb+" = ptrtoint.i"+std::to_string(pw)+" "+x);rows.push_back(yb+" = ptrtoint.i"+std::to_string(pw)+" "+y);
+            rows.push_back(bits+" = select "+p+" "+xb+" "+yb);rows.push_back(d+" = inttoptr "+bits);
+          } else rows.push_back(d + " = select " + p + " " + x + " " + y);
           names[sel] = d;
-          rows.push_back(d + " = select " + p + " " + x + " " + y);
         } else if (auto *cmp = dyn_cast<ICmpInst>(&i)) {
           auto pred = cmp->getPredicate();
           auto *xv = cmp->getOperand(0), *yv = cmp->getOperand(1);
@@ -1145,6 +1181,13 @@ struct Entry {
           rows.push_back(d + " = icmp." +
                          CmpInst::getPredicateName(pred).str() + " " + x + " " +
                          y);
+        } else if (auto *cast = dyn_cast<CastInst>(&i); cast && (isa<PtrToIntInst>(cast) || isa<IntToPtrInst>(cast))) {
+          auto x=operand(cast->getOperand(0));auto w=m.getDataLayout().getPointerSizeInBits();
+          auto source=isa<PtrToIntInst>(cast)?w:width(cast->getOperand(0)->getType());
+          auto target=isa<IntToPtrInst>(cast)?w:width(cast->getType());
+          if(isa<PtrToIntInst>(cast)){auto n=fresh("i"+std::to_string(w));rows.push_back(n+" = ptrtoint.i"+std::to_string(w)+" "+x);x=n;}
+          if(source!=target){auto n=fresh("i"+std::to_string(target));rows.push_back(n+std::string(source<target?" = zext.i":" = trunc.i")+std::to_string(target)+" "+x);x=n;}
+          if(isa<IntToPtrInst>(cast)){auto n=fresh("ptr");rows.push_back(n+" = inttoptr "+x);x=n;}names[cast]=x;
         } else if (auto *c = dyn_cast<CastInst>(&i);
                    c && (isa<ZExtInst>(c) || isa<SExtInst>(c) ||
                          isa<TruncInst>(c))) {
@@ -1179,7 +1222,7 @@ std::string linkReferences(Entry &e) {
   std::vector<Symbol> functions;
   std::map<std::string,std::string> globalSymbols, data, dataSignatures;
   std::map<std::string,uint64_t> bases,sizes;
-  std::set<std::string> used;
+  std::set<std::string> used=e.ccGlobals;
   for (auto &names:e.referenceGlobals) for (auto &n:names) used.insert(n.second);
   uint64_t base=4096;
   for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
@@ -1204,7 +1247,15 @@ std::string linkReferences(Entry &e) {
     heapLimit=std::max(heapLimit,uint64_t(*layout.getAsObject()->getInteger("heap_limit_max")));
     stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
   }
+  heapLimit=std::max(heapLimit,e.ccHeapBytes);
   uint64_t endAddress=heap+heapLimit,memCount=0;
+  for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
+    auto name=globalSymbols.at(scalarGlobalKey(g)),image=scalarGlobalImage(g,sourceBases);
+    data[name]=image;dataSignatures[name]="{\"abi\":\"0.8\",\"kind\":\"data\",\"size\":"+std::to_string(sizes.at(name))+",\"tier\":\"-\"}";
+    globals[name]=json::Object{{"base",int64_t(bases.at(name))},{"size",int64_t(sizes.at(name))},{"image",name}};
+    auto marker="CCADDRESS"+std::to_string(std::distance(e.m.global_begin(),g.getIterator()));
+    for(auto &row:e.rows)row=std::regex_replace(row,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
+  }
   for(unsigned i=0;i<parsed.size();++i) {
     auto &sec=parsed[i];auto syms=parse(sec.at("symbols"));auto suffix=i?std::to_string(i):"";
     std::map<std::string,std::string> rename;
@@ -1305,6 +1356,7 @@ std::string launchObject(Entry &e, json::Object &record,
       if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty() || mapped) unified=true;
     }
   }
+  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty()) && !e.references.empty();
   if(unified) ref=linkReferences(e);
   size_t pos = ref.find("\n\nsection ");
   std::string header =
@@ -1324,7 +1376,7 @@ std::string launchObject(Entry &e, json::Object &record,
     pos = next;
   }
   if (!sections.count("layout") && !e.localMemory.empty()) {
-    uint64_t heap = e.table.capacities[1]; unsigned h = 0, tab = 0, sc = 0;
+    uint64_t heap = std::max(e.table.capacities[1],e.ccHeapBytes); unsigned h = 0, tab = 0, sc = 0;
     while ((uint64_t(1)<<h) < 4096 + heap) ++h;
     while ((uint64_t(1)<<tab) < e.localMemory.size()) ++tab;
     while ((uint64_t(1)<<sc) < e.stack) ++sc;
@@ -1704,6 +1756,43 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 } // namespace
 void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
                      StringRef budgetDefault, StringRef budgetFile) {
+  // Finite source widths become distinct static roots before register-file
+  // construction. Unbounded widths retain the explicit BLK-1 obligation.
+  std::vector<std::pair<CallInst *,std::vector<uint64_t>>> allocations;
+  for(auto &f:m)if(a.tiers[&f].count("CC"))for(auto &i:instructions(f))
+    if(auto *c=dyn_cast<CallInst>(&i);c && c->getCalledFunction() &&
+       (c->getCalledFunction()->getName()=="__bennett_qalloc" || c->getCalledFunction()->getName()=="__bennett_qborrow") && !isa<ConstantInt>(c->getArgOperand(1))) {
+      auto v=a.get(c->getArgOperand(1));std::vector<uint64_t> widths;
+      if(v.top)unimplemented("§25.1 BLK-1 dynamic widths (blocked: bp-2tw)",3,c);
+      for(auto &x:v.atoms)if(x.kind==Atom::Int)widths.push_back(x.integer.getLimitedValue());
+      std::sort(widths.begin(),widths.end());widths.erase(std::unique(widths.begin(),widths.end()),widths.end());allocations.push_back({c,widths});
+    }
+  if(!allocations.empty()) {
+    for(auto &site:allocations) {
+      auto *c=site.first;auto *head=c->getParent();auto *fn=head->getParent();
+      auto *done=head->splitBasicBlock(c->getIterator(),"width.done");head->getTerminator()->eraseFromParent();
+      auto *phi=PHINode::Create(c->getType(),site.second.size(),"width.handle",&done->front());
+      auto *bad=BasicBlock::Create(m.getContext(),"width.bad",fn,done);IRBuilder<> failBuilder(bad);
+      failBuilder.CreateCall(
+#if LLVM_VERSION_MAJOR >= 23
+        Intrinsic::getOrInsertDeclaration(&m,Intrinsic::trap)
+#else
+        Intrinsic::getDeclaration(&m,Intrinsic::trap)
+#endif
+      );failBuilder.CreateUnreachable();
+      std::function<void(BasicBlock *,unsigned,unsigned)> tree=[&](BasicBlock *block,unsigned lo,unsigned hi) {
+        IRBuilder<> b(block);if(lo==hi){b.CreateBr(bad);return;}
+        auto mid=(lo+hi)/2;auto *key=ConstantInt::get(c->getArgOperand(1)->getType(),site.second[mid]);
+        auto *leaf=BasicBlock::Create(m.getContext(),"width.leaf",fn,done),*rest=BasicBlock::Create(m.getContext(),"width.rest",fn,done);
+        b.CreateCondBr(b.CreateICmpEQ(c->getArgOperand(1),key),leaf,rest);
+        IRBuilder<> lb(leaf);auto *allocation=cast<CallInst>(c->clone());allocation->setName("width.static");allocation->setArgOperand(1,key);lb.Insert(allocation);lb.CreateBr(done);phi->addIncoming(allocation,leaf);
+        IRBuilder<> rb(rest);auto *left=BasicBlock::Create(m.getContext(),"width.left",fn,done),*right=BasicBlock::Create(m.getContext(),"width.right",fn,done);
+        rb.CreateCondBr(rb.CreateICmpULT(c->getArgOperand(1),key),left,right);tree(left,lo,mid);tree(right,mid+1,hi);
+      };tree(head,0,site.second.size());c->replaceAllUsesWith(phi);c->eraseFromParent();
+    }
+    Analysis specialised(m);specialised.run();lowerProduction(m,specialised,out,stack,budgetDefault,budgetFile);return;
+  }
+
   SmallVector<StringRef> components;
   budgetDefault.split(components, ',');
   std::vector<uint64_t> defaults;
@@ -1743,6 +1832,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       fail("output", ec.message());
     Entry e{m, a, *f, dir, stack, table};
     e.lower();
+    if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
     json::Object record{{"dialect", "0.2.10"},
                         {"isa", "0.8"},
                         {"llvm_version", LLVM_VERSION_STRING},
