@@ -1,24 +1,27 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "fourteenth",
+    "name": "fifteenth",
     "date": "2026-10-31",
     "commits": [
-      "40439e3",
-      "7c3e9be",
-      "ef3b387",
-      "3e96314",
-      "65b7b2d",
-      "f45bdc1"
+      "31612b6",
+      "399cf40",
+      "3d41121"
     ],
-    "code_head": "f45bdc1a1528d4d72ba5b92429c8dd41326eaa21",
-    "recorded_at": "2026-10-31T19:31:27+00:00",
+    "code_head": "3d4112120e5849a08809163b507362cceb71fdc7",
+    "recorded_at": "2026-10-31T20:31:26+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
+    "arith": {
+      "llvm18_path": "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+      "llvm18_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+      "llvm23_path": "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+      "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
+    },
     "plugin_sha256": {
-      "18": "6f256fb24b0faed6358461c98e9b30afb6cc3ff0bab279eb0df3665098753a95",
-      "23": "5dd0ece524076dc0befe4b1935d74fd547912f183dac301a8e83fd5a06933223"
+      "18": "7af78d68218d6f0ec7971cf6f4b9d3cfdefa3abf81122b86bdf65e761297933e",
+      "23": "195b095a58d9d63672e566429eca8521d00feb341cd771b32a5e2cfc157021d2"
     },
     "gate": {
       "command": "scripts/gate",
@@ -27,59 +30,10 @@
       "contract_head_drift": true,
       "contract_worktree_drift": true,
       "corpus": {
-        "18": "66/65/1/0/0 cells 920/924",
-        "23": "66/65/1/0/0 cells 788/792"
+        "18": "66/66/0/0/0 cells 924/924",
+        "23": "66/66/0/0/0 cells 792/792"
       },
-      "non_agreeing": [
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 18,
-          "pipeline": "default<O0>",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 18,
-          "pipeline": "strip",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 18,
-          "pipeline": "strip-nondebug",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 18,
-          "pipeline": "mergefunc",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 23,
-          "pipeline": "default<O0>",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 23,
-          "pipeline": "strip",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 23,
-          "pipeline": "strip-nondebug",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        },
-        {
-          "case": "fp-rot-fastmath-reassoc",
-          "major": 23,
-          "pipeline": "mergefunc",
-          "classification": "deferred: M2 (\u00a713 FP materialisation; PLAN M2)"
-        }
-      ]
+      "non_agreeing": []
     },
     "checks": {
       "18": {
@@ -96,12 +50,25 @@
           "passed": 23
         },
         "materialisation": {
-          "cases": 22,
-          "passed": 22
+          "cases": 33,
+          "passed": 33
+        },
+        "softfloat": {
+          "cases": 84,
+          "passed": 84,
+          "known_remainders": [
+            {
+              "name": "published-production-N22-remainder",
+              "ok": true,
+              "detail": "bennett: unimplemented: \u00a712 N22 general wide limb operation (milestone 2) at   %41 = select i1 %37, i512 -1, i512 %40\n",
+              "expected_unimplemented": true,
+              "determining_sentence": "`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (\u00a712.7)."
+            }
+          ]
         },
         "region-keys": {
-          "cases": 31,
-          "passed": 31
+          "cases": 42,
+          "passed": 42
         },
         "validation": {
           "cases": 49,
@@ -109,9 +76,9 @@
         },
         "full-key-audit": {
           "cases": 49,
-          "matched": 26,
-          "unmatched": 23,
-          "accounted": 23,
+          "matched": 38,
+          "unmatched": 11,
+          "accounted": 11,
           "unaccounted": []
         },
         "descriptors": {
@@ -191,12 +158,25 @@
           "passed": 23
         },
         "materialisation": {
-          "cases": 23,
-          "passed": 23
+          "cases": 34,
+          "passed": 34
+        },
+        "softfloat": {
+          "cases": 87,
+          "passed": 87,
+          "known_remainders": [
+            {
+              "name": "published-production-N22-remainder",
+              "ok": true,
+              "detail": "bennett: unimplemented: \u00a712 N22 general wide limb operation (milestone 2) at   %68 = select i1 %nz.c.7, i512 0, i512 %nz.s.8\n",
+              "expected_unimplemented": true,
+              "determining_sentence": "`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (\u00a712.7)."
+            }
+          ]
         },
         "region-keys": {
-          "cases": 32,
-          "passed": 32
+          "cases": 43,
+          "passed": 43
         },
         "validation": {
           "cases": 49,
@@ -204,9 +184,9 @@
         },
         "full-key-audit": {
           "cases": 50,
-          "matched": 27,
-          "unmatched": 23,
-          "accounted": 23,
+          "matched": 39,
+          "unmatched": 11,
+          "accounted": 11,
           "unaccounted": []
         },
         "descriptors": {
@@ -288,11 +268,11 @@
       }
     },
     "object_pairs": {
-      "count": 260,
+      "count": 263,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 175,
-      "preserved_previous_objects": 232,
+      "production_cross_major_pairs": 178,
+      "preserved_previous_objects": 260,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
@@ -1852,6 +1832,24 @@
           "object": "entry-snapshot/several-entries/out/second/oracle-0/ref.bennett",
           "bytes": 6346,
           "sha256": "52edc74d6186919a74e35debb44d08c55778fe66f33665cf94ff7ca78e76a8cd",
+          "published_golden": null
+        },
+        {
+          "object": "softfloat/cc/top/launch.bennett",
+          "bytes": 459,
+          "sha256": "621d5306731348c1592d9f9232265c4dac4413a70030647d5cd5ce044d432a30",
+          "published_golden": null
+        },
+        {
+          "object": "softfloat/production/top/launch.bennett",
+          "bytes": 2284,
+          "sha256": "cd8d4e13e091ee3c099e2cda8262e525e02ed908b30195ba77ff6a71275e96c4",
+          "published_golden": null
+        },
+        {
+          "object": "softfloat/production/top/oracle-0/ref.bennett",
+          "bytes": 1846,
+          "sha256": "3362f52693951b198f5bae405b4f7b05589a73c8df8c72597029d8c204f01c73",
           "published_golden": null
         }
       ]

@@ -113,3 +113,9 @@ Automatic CC whole-memory, complete allocation-history and handle snapshots; con
 LLVM 18/23: 11 production witnesses and 14 vectors each, including dead/zero/address-only histories, multiple entries, saved-point roundtrips and pop/restore faults.
 Exact wildcard-union canonicalisation removes restore analysis blowup; stopped a partial gate to add conservative dependency guards; published replay bytes unchanged.
 Final complete gate exit 0, 66/65/1/0/0 each, no new deferrals; 260 equal pairs, 45 published matches, all 232 previous hashes preserved.
+
+### Pass 15 - 2026-10-31 - 31612b6, 399cf40, 3d41121 (bp-7ni blocked; bp-xms staged arith edge)
+Seven FP carriers, N16 unfused fmuladd, i128/wide slots, N33 routing, FP atomics and private S2 graphs; all eleven FP materialisation/key witnesses match on LLVM 18/23.
+Pinned arith publications close native comparison: fp-rot-fastmath-reassoc agrees in all 26 cells; 84/87 FP checks include one explicit real-production N22 refusal per major, never numerical production closure.
+Stopped incomplete gates for a red→green host-initializer regression and the mid-pass arith publication; remaining production/staged obligations and determining sentences are only in bd; HANDOFF untouched.
+Final complete gate exit 0, 66/66/0/0/0 each, zero deferrals; 263 equal pairs, 45 published matches, all 260 prior hashes preserved.
