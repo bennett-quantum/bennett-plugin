@@ -125,3 +125,9 @@ N22 limb select/phi, carry/borrow, bitwise/icmp/casts, function ABI, nonbyte/agg
 Published n-wideint/n-wide-sub materialisations and keys match; initial full gate caught eight stripped-name identity crashes per major, fixed with tracking handles and a red→green regression in dc2fe4c.
 Pinned real arith production passes select i512 and reaches different rules; exact N26/N27 production and remaining soft-float obligations stay only in bp-w2b/bp-jx3/bp-7ni/bp-xms; HANDOFF untouched.
 Final full gate exit 0, 66/66/0/0/0 each, zero deferrals; 264 equal pairs, 45 published matches, all 263 prior hashes preserved; latest receipt in docs/verification.json.
+
+### Pass 17 - 2026-10-31 - 7ac69c1..637afd4 (ninth M2 pass; bp-jx3/bp-w2b closed; bp-7ni blocked)
+N27 arithmetic, twenty intrinsic runtime families and wide-slot ABI: 472/547 families on LLVM 18/23; published materialisations 36/36 and 37/37, keys 47/47 and 48/48 including both wide-intrinsics roots.
+N26 memmove/memcpy/memset closure, inline/atomic/pattern lowering and logical faults: 33/34 native/ISA/key families; LLVM23 N3 range-list attributes removed before residual validation.
+Real arith LLVM23 L numerical vectors pass; exact production/CC/publication obligations remain only in bd. Initial gate stopped incomplete at the 600-second full-width CC probe; HANDOFF untouched.
+Final complete gate exit 0, 66/66/0/0/0 each, zero deferrals; 288 equal object pairs, 45 published matches, all 264 prior hashes preserved; latest receipt in docs/verification.json.
