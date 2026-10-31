@@ -1,3 +1,120 @@
+# Sixth pass — 2026-10-31 (scalar CC launches landed; bp-2zv acceptance still open)
+
+Started at **a2bce18**. Implementation **bc14d48**, native ABI fix **563ca6a**.
+Accepted dialect **0.2.10 @ 023f5a7**, ISA **0.8** unchanged. No push, sibling
+modification, key-audit/remaining-lift expansion or new M2 deferral.
+**This is partial completion of bp-2zv, not full production or M1 acceptance.**
+
+## Actual red → green implementation
+
+- Production probes on LLVM 18 and 23: **exit 1/no artifacts → exit 0/launch
+  artifacts**. Both the C-built descriptor and the unchanged published
+  `oracle-inc8` LLVM fixture lower. Their reference objects equal the complete
+  published inc8 bytes; the published fixture also runs COMPLETED/CLOSED.
+- CC has direct fixed-width handle bindings, `qreg.new any`/`qreg.free`, scalar
+  integer arguments/results/arithmetic/select/branches, host-minted token
+  parameters and `oracle_call`. Singleton IN/ARG descriptors are read at the
+  call; local record storage is elided only after checking its complete uses.
+  Default budgets and constant explicit records use the published layouts.
+- Fixed-index one-wire gates become action calls. Measurement copies the named
+  wire into a fresh one-wire register and measures the copy, leaving the source
+  handle live as the marker ABI requires. Three measured inc8 launches test
+  **0→1, 7→8, 255→0**, each with five-step and four-step oracle tokens: **6/6
+  executions per major**, plus the published fixture. Repeating the oracle
+  cleans target/fault before free; input preparation is also undone.
+- Host entries are replaced by stubs using the actual launch 0.8 C ABI:
+  load/args/budget/run/wait/result/close/unload. They embed the generated ISA
+  bytes and read target JCS from `BENNETT_TARGET`. Native integer parameter and
+  result ABI attributes survive replacement (signext regression red→green).
+  Three compiled native protocol witnesses per major verify calls, values,
+  cleanup and embedded bytes. They are **mock launch-library witnesses**, not
+  linked launch-library execution; the independent ISA CLI executes the objects.
+- Outputs include host/device bitcode, per-entry ISA object, launch manifest,
+  build record, hash-bound certificate metadata, coverage and blocker sidecars.
+  Object/interface/closure/build hash bindings are independently checked.
+  **The certificate metadata has no checked claims and is not a complete
+  target/schedule-bound executable certificate.**
+
+The initial full gate was invalidated by the ABI rebuild during its corpus
+phase; the digest guard exited 1. It is not a valid passing or failing corpus
+baseline. The final full gate is rerun against fixed binaries and recorded in
+verification.json. Before means the fresh unchanged-binary corpus command,
+not a fresh full unchanged-code pre-push run.
+
+| Corpus totals (run/agree/deferred/blocked/diverge) | Before | After stable full gate |
+|---|---|---|
+| LLVM 18 | 66/65/1/0/0 | 66/65/1/0/0 |
+| LLVM 23 | 66/65/1/0/0 | 66/65/1/0/0 |
+
+Final headless `scripts/pre-push`: **exit 0**. The sole corpus deferral
+remains fp-rot-fastmath-reassoc (bp-7ni, M2 §13). Sixteen complete scalar golden
+objects and all **40/40** published vectors per major remain exact/passing;
+C O3 inc8 and descriptor-reference inc8 stay exact. The four remaining lifts
+and two object-only obligations are untouched and still required.
+
+## Byte evidence: published references versus generated CC objects
+
+| Object(s), each on LLVM 18 and 23 | Published full bytes | Cross-major bytes |
+|---|---|---|
+| inc8 lift, C O3 inc8, descriptor-reference inc8 | exact | equal |
+| binding-out-byte | exact | equal |
+| binding-clock-read | exact | equal |
+| binding-block-byte | exact | equal |
+| binding-console-byte | exact | equal |
+| production references: C descriptor smoke, measured 0/7/255, published oracle-inc8 | exact inc8, five separately emitted objects per major | equal |
+| CC: C descriptor smoke | no paired published golden | equal |
+| CC: measured-0 | no paired published golden | equal |
+| CC: measured-7 | no paired published golden | equal |
+| CC: measured-255 | no paired published golden | equal |
+| CC: published-oracle-inc8 | no paired published golden | equal |
+| CC: integer-ABI allocation/free witness | no paired published golden | equal |
+
+Every emitted launch object is checked against ISA syntax/identity and its
+executed semantics; the ABI-only object additionally verifies the host IR.
+The C descriptor smoke has a single oracle followed by free of its dirty target:
+compilation is valid but that source's run must trap; it is not substituted for
+the clean, twice-invoked execution fixtures. Per-file full SHA-256, byte counts,
+checker hashes and exact paths are in verification.json's `sixth_pass`.
+There is **no published CC-byte equality claim**: §17.4 makes CC/R lowering
+plugin-defined, and the pin supplies oracle/lproc references rather than a
+paired CC lowering golden. New **bp-95o** tracks that exact acceptance evidence
+requirement. ISA suite-G launch vectors validate the launch ABI; their objects
+are not published as the lowering of the dialect's scalar descriptor fixtures.
+
+## Exact remaining bp-2zv sub-items (all M1, none out of scope)
+
+1. Production scalar OUT/MEM_IN and device descriptors (including launch paths
+   for the four already-exact reference binding lifts), multiple distinct
+   shapes/regions, finite dispatch and general handle/CC SSA-memory/call
+   environments. These paths still diagnose unimplemented. Determining dialect
+   §17.4: “marker calls lower to the region calls and `qreg.*` instructions of
+   §18.3 with the handle register environment of §6.5”; §8.2/§8.3 define these
+   bindings. The implemented singleton IN/ARG path does not waive the others.
+2. Full §9.2 budget-table selector/identity overlays and frozen componentwise
+   maxima. Defaults/constant explicit records now work, but the table-input
+   path is missing. Determining sentence: freeze capacities using maxima of
+   effective defaults, every raw table entry and non-sentinel statically
+   supplied fields; then apply the identity overlay once.
+3. Checked target/schedule-bound executable certificates, complete coverage
+   and build-record acceptance, and real linked launch-library acceptance.
+   Current certificate sidecars contain bindings/producer metadata and an empty
+   regions map, with no target/schedule binding. Determining dialect §19.9
+   requires “the certificate (ISA §12)” and the coverage/resolved build record;
+   ISA §9.2 requires executable certificates to bind to closure hashes, and
+   §12.1 requires executable claims to name their realisation. Metadata alone
+   does not discharge these requirements.
+4. A paired published CC byte golden (bp-95o). The determining §17.4 sentence
+   makes the representation plugin-defined; no accepted golden currently
+   establishes the requested CC-byte comparison. Cross-major equality and
+   independent execution are recorded separately, without inventing a fixture.
+
+bp-2zv remains **OPEN**, updated with the above. `.beads/issues.jsonl` is exported
+and committed by path. The general key/address audit (bp-3w4/bp-tr5), remaining
+entry-replay/rung minis/listsum lifts, entry-stack/arena-o1 and Grover over
+unmodified SQLite remain required; no North-Star capability is narrowed.
+
+---
+
 # Fifth pass — 2026-10-31 (four binding objects complete; production launch still open)
 
 Started at **91a0d7d**. Binding implementation/tests: **384dd54**. Hook repair:

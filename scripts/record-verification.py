@@ -1,69 +1,99 @@
 #!/usr/bin/env python3
-"""Record fifth-pass runs; production failure is not a passing M1 verdict."""
-import datetime,hashlib,json,subprocess,sys
+"""Record sixth-pass actual runs without promoting partial launches to M1 acceptance."""
+import datetime,hashlib,json,re,subprocess,sys
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(R/'tests'))
 from contracts import PIN,dialect_text,drift
 def read(name):return json.loads((R/'.tmp'/name).read_text())
-assert (R/'.tmp/fifth-dry-run.exit').read_text().strip()=='0'
-assert (R/'.tmp/fifth-dry-run.exit').stat().st_mtime_ns >= (R/'.tmp/fifth-dry-run.log').stat().st_mtime_ns
-assert (R/'.tmp/fifth-before-corpus.exit').read_text().strip()=='0'
+def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+assert (R/'.tmp/sixth-final-gate.exit').read_text().strip()=='0'
+assert (R/'.tmp/sixth-final-gate.exit').stat().st_mtime_ns >= (R/'.tmp/sixth-final-gate.log').stat().st_mtime_ns
 assert not drift()
-log=(R/'.tmp/fifth-dry-run.log').read_text()
-assert 'gate policy: 7 assertions passed' in log and 'contract policy: 5 assertions passed' in log
-gate=read('corpus-gate.json');before=read('fifth-before-gate.json')
+gate=read('corpus-gate.json');before=read('sixth-before-gate.json')
 assert gate['dialect_commit']==before['dialect_commit']==PIN and not gate['accepted_contract_drift']
-for major,h in gate['plugin_sha256'].items():
- assert hashlib.sha256((R/f'build/libbennett-plugin-{major}.so').read_bytes()).hexdigest()==h
-result=json.loads(subprocess.check_output(['git','-C',str(R),'show','91a0d7d:docs/verification.json'],text=True))
-previous_recorded_at=result['recorded_at']
+assert all(digest(R/f'build/libbennett-plugin-{major}.so')==h for major,h in gate['plugin_sha256'].items())
+result=json.loads(subprocess.check_output(['git','-C',str(R),'show','a2bce18:docs/verification.json'],text=True))
+result['historical_fifth_pass_recorded_at']=result['recorded_at']
 result.update({'recorded_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
  'code_head':subprocess.check_output(['git','-C',str(R),'rev-parse','HEAD'],text=True).strip(),
- 'dialect':'0.2.10','dialect_commit':PIN,'dialect_spec_sha256':hashlib.sha256(dialect_text().encode()).hexdigest(),'isa':'0.8',
+ 'plugin_sha256':gate['plugin_sha256'],'pre_push_exit':0,'corpus_summary':gate['summary'],
  'contract_head':gate['contract_head'],'contract_head_drift':gate['contract_head_drift'],
  'contract_worktree_drift':gate['contract_worktree_drift'],'accepted_contract_drift':gate['accepted_contract_drift'],
- 'plugin_sha256':gate['plugin_sha256'],'pre_push_exit':0,
- 'before':{'code_head':'91a0d7d','dialect_commit':PIN,'plugin_sha256':before['plugin_sha256'],
-   'corpus_summary':before['summary'],'corpus_exit':0,
-   'initial_pre_push_exit':int((R/'.tmp/fifth-before.exit').read_text()),
-   'reason':'Fresh unchanged-binary corpus passed. Initial pre-push encountered the newly strict binding assertions and exited 1 (TDD red); it did not reach the corpus suite.'},
- 'corpus_summary':gate['summary'],'corpus_scope':gate['scope'],
  'non_agreeing':[r for r in gate['cells'] if r['classification']!='agree'],
- 'checks':{},'scalars':{},'milestone_1_complete':False,'production_launch_implemented':False,'new_deferrals':[],
- 'hook_verification':{'command':'git -C '+str(R)+' push --dry-run','exit':0,'gate_executed':True,'pushed':False,
-   'fixes':['unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE','resolve installed hook symlink before git root discovery'],
-   'red_exit':128,'first_dry_run_exit':1,'first_dry_run_error':'fatal: this operation must be run in a work tree',
-   'first_dry_run_cause':'Unsetting alone leaves root discovery inside .git/hooks.'},
- 'acceptance_audit_provenance':{'all_published_materialised_keys':'Historical fourth-pass runs recorded at '+previous_recorded_at+'; not rerun in fifth pass. Analysis/key implementation unchanged.',
-   'production_scalar':'Fresh --require-production smoke probes on both majors: exit 1, no production artefacts.'},
- 'historical_step_check_provenance':'Earlier passes; unchanged inc8/switch5 bytes, 256 inputs each. Not rerun in fifth pass; add2 exhaustive timeout remains historical.'})
-result['remaining_M1']['rung1_scalar_examples_missing']=4
-result['existing_mechanical_deferrals']['memory_bindings_calls']='bp-311: sections 8.5/16.2/16.4; four remaining scalar lifts and entry-stack'
+ 'before':{'code_head':'a2bce18','corpus_summary':before['summary'],'plugin_sha256':before['plugin_sha256'],
+   'corpus_exit':0,'production_exit':{'18':1,'23':1},'provenance':'Fresh unchanged-binary corpus plus strict production probes. No fresh unchanged-code full pre-push claim.'},
+ 'production_launch_implemented':'partial','production_scalar_inc8_launch_implemented':True,
+ 'milestone_1_complete':False,'new_deferrals':[],
+ 'acceptance_audit_provenance':{'all_published_materialised_keys':'Historical fourth-pass all-fixture key audit retained; not rerun or claimed complete in sixth pass.',
+   'production_scalar':'Fresh strict production, independent ISA check/run-program, native mock protocol and integer ABI tests on both majors. Full gate with stable plugin hashes exit 0.'}})
+result['checks']={};result['scalars']={}
 for major in (18,23):
- checks={family:read(f'{family}-{major}.json') for family in ['recognition','analysis-edges','reference-images','materialisation','region-keys','descriptors']}
- for family in ['recognition','analysis-edges','reference-images','materialisation','region-keys']:assert checks[family]['passed']==checks[family]['cases']
- descriptor=checks['descriptors']
- assert descriptor['descriptor_inc8_equal'] and descriptor['production_exit']==1
- assert descriptor['production_unimplemented'] and not descriptor['production_artifacts']
+ checks={name:read(f'{name}-{major}.json') for name in ['recognition','analysis-edges','reference-images','materialisation','region-keys','descriptors','production']}
+ for name in ['recognition','analysis-edges','reference-images','materialisation','region-keys']:
+  assert checks[name]['passed']==checks[name]['cases']
+ assert checks['descriptors']['descriptor_inc8_equal'] and checks['descriptors']['production_complete'] and checks['descriptors']['production_exit']==0
+ prod=checks['production'];assert prod['passed']==3 and prod['published_oracle_inc8']['ok'] and prod['native_abi']['ok']
+ for row in prod['cases']:
+  assert row['ok'] and row['host_protocol'] and all(r['ok'] for r in row['runs'])
+  row.pop('check_output',None)
  result['checks'][str(major)]=checks
- scalar=read(f'scalars-{major}.json')
- assert len(scalar['objects'])==20 and scalar['passed']==16 and len(scalar['deferred'])==4 and scalar['c_inc8_equal']
- assert sum(len(row.get('runs',[])) for row in scalar['objects'])==40
- for row in scalar['objects']:
+ scalars=read(f'scalars-{major}.json');assert scalars['passed']==16 and len(scalars['objects'])==20 and len(scalars['deferred'])==4 and scalars['c_inc8_equal']
+ assert sum(len(row.get('runs',[])) for row in scalars['objects'])==40
+ for row in scalars['objects']:
   if row.get('lowered'):
-   assert row['fixture_equal'] and row['hash_fixture_equal'] and row['check'] and all(x['ok'] for x in row['runs'])
+   assert row['fixture_equal'] and row['hash_fixture_equal'] and row['check'] and all(r['ok'] for r in row['runs'])
    row['symbols']=json.loads(row.pop('hashes'))['symbols'];row.pop('check_output',None)
- result['scalars'][str(major)]=scalar
-result['example_byte_equality']=[{'name':row['name'],**{str(major):next(x for x in result['scalars'][str(major)]['objects'] if x['name']==row['name']).get('fixture_equal',False) for major in (18,23)}} for row in result['scalars']['18']['objects']]
-result['example_byte_equality'] += [{'name':name,'18':False,'23':False,'reason':'No published LLVM lift source; not compiler-emitted.'} for name in ['entry-stack','arena-o1']]
-result['fifth_pass']={'bindings':{'red':{'18':'0/4; exit 1','23':'0/4; exit 1'},'green':{'18':'4/4; five vectors','23':'4/4; five vectors'}},
- 'production_scalar':{'18':'red; exit 1','23':'red; exit 1','bead':'bp-2zv',
-   'root_cause':'BennettPass still rejects CC/marker event lowering; host replacement and launch records are not implemented.',
-   'determining_requirements':['dialect 0.2.10 section 17.4: marker calls lower to region calls and qreg.* instructions with the handle register environment of section 6.5',
-     'dialect 0.2.10 section 19.9: host module with device entries replaced by launch stubs; ISA objects, certificate, coverage and build record',
-     'ISA 0.8 section 10: A run executes a device CC entry.'],
-   'published_cc_launch_golden':False,
-   'golden_note':'Section 17.4 makes CC/R lowering plugin-defined. inc8 is a published reference oracle/lproc object, not a CC launch object; this does not waive production obligations.'}}
+ result['scalars'][str(major)]=scalars
+# Published reference-byte evidence and generated CC-byte evidence are separate.
+fixtures=dict(re.findall(r'```isa object=([^\n ]+)\n(.*?)```',dialect_text(),re.S))
+paths=[(name,f'.tmp/scalars/{{major}}/{name}/ref.bennett',name) for name in ['inc8','binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte']]
+paths += [('descriptor-reference inc8','.tmp/descriptors/{major}/oracle-0/ref.bennett','inc8'),
+ ('production C descriptor reference','.tmp/descriptors/{major}/production/top/oracle-0/ref.bennett','inc8'),
+ ('production C descriptor CC','.tmp/descriptors/{major}/production/top/launch.bennett',None)]
+for x in [0,7,255]:
+ paths += [(f'production measured-{x} reference',f'.tmp/production/{{major}}/{x}/out/top/oracle-0/ref.bennett','inc8'),
+  (f'production measured-{x} CC',f'.tmp/production/{{major}}/{x}/out/top/launch.bennett',None)]
+paths += [('production published-oracle-inc8 reference','.tmp/production/{major}/published/out/top/oracle-0/ref.bennett','inc8'),
+ ('production published-oracle-inc8 CC','.tmp/production/{major}/published/out/top/launch.bennett',None),
+ ('production integer-ABI CC','.tmp/production/{major}/abi/out/abi/launch.bennett',None)]
+byte_table=[]
+for name,pattern,golden in paths:
+ row={'name':name,'published_golden':golden,'majors':{}}
+ for major in (18,23):
+  path=R/pattern.format(major=major);data=path.read_bytes()
+  row['majors'][str(major)]={'path':str(path.relative_to(R)),'sha256':digest(path),'bytes':len(data),'published_byte_equal':data==fixtures[golden].encode() if golden else None}
+  if golden:assert row['majors'][str(major)]['published_byte_equal']
+  else:
+   ref=R.parent/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+   checked=subprocess.run([ref,'check',path],capture_output=True,text=True,timeout=60)
+   assert checked.returncode==0,checked.stderr
+   row['majors'][str(major)]['independent_check']=json.loads(checked.stdout)
+   if name in ['production C descriptor CC','production integer-ABI CC']:
+    abi=name=='production integer-ABI CC'
+    execution=subprocess.run([ref,'run-program',path,'abi' if abi else 'top','--args','11' if abi else '5','--budget','10000,0,0,0' if abi else '10000,0,7,1'],capture_output=True,text=True,timeout=60)
+    assert execution.returncode==0,execution.stderr
+    v=json.loads(execution.stdout);assert v['status']==('COMPLETED' if abi else 'FAILED') and v['run_state']=='CLOSED'
+    if abi:assert v['results']==[{'type':'i8','value':'11'}]
+    else:assert v['fault']==4
+    row['majors'][str(major)]['independent_run']=v
+ row['cross_major_byte_equal']=(R/pattern.format(major=18)).read_bytes()==(R/pattern.format(major=23)).read_bytes()
+ assert row['cross_major_byte_equal']
+ byte_table.append(row)
+result['sixth_pass']={'commits':['bc14d48','563ca6a'],'gate_exit':0,'gate_command':'env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR='+str(R/'.tmp')+' '+str(R/'scripts/pre-push'),
+ 'initial_gate_exit':1,'initial_gate_valid':False,'initial_gate_cause':'Plugin digest changed during corpus after ABI rebuild; final gate rerun in full against stable binaries.',
+ 'red_probes':{str(m):(R/f'.tmp/sixth-red-{m}.log').read_text() for m in (18,23)},
+ 'byte_equality':byte_table,'published_cc_golden':False,'golden_bead':'bp-95o',
+ 'host_target':'BENNETT_TARGET contains runtime target JCS; no environment service outside launch ABI',
+ 'host_runtime_witness':'Native compiled mock checks published ABI protocol and arguments/result and captured embedded bytes; actual ISA objects are independently executed by run-program. Not a linked launch-library acceptance claim.',
+ 'certificate_status':'Hash-bound metadata only; empty regions, no checked executable claims or target/schedule binding. Required completion remains bp-2zv.',
+ 'remaining_bead':'bp-2zv','remaining_sub_items':[
+  'Scalar OUT/MEM_IN/device descriptors, multiple distinct shapes/regions and finite dispatch/general handle/CC environments (dialect 8.2,8.3,6.5,17.4).',
+  'Full budget-table selection/identity overlays and frozen componentwise capacity maxima (dialect 9.2).',
+  'Target/schedule-bound checked executable certificate claims and full record/coverage acceptance (dialect 19.9; ISA 9.2,12).',
+  'Paired published production CC byte fixture (bp-95o; dialect 17.4 plugin-defined lowering).']}
+result['remaining_M1']['production_descriptors_CC_launches_host_stubs_records']='bp-2zv: scalar IN/ARG launches/stubs implemented; full production acceptance sub-items in sixth_pass'
+result['limits']=[x for x in result['limits'] if not x.startswith('No production accept verdict')]
+result['limits'].append('Partial production scalar launch implementation: no full descriptor dispatch/budget-table or checked executable certificate acceptance; bp-2zv remains open. No paired published CC golden (bp-95o).')
 (R/'docs/verification.json').write_text(json.dumps(result,indent=2)+'\n')
-print('Recorded dual-major dry-run hook/gate, 16 exact objects and 40 vectors per major; production remains red.')
+print('Recorded actual dual-major gate, exact references, executable scalar launches, and explicit incomplete production acceptance.')
