@@ -24,6 +24,7 @@ cl::opt<std::string> BudgetTableFile("bennett-budgets",cl::init(""));
 cl::opt<std::string> BudgetDefault("bennett-budget-default",cl::init("1048576,1048576,65536,256,65536"));
 cl::opt<std::string> Report("bennett-report");
 cl::opt<bool> DescriptorReference("bennett-descriptor-reference", cl::desc("Non-production reference objects from statically resolved marker descriptors"));
+cl::opt<bool> ValidateOnly("bennett-validate-only", cl::desc("Validate materialised L/R IR independently of normalisation"));
 cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
 cl::opt<bool> AnalysisOnly(
     "bennett-analysis-only",
@@ -303,6 +304,10 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
+    if (ValidateOnly) {
+      validateResidual(m);
+      return PreservedAnalyses::all();
+    }
     if (NormaliseOnly) {
       for (Function &f : m) if (!f.isDeclaration()) normaliseScalar(f);
       errs() << "bennett: scalar normalisation test mode; full N0-N35/V1-V16 pending M2\n";
