@@ -1,3 +1,9 @@
+Group 3 adds supplementary final-artifact SHA-256/size inventories and complete
+instruction coverage. Five cases pass per major; 30/30 existing build/certificate/
+CC-coverage sidecars are byte-stable. No checked executable certificate or linked
+runtime acceptance is claimed: bp-o7f and bp-2zv remain open. Full final gate and
+byte inventory are recorded next; no further implementation rebuild is planned.
+
 Group 2 now implements staged budget-table selectors, unmatched/raw-entry and
 explicit-field frozen maxima, once-only identity overlays and build-record table
 hashes. Four independent table launches pass per major. Published budget-stage

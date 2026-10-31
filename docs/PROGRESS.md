@@ -34,7 +34,23 @@ obligation: §9.2 step 3 requires the provisional reference object “with basel
 `sstack` and other baseline wrapper inputs”; the staged shadow-stack H16→H32
 hashes and 316-row vector are not reproduced. This is missing plugin mechanics,
 not a spec blocker or a new M2 deferral. Group 2 is therefore partial acceptance.
-Checked executable certificates/records are the next group.
+Group 3: supplementary launch-record.json binds final host/device bitcode,
+launch manifest, all oracle references and sidecars by full SHA-256/size.
+all-coverage.json enumerates every emitted CC/oracle/lproc/action instruction.
+Five inventory/coverage cases pass on each major. All **30/30 existing build,
+certificate and CC coverage sidecars are byte-stable** across this group.
+These additions do not claim certificate acceptance: launch records explicitly
+say metadata_only and checked_executable_claims=false.
+
+**Executable certificates remain incomplete** (bp-o7f): ISA §12.3 requires
+“Executable claims … bind to `schedule_hash` through their subject”, and §9.2
+requires closure bindings. The published D-expected-oracle-claim marks its checker
+and ref@0.8 expansion unavailable upstream (b-isa-spec-8r4/bennett-vm-47t);
+only the negative f_cert_unknown_field object bears a certificate section.
+There is no positive published certificate-bearing LLVM/object pair to reproduce.
+The plugin also still needs actual target/schedule-bound checked claims, complete
+runtime/build provenance and real linked launch-library acceptance. These plugin
+obligations remain required independently of the publication gap.
 
 ---
 

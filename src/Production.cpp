@@ -826,6 +826,33 @@ std::string launchObject(Entry &e, json::Object &record,
                                          {"dialect_mapping_version", "0.2.9"}};
   return object;
 }
+// Supplementary coverage preserves the existing CC coverage sidecar's bytes.
+json::Object completeCoverage(StringRef object) {
+  auto symbols = parse(object.split("section symbols\n").second.split('\n').first);
+  std::map<std::string, std::string> hashes;
+  for (auto &v : *symbols.getAsObject()) {
+    auto *sym = v.second.getAsObject();
+    hashes[sym->getString("name")->str()] = sym->getString("interface_hash")->str();
+  }
+  json::Array entries;
+  auto body = object.split("section functions\n").second.split("\n\nsection ").first;
+  SmallVector<StringRef> lines; body.split(lines, '\n');
+  std::string symbol, block, rule; unsigned ordinal = 0;
+  for (auto line : lines) {
+    if (line.starts_with("fn cc @") || line.starts_with("oracle @") ||
+        line.starts_with("lproc @") || line.starts_with("action @")) {
+      symbol = line.split('@').second.split(' ').first.str();
+      rule = line.starts_with("fn cc") ? "17.4" : line.starts_with("action") ? "18.3" : "16.4";
+    } else if (line.starts_with("^")) {
+      block = line.drop_front().split('(').first.str(); ordinal = 0;
+    } else if (!line.empty() && !line.starts_with("regs ")) {
+      entries.push_back(json::Object{{"point", json::Array{hashes.at(symbol), block, ordinal++}},
+        {"source", "dialect-0.2.10:" + rule}, {"classification", "lowered"},
+        {"reason", "materialised scalar production instruction"}});
+    }
+  }
+  return json::Object{{"entries", std::move(entries)}};
+}
 // The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
 // the target JSON at runtime; it is copied by bennett_load before launch.
 void hostStub(Function &f, StringRef object, const json::Object &record) {
@@ -1027,6 +1054,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
                       {"method", "sum_over_multiplicities"}}}};
     auto obj = launchObject(e, record, cert);
     write(dir + "/launch.bennett", obj);
+    write(dir + "/all-coverage.json", jcs(json::Value(completeCoverage(obj))) + "\n");
     auto build = jcs(json::Value(std::move(record)));
     hostStub(*f, obj, *parse(build).getAsObject());
     write(dir + "/build.json", build + "\n");
@@ -1060,5 +1088,32 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   WriteBitcodeToFile(m, host);
   write(out.str() + "/launches.json",
         jcs(json::Value(std::move(launches))) + "\n");
+  bc.close(); host.close();
+  // Hash only closed, final artifacts. The record is not included in its own
+  // inventory, and never upgrades metadata to a checked executable claim.
+  for (Function *f : entries) {
+    std::string dir = f->getName().str();
+    json::Object artifacts;
+    auto add = [&](const std::string &path) {
+      auto bytes = read(out.str() + "/" + path);
+      artifacts[path] = json::Object{{"bytes", int64_t(bytes.size())}, {"sha256", hash(bytes)}};
+    };
+    for (auto file : {"host.bc", "device.bc", "launches.json"}) add(file);
+    for (auto file : {"launch.bennett", "build.json", "certificate.json", "coverage.json", "all-coverage.json", "blockers.json"}) add(dir + "/" + file);
+    for (unsigned i = 0;; ++i) {
+      auto path = dir + "/oracle-" + std::to_string(i) + "/ref.bennett";
+      if (!sys::fs::exists(out.str() + "/" + path)) break;
+      add(path);
+    }
+    auto build = parse(read(out.str() + "/" + dir + "/build.json"));
+    json::Object record{{"schema", "bennett-plugin-launch-record-1"},
+      {"entry", dir}, {"object_hash", *build.getAsObject()->getString("object_hash")},
+      {"artifacts", std::move(artifacts)}, {"certificate_acceptance", "metadata_only"},
+      {"target_source", "runtime:BENNETT_TARGET"},
+      {"checked_executable_claims", false}, {"linked_runtime_acceptance", false},
+      {"required_acceptance", json::Array{"target/schedule-bound checked executable claims", "real linked launch-library execution"}}};
+    write(out.str() + "/" + dir + "/launch-record.json", jcs(json::Value(std::move(record))) + "\n");
+  }
+
 }
 } // namespace bennett
