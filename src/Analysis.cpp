@@ -943,6 +943,17 @@ void Analysis::step(Instruction &i) {
         case AtomicRMWInst::Min: n = n.slt(v) ? n : v; break;
         case AtomicRMWInst::UMax: n = n.ugt(v) ? n : v; break;
         case AtomicRMWInst::UMin: n = n.ult(v) ? n : v; break;
+        case AtomicRMWInst::UIncWrap:
+          // N9's guard is not a path refinement in PT3: retain both arms.
+          next.merge(integer(APInt(n.getBitWidth(),0)));n+=1;break;
+        case AtomicRMWInst::UDecWrap:
+          next.merge(operand);n-=1;break;
+#if LLVM_VERSION_MAJOR >= 23
+        case AtomicRMWInst::USubCond:
+          next.merge(a);n-=v;break;
+        case AtomicRMWInst::USubSat:
+          next.merge(integer(APInt(n.getBitWidth(),0)));n-=v;break;
+#endif
         default: unimplemented("§5 PT12 atomic transfer", 1, rmw);
         }
         next.merge(integer(n));
@@ -974,12 +985,39 @@ void Analysis::step(Instruction &i) {
       changed|=values[&i].merge(displace(base,off,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
       return;
     }
+    // Accumulate the complete Cartesian index image at I(a), and only then
+    // add it to the represented base. Sequential host int64_t additions lose
+    // both index wrap and GEP's preserved high address bits.
+    std::set<APInt, bool(*)(const APInt &,const APInt &)> offsets(
+      [](const APInt &x,const APInt &y){return x.ult(y);});
+    offsets.insert(off);bool finite=true;
+    for(auto &entry:vars) {
+      AV indices=get(entry.first);
+      if(auto it=indexBounds.find({g,entry.first});it!=indexBounds.end()) {
+        if(indices.top)indices=it->second;
+        else for(auto at=indices.atoms.begin();at!=indices.atoms.end();)
+          if(at->kind==Atom::Int && !it->second.atoms.count(*at))at=indices.atoms.erase(at);else ++at;
+      }
+      if(indices.top) {finite=false;break;}
+      auto old=offsets;offsets.clear();
+      for(auto &offset:old)for(auto &index:indices.atoms)
+        if(index.kind==Atom::Int)offsets.insert(offset+index.integer.sextOrTrunc(bits)*entry.second);
+        else finite=false;
+      if(!finite)break;
+    }
+    if(finite) {
+      for(auto &offset:offsets)a.merge(displace(base,offset,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
+      changed|=values[&i].merge(a);return;
+    }
     a = base;
     for (auto &entry : vars) {
       AV r;
       auto indices = get(entry.first);
-      if (auto it = indexBounds.find({g, entry.first}); it != indexBounds.end())
-        indices = it->second;
+      if (auto it = indexBounds.find({g, entry.first}); it != indexBounds.end()) {
+        if(indices.top)indices=it->second;
+        else for(auto at=indices.atoms.begin();at!=indices.atoms.end();)
+          if(at->kind==Atom::Int && !it->second.atoms.count(*at))at=indices.atoms.erase(at);else ++at;
+      }
       for (auto p : a.atoms)
         if (p.kind == Atom::Ptr) {
           if (indices.top) {

@@ -65,6 +65,39 @@ define i128 @top() {
  %v = zext i64 %p to i128
  ret i128 %v
 }''', {'PTR(@g,0,-1)', 'PTR(EXT,0,-1)'}, True),
+    'PT2-finite-index-wrap': (
+        'e-p:64:64:64:8',
+        """@g = internal global [32 x i8] zeroinitializer, align 16
+define ptr @top(i1 %c) {
+ %i = select i1 %c, i8 0, i8 16
+ %v = getelementptr i8, ptr @g, i8 %i
+ ret ptr %v
+}""", {'PTR(@g,0,0)', 'PTR(@g,16,0)', 'PTR(@g,-240,0)', 'PTR(EXT,0,-1)'}, True),
+    'PT2-finite-multi-index-accumulation': (
+        'e-p:64:64:64:8',
+        """@g = internal global [16 x i8] zeroinitializer, align 256
+define ptr @top(i1 %c) {
+ %i = select i1 %c, i8 1, i8 2
+ %j = select i1 %c, i8 -16, i8 -32
+ %v = getelementptr [16 x i8], ptr @g, i8 %i, i8 %j
+ ret ptr %v
+}""", {'PTR(@g,0,0)', 'PTR(@g,16,0)', 'PTR(@g,240,0)', 'PTR(EXT,0,-1)'}, True),
+
+    'PT12-uinc-wrap-select-union': (
+        'e-p:64:64',
+        """@g = internal global i8 0
+define i8 @top() {
+ %v = atomicrmw uinc_wrap ptr @g, i8 0 monotonic
+ ret i8 %v
+}""", {f'INT({i})' for i in range(256)}, False),
+    'PT12-udec-wrap-select-union': (
+        'e-p:64:64',
+        """@g = internal global i8 0
+define i8 @top() {
+ %v = atomicrmw udec_wrap ptr @g, i8 0 monotonic
+ ret i8 %v
+}""", {f'INT({i})' for i in range(256)}, False),
+
 }
 
 
