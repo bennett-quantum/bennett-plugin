@@ -98,14 +98,14 @@ AV Analysis::convert(const AV &source,Type *from,Type *to,unsigned opcode) {
   }
   return result;
 }
-AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth) {
+AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,bool gep) {
   if(delta.isZero()) return source;
   AV result;result.top=source.top;
   unsigned bits=delta.getBitWidth();
   for(auto a:source.atoms) {
     if(a.kind!=Atom::Ptr || !a.object) {result.atoms.insert(a);continue;}
     // All aligned low-bit patterns, including wrap with preserved high bits.
-    if(bits<pointerWidth && bits<63 && !a.stride) {
+    if(gep && bits<pointerWidth && bits<63 && !a.stride) {
       uint64_t alignment=1,size=UINT64_MAX;
       if(auto *g=dyn_cast<GlobalVariable>(a.object)) {
         alignment=g->getAlign().valueOrOne().value();
@@ -130,7 +130,19 @@ AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth)
       if(high+d>=modulus) include((__int128)a.offset+d-modulus);
       if(low+d<0) include((__int128)a.offset+d+modulus);
     } else {
-      a.offset=(APInt(64,a.offset)+delta.sextOrTrunc(64)).getSExtValue();
+      auto offset=APInt(bits,a.offset,true)+delta;
+      if(a.stride || !offset.isSignedIntN(64)) {
+        a.offset=0;a.stride=-1;numericalUnknown(result);
+      } else {
+        a.offset=offset.getSExtValue();
+        uint64_t size=UINT64_MAX;
+        if(auto *g=dyn_cast<GlobalVariable>(a.object))
+          size=M.getDataLayout().getTypeAllocSize(g->getValueType()).getKnownMinValue();
+        else if(auto *alloc=dyn_cast<AllocaInst>(a.object))
+          if(auto *count=dyn_cast<ConstantInt>(alloc->getArraySize()))
+            size=(uint64_t)std::min<unsigned __int128>(UINT64_MAX,(unsigned __int128)count->getLimitedValue()*M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue());
+        if(a.offset<0 || (uint64_t)a.offset>=size)numericalUnknown(result);
+      }
       result.atoms.insert(a);
     }
   }
@@ -998,6 +1010,12 @@ void Analysis::step(Instruction &i) {
         else for(auto at=indices.atoms.begin();at!=indices.atoms.end();)
           if(at->kind==Atom::Int && !it->second.atoms.count(*at))at=indices.atoms.erase(at);else ++at;
       }
+      if(indices.top && entry.first->getType()->isIntegerTy() && entry.first->getType()->getIntegerBitWidth()<=12) {
+        // The entire finite-width index domain is small. Enumerate exactly,
+        // including negative signed indices, before modulo-I accumulation.
+        unsigned width=entry.first->getType()->getIntegerBitWidth();indices={};
+        for(unsigned n=0;n<(1u<<width);++n)indices.merge(integer(APInt(width,n)));
+      }
       if(indices.top) {finite=false;break;}
       auto old=offsets;offsets.clear();
       for(auto &offset:old)for(auto &index:indices.atoms)
@@ -1047,6 +1065,9 @@ void Analysis::step(Instruction &i) {
       r.atoms.insert(p);
     }
     r.top = a.top;
+    // Symbolic residue extents beyond the finite implementation still need
+    // the unknown-address alternative; it is numerical, not host provenance.
+    numericalUnknown(r);
     a = r;
   } else if (auto *l = dyn_cast<LoadInst>(&i))
     a = load(get(l->getPointerOperand()), l->getType());
@@ -1308,15 +1329,17 @@ void Analysis::step(Instruction &i) {
             if (a.top)
               goto done;
           } else if (v.kind == Atom::Ptr) {
-            auto p = v;
             if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
-                                        i.getOpcode() == Instruction::Sub))
-              p.offset = (i.getOpcode()==Instruction::Add
-                              ? APInt(64,p.offset)+w.integer.zextOrTrunc(64)
-                              : APInt(64,p.offset)-w.integer.zextOrTrunc(64)).getSExtValue();
-            else
-              p.stride = -1;
-            a.atoms.insert(p);
+                                        i.getOpcode() == Instruction::Sub)) {
+              auto delta=i.getOpcode()==Instruction::Add?w.integer:-w.integer;
+              a.merge(displace(atom(Atom::Ptr,v.object,v.offset,v.stride),delta,
+                               delta.getBitWidth(),false));
+            } else {
+              auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);
+            }
+          } else if(v.kind==Atom::Int && w.kind==Atom::Ptr && i.getOpcode()==Instruction::Add) {
+            a.merge(displace(atom(Atom::Ptr,w.object,w.offset,w.stride),v.integer,
+                             v.integer.getBitWidth(),false));
           }
         }
     }

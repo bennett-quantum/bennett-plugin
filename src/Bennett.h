@@ -63,7 +63,7 @@ class Analysis {
   void store(const AV &, const AV &, uint64_t, bool filled = false);
   AV load(const AV &, llvm::Type *);
   AV convert(const AV &, llvm::Type *, llvm::Type *, unsigned);
-  AV displace(const AV &, const llvm::APInt &, unsigned);
+  AV displace(const AV &, const llvm::APInt &, unsigned, bool gep = true);
   void bind(llvm::CallBase &, llvm::Function *);
 
 public:

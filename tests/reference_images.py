@@ -83,6 +83,38 @@ define ptr @top(i1 %c) {
  ret ptr %v
 }""", {'PTR(@g,0,0)', 'PTR(@g,16,0)', 'PTR(@g,240,0)', 'PTR(EXT,0,-1)'}, True),
 
+    'PT2-symbolic-small-index-image': (
+        'e-p:64:64:64:8',
+        """@g = internal global [32 x i8] zeroinitializer, align 256
+define ptr @top(i8 %i) {
+ %v = getelementptr i8, ptr @g, i8 %i
+ ret ptr %v
+}""", {f'PTR(@g,{i},0)' for i in range(256)} | {'PTR(EXT,0,-1)'}, True),
+    'PT5-full-width-outside-object': (
+        'e-p:64:64',
+        """@g = internal global i8 0
+define i64 @top() {
+ %p = ptrtoint ptr @g to i64
+ %v = add i64 %p, 8
+ ret i64 %v
+}""", {'PTR(@g,8,0)', 'PTR(EXT,0,-1)'}, True),
+    'PT5-commuted-add': (
+        'e-p:64:64',
+        """@g = internal global [16 x i8] zeroinitializer
+define i64 @top() {
+ %p = ptrtoint ptr @g to i64
+ %v = add i64 8, %p
+ ret i64 %v
+}""", {'PTR(@g,8,0)'}, False),
+    'PT5-wide-unrepresentable-displacement': (
+        'e-p:64:64',
+        """@g = internal global i8 0
+define i128 @top() {
+ %p = ptrtoint ptr @g to i128
+ %v = add i128 %p, 18446744073709551616
+ ret i128 %v
+}""", {'PTR(@g,0,-1)', 'PTR(EXT,0,-1)'}, True),
+
     'PT12-uinc-wrap-select-union': (
         'e-p:64:64',
         """@g = internal global i8 0
