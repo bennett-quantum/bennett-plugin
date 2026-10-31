@@ -2,6 +2,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -410,6 +411,14 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
         if(!d.object || overlaps(p,written,bytes)) {
           if(!dst.top && dst.atoms.size()==1 && !d.stride && d.offset==p.offset && written.bytes==bytes)
             return get(st->getValueOperand());
+          // Decode actual constant bytes from a containing vector/aggregate
+          // store. This is a call-local reaching definition, not an S2 union
+          // of fragments (which would incorrectly reconstruct pointers).
+          if(!dst.top && dst.atoms.size()==1 && !d.stride && d.offset<=p.offset &&
+             (__int128)p.offset+bytes<=(__int128)d.offset+written.bytes)
+            if(auto *value=dyn_cast<Constant>(st->getValueOperand()))
+              if(auto *folded=ConstantFoldLoadFromConst(value,type,APInt(64,p.offset-d.offset),M.getDataLayout()))
+                if(isa<ConstantInt>(folded)||isa<ConstantPointerNull>(folded))return get(folded);
           return read(base,offset,type);
         }
       }
@@ -427,6 +436,17 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
           if(!d.object || overlaps(p,written,bytes)) disjoint=false;
         }
         if(disjoint) continue;
+      }
+      // These markers have no classical-memory writes: oracle descriptors
+      // are read-only and oracle execution uses its private entry-state image.
+      // Generation/effect markers are deliberately absent (they may write).
+      if(auto *g=c->getCalledFunction()) {
+        auto n=g->getName();
+        if(n=="__bennett_qalloc"||n=="__bennett_qborrow"||n=="__bennett_qfree"||
+           n=="__bennett_gate"||n=="__bennett_gate2"||n=="__bennett_gate3"||
+           n=="__bennett_rot"||n=="__bennett_measure"||n=="__bennett_qload"||
+           n=="__bennett_qstore"||n=="__bennett_qprep"||n=="__bennett_oracle"||
+           n=="__bennett_inplace") continue;
       }
       // Any call could clobber an escaped local. Only cross calls before the
       // reaching store when no relevant field has yet been proven.

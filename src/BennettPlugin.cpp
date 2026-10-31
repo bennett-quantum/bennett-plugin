@@ -20,6 +20,7 @@ cl::opt<std::string> Dialect("bennett-dialect",
                              cl::desc("Required exact dialect version"));
 cl::opt<std::string> ISA("bennett-isa", cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
+cl::opt<std::string> BudgetDefault("bennett-budget-default",cl::init("1048576,1048576,65536,256,65536"));
 cl::opt<std::string> Report("bennett-report");
 cl::opt<bool> DescriptorReference("bennett-descriptor-reference", cl::desc("Non-production reference objects from statically resolved marker descriptors"));
 cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
@@ -405,9 +406,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
             if (width.top)
               fail("unimplemented", "§25.1 BLK-1 (blocked: bp-2tw)", c);
           }
-    for (Function &f : m)
-      if (a.tiers[&f].count("CC"))
-        unimplemented("§17.4 CC/marker event lowering", 3, &f);
+    lowerProduction(m, a, Output, StackCells, BudgetDefault);
     return PreservedAnalyses::none();
   }
   static bool isRequired() { return true; }

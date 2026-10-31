@@ -20,11 +20,13 @@ void top(void) {
 ''')
  tool=f'/usr/lib/llvm-{a.major}/bin/';ll=d/'in.ll'
  subprocess.run([tool+'clang','-O1','-emit-llvm','-S',src,'-o',ll],check=True)
- cmd=[tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-descriptor-reference','-bennett-scalar-stack=7','-bennett-out='+str(d),'-disable-output',str(ll)]
+ cmd=[tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-descriptor-reference','-bennett-scalar-stack=7','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(d),'-disable-output',str(ll)]
  x=subprocess.run(cmd,capture_output=True,text=True);obj=d/'oracle-0/ref.bennett';fixture=re.search(r'```isa object=inc8\n(.*?)```',dialect_text(),re.S)[1].encode();ok=x.returncode==0 and obj.exists() and obj.read_bytes()==fixture
- # Production must still fail loudly until CC launch/object emission exists.
+ # Production is acceptance: success and complete launch artefacts are required.
  prod=d/'production';shutil.rmtree(prod,ignore_errors=True);prod.mkdir()
  production=subprocess.run([('-bennett-out='+str(prod) if arg.startswith('-bennett-out=') else arg) for arg in cmd if arg!='-bennett-descriptor-reference'],capture_output=True,text=True)
  loud=production.returncode!=0 and 'unimplemented' in production.stderr
- result={'major':a.major,'descriptor_inc8_equal':ok,'production_unimplemented':loud,'production_exit':production.returncode,'production_artifacts':sorted(str(p.relative_to(prod)) for p in prod.rglob('*') if p.is_file()),'production_diagnostic':production.stderr,'diagnostic':x.stderr};(R/f'.tmp/descriptors-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return not(ok and (production.returncode==0 if a.require_production else loud))
+ required=['host.bc','device.bc','launches.json','top/launch.bennett','top/build.json','top/certificate.json','top/coverage.json','top/blockers.json','top/oracle-0/ref.bennett']
+ complete=production.returncode==0 and all((prod/f).is_file() for f in required) and (prod/'top/oracle-0/ref.bennett').read_bytes()==fixture
+ result={'major':a.major,'descriptor_inc8_equal':ok,'production_unimplemented':loud,'production_complete':complete,'production_exit':production.returncode,'production_artifacts':sorted(str(p.relative_to(prod)) for p in prod.rglob('*') if p.is_file()),'production_diagnostic':production.stderr,'diagnostic':x.stderr};(R/f'.tmp/descriptors-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return not(ok and complete)
 if __name__=='__main__':raise SystemExit(main())

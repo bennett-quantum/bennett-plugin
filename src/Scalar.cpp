@@ -488,10 +488,10 @@ struct Scalar {
   }
 };
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
-                 unsigned stackCells) {
+                 unsigned stackCells, uint64_t heapCapacity) {
   Scalar s{m, f};
   std::string d = desc.str(), device;
-  uint64_t deviceSize = 0, heapLimit = 0;
+  uint64_t deviceSize = 0, heapLimit = heapCapacity;
   auto deviceStart = d.find(";dev=");
   if (deviceStart != std::string::npos) {
     auto deviceEnd = d.find(';', deviceStart + 1);
