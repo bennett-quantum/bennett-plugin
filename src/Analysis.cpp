@@ -188,11 +188,13 @@ Function *resolve(Value *v) {
   return f;
 }
 std::string regionKey(Function *f) {
-  // Clone only the direct closure, strip non-semantic names/metadata, and give
-  // closure members DFS names. Retain external references such as marker names.
+  // Build the source call closure, including fixed S2 indirect candidates.
+  // Normalisation can introduce linked helper edges; include those before
+  // stripping names and hashing. H/source definitions remain untouched.
   Module &src = *f->getParent();
   std::vector<Function *> order;
   std::set<Function *> seen;
+  std::unique_ptr<Analysis> reference;
   std::function<void(Function *)> dfs = [&](Function *g) {
     g = resolve(g);
     if (!g || g->isDeclaration() || !seen.insert(g).second)
@@ -200,40 +202,61 @@ std::string regionKey(Function *f) {
     order.push_back(g);
     for (Instruction &i : instructions(g))
       if (auto *c = dyn_cast<CallBase>(&i))
-        if (auto *t = resolve(c->getCalledOperand()))
-          dfs(t);
+        if (auto *t = resolve(c->getCalledOperand())) dfs(t);
+        else {
+          if(!reference) {reference=std::make_unique<Analysis>(src,f);reference->run();}
+          auto candidates=reference->candidates(c->getCalledOperand(),c->getFunctionType());
+          // §7.3 specifies direct preorder; preserve module order for the
+          // additional indirect members rather than host pointer addresses.
+          for(Function &target:src)if(candidates.count(&target))dfs(&target);
+        }
   };
   dfs(f);
-  std::set<const GlobalVariable *> globals;
-  std::set<const Value *> visited;
-  std::function<void(const Value *)> data = [&](const Value *v) {
-    if (!visited.insert(v).second)
-      return;
-    if (auto *g = dyn_cast<GlobalVariable>(v)) {
-      globals.insert(g);
-      if (g->hasInitializer())
-        data(g->getInitializer());
-      return;
-    }
-    if (isa<Function>(v))
-      return;
-    if (auto *u = dyn_cast<User>(v))
-      for (Value *operand : u->operands())
-        data(operand);
-  };
-  for (auto *g : order)
-    for (Instruction &i : instructions(g))
-      for (Value *v : i.operands())
-        data(v);
   ValueToValueMapTy map;
-  auto clone = CloneModule(src, map, [&](const GlobalValue *v) {
-    return seen.count(const_cast<Function *>(dyn_cast<Function>(v))) ||
-           globals.count(dyn_cast<GlobalVariable>(v));
-  });
-  // §7.3 identity is over the materialised body, with H left untouched.
-  // This is the implemented scalar N-rule slice; full N0–N35/V1–V16 remains
-  // an explicit M1 key-audit obligation for regions outside that slice.
-  for(auto *g:order) normaliseScalar(*cast<Function>(map[g]));
+  auto clone = CloneModule(src, map);
+  std::vector<Function *> materialised;
+  std::set<Function *> included;
+  for(auto *g:order) {auto *c=cast<Function>(map[g]);materialised.push_back(c);included.insert(c);}
+  for(unsigned n=0;n<materialised.size();++n) {
+    auto *g=materialised[n];normaliseScalar(*g);
+    for(auto &i:instructions(g))if(auto *call=dyn_cast<CallBase>(&i))
+      if(auto *target=resolve(call->getCalledOperand())) {
+        if(target->getFunctionType()==call->getFunctionType())call->setCalledFunction(target);
+        if(!target->isDeclaration() && included.insert(target).second)materialised.push_back(target);
+      }
+  }
+  std::map<CallBase *,std::vector<Function *>> indirect;
+  if(reference)for(auto *g:order)for(auto &i:instructions(g))
+    if(auto *call=dyn_cast<CallBase>(&i);call && !resolve(call->getCalledOperand())) {
+      auto candidates=reference->candidates(call->getCalledOperand(),call->getFunctionType());
+      auto *copy=cast<CallBase>(map[call]);
+      for(Function &target:src)if(candidates.count(&target))indirect[copy].push_back(cast<Function>(map[&target]));
+    }
+  auto *root=materialised.front();materialised.clear();included.clear();
+  std::function<void(Function *)> visit=[&](Function *g) {
+    g=resolve(g);
+    if(!g || g->isDeclaration() || !included.insert(g).second)return;
+    materialised.push_back(g);
+    for(auto &i:instructions(g))if(auto *call=dyn_cast<CallBase>(&i)) {
+      if(auto *target=resolve(call->getCalledOperand()))visit(target);
+      else for(auto *target:indirect[call])visit(target);
+    }
+  };visit(root);
+  // Only closure definitions and their referenced data survive. In particular,
+  // unrelated source bodies cannot keep each other's globals alive in a key.
+  std::set<const Value *> used;
+  std::function<void(const Value *)> retain=[&](const Value *v) {
+    if(!used.insert(v).second || isa<Function>(v))return;
+    if(auto *u=dyn_cast<User>(v))for(Value *operand:u->operands())retain(operand);
+  };
+  for(auto *g:materialised)for(auto &i:instructions(g))for(Value *v:i.operands())retain(v);
+  for(Function &g:*clone)if(!g.isDeclaration() && !included.count(&g))g.deleteBody();
+  for(auto &g:clone->globals())if(!used.count(&g))g.dropAllReferences();
+  for(auto it=clone->global_begin();it!=clone->global_end();) {
+    auto &g=*it++;
+    if(!used.count(&g)) {if(!g.use_empty())fail("output","unretained region data still referenced",&g);g.eraseFromParent();}
+  }
+  order=std::move(materialised);
   StripDebugInfo(*clone);
   clone->setModuleIdentifier("");
   clone->setSourceFileName("");
@@ -247,23 +270,23 @@ std::string regionKey(Function *f) {
   while (!clone->named_metadata_empty())
     clone->eraseNamedMetadata(&*clone->named_metadata_begin());
   for (auto *g : order) {
-    auto *c = cast<Function>(map[g]);
+    auto *c = g;
     clone->getFunctionList().splice(clone->end(), clone->getFunctionList(),
                                     c->getIterator());
   }
   unsigned n = 0;
   for (auto *g : order) {
-    auto *c = cast<Function>(map[g]);
+    auto *c = g;
     c->setName("__canonical_" + std::to_string(n++));
   }
   for (auto *g : order) {
-    auto *c = cast<Function>(map[g]);
+    auto *c = g;
     clone->getFunctionList().splice(clone->end(), clone->getFunctionList(),
                                     c->getIterator());
   }
   n = 0;
   for (auto *g : order) {
-    auto *c = cast<Function>(map[g]);
+    auto *c = g;
     c->setName("f" + std::to_string(n++));
     c->setLinkage(GlobalValue::ExternalLinkage);
     c->setUnnamedAddr(GlobalValue::UnnamedAddr::None);

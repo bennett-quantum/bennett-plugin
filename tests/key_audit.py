@@ -28,6 +28,7 @@ for row in raw['published_closures']:
   obligation=owners.get(row['fixture']);remaining.append(dict(witness=row['fixture'],bead=obligation))
   if not obligation:unaccounted.append(row['fixture'])
 # The four local identity checks must never be filed away as producer gaps.
+assert all(raw['closure_checks'].values()),raw['closure_checks']
 assert all(raw['checks'][name] for name in ['flags','freeze','rstep_preserved','host_preserved'])
 result=dict(major=a.major,cases=raw['cases'],matched=raw['passed'],unmatched=raw['cases']-raw['passed'],accounted=len(remaining)-len(unaccounted),unaccounted=unaccounted,remaining=remaining)
 (R/f'.tmp/key-audit-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));raise SystemExit(bool(unaccounted))

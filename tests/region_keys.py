@@ -63,6 +63,44 @@ for name in fixtures:
  checks[name]=not unsupported_context and None not in observed and observed[0]==observed[1]
  details.append({'fixture':name,'keys':observed,'errors':errors,'ok':checks[name],
                  'context':context,'context_implemented':not unsupported_context})
-result={'major':a.major,'checks':checks,'cases':len(checks),'passed':sum(checks.values()),'diagnostic':x.stderr,'published_closures':details}
+# Closure membership witnesses: an indirect target's body and a materialised
+# helper definition affect the key, while unrelated source bodies do not.
+def closure_key(body, entry='region'):
+ path=d/'closure.ll';rep=d/'closure.json'
+ path.write_text(body+f'\ndeclare void @__bennett_oracle(ptr,ptr,ptr)\ndefine void @__closure_probe() {{ call void @__bennett_oracle(ptr @{entry},ptr null,ptr null)\n ret void }}\n')
+ rep.unlink(missing_ok=True)
+ z=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',str(path)],capture_output=True,text=True)
+ assert z.returncode==0,z.stderr
+ return json.loads(rep.read_text())['regions'][0]['candidates'][0]['key']
+indirect = """@fp = internal constant ptr @target
+define internal i8 @target(i8 %x) { %y = add i8 %x, AMOUNT
+ ret i8 %y }
+define internal i8 @region(i8 %x) { %fp = load ptr, ptr @fp
+ %r = call i8 %fp(i8 %x)
+ ret i8 %r }
+"""
+closure_checks={}
+closure_checks['indirect_body_in_closure']=closure_key(indirect.replace('AMOUNT','1'))!=closure_key(indirect.replace('AMOUNT','2'))
+helper = """declare i8 @llvm.ctpop.i8(i8)
+define internal i8 @__bennett_rt_ctpop_i8(i8 %x) { %r = add i8 %x, AMOUNT
+ ret i8 %r }
+define internal i8 @region(i8 %x) { %r = call i8 @llvm.ctpop.i8(i8 %x)
+ %s = add i8 %r, 0
+ ret i8 %s }
+"""
+closure_checks['introduced_helper_in_closure']=closure_key(helper.replace('AMOUNT','1'))!=closure_key(helper.replace('AMOUNT','2'))
+plain="""define internal i8 @leaf(i8 %x) { %r = add i8 %x, 1
+ ret i8 %r }
+define internal i8 @region(i8 %x) { %r = call i8 @leaf(i8 %x)
+ %s = add i8 %r, 1
+ ret i8 %s }
+"""
+thunk="""define internal i8 @forward(i8 %x) { %r = tail call i8 @leaf(i8 %x)
+ ret i8 %r }
+"""
+closure_checks['direct_thunk_closure']=closure_key(plain)==closure_key(plain.replace('call i8 @leaf','call i8 @forward')+thunk)
+closure_checks['unrelated_definition_excluded']=closure_key(plain)==closure_key(plain+'define internal i8 @unrelated() { ret i8 42 }')
+if not a.all_fixtures: checks.update(closure_checks)
+result={'major':a.major,'checks':checks,'cases':len(checks),'passed':sum(checks.values()),'diagnostic':x.stderr,'published_closures':details,'closure_checks':closure_checks}
 (R/f'.tmp/{"region-key-audit" if a.all_fixtures else "region-keys"}-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
-raise SystemExit(not all(checks.values()))
+raise SystemExit(not all(checks.values()) or not all(closure_checks.values()))
