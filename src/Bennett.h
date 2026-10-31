@@ -90,6 +90,7 @@ void normaliseScalar(llvm::Function &, bool wide = true, bool privateTransfer = 
 void normaliseFP(llvm::Function &);
 void materialiseFPBits(llvm::Function &);
 void normaliseWideFP(llvm::Function &);
+llvm::Function *normaliseWideABI(llvm::Module &, llvm::Function *root = nullptr);
 void linkArith(llvm::Module &);
 void prepareNativeComparison(llvm::Module &);
 void requireSoftFloat(llvm::Function &);

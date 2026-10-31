@@ -230,6 +230,11 @@ std::string regionKey(Function *f) {
   dfs(f);
   ValueToValueMapTy map;
   auto clone = CloneModule(src, map);
+  // Preserve the clone map when N22 changes internal function signatures.
+  std::map<Function *,std::string> wideNames;
+  for(auto *g:order)wideNames[g]=cast<Function>(map[g])->getName().str();
+  normaliseWideABI(*clone);
+  for(auto [g,name]:wideNames)map[g]=clone->getFunction(name);
   std::vector<Function *> materialised;
   std::set<Function *> included;
   for(auto *g:order) {auto *c=cast<Function>(map[g]);materialised.push_back(c);included.insert(c);}

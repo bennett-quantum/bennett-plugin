@@ -609,6 +609,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     for(auto *g:scratch) {if(!g->use_empty())fail("output","CC snapshot scratch escaped into L",g);g->eraseFromParent();}
     prepareEntryReplay(m,autoSnapshot);
   }
+  normaliseWideABI(m);
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) {normaliseScalar(g);materialiseFPBits(g);}
   // The command/descriptor-selected internal oracle is an invocation entry,

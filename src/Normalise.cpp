@@ -350,7 +350,6 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
       unsigned count=destVector?destVector->getElementCount().getKnownMinValue():1;
       unsigned sw=dl.getTypeSizeInBits(input[0]->getType()).getKnownMinValue(),dw=dl.getTypeSizeInBits(element).getKnownMinValue();
       unsigned total=sw*input.size();
-      if(total>128)continue; // N22 limb expansion remains explicit audit work.
       IRBuilder<NoFolder> b(bc);auto name=bc->getName().str();SmallVector<Value *> values;
       if(input.size()==count && sw==dw) {
         for(unsigned k=0;k<count;++k)values.push_back(b.CreateBitCast(input[k],element,"nz.l"+std::to_string(k)+"."+name));

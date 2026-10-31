@@ -312,6 +312,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     }
     if (NormaliseOnly || Comparison) {
       if(Comparison || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m);
+      if(!Comparison)normaliseWideABI(m);
       for (Function &f : m) if (!f.isDeclaration() && !f.hasFnAttribute("bennett.native.comparison.runtime")) normaliseScalar(f,!Comparison);
       if(Comparison)prepareNativeComparison(m);
       if(Comparison) for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())requireSoftFloat(*g);

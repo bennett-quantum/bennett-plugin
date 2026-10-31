@@ -261,70 +261,7 @@ void normaliseFP(Function &f) {
 } // namespace bennett
 
 namespace bennett {
-// N22 rerun for the limb loads/stores exposed by §13.1 wide conversions.
-// Decompose only transport/packing here; general wide arithmetic is N22's owner.
-void normaliseWideFP(Function &f) {
-  std::map<Value *,SmallVector<Value *>> parts;
-  SmallVector<Instruction *> dead,work;
-  for(auto &i:instructions(f))work.push_back(&i);
-  auto wide=[](Type *t){return t->isIntegerTy() && t->getIntegerBitWidth()>128;};
-  for(auto *i:work)if(auto *l=dyn_cast<LoadInst>(i);l && wide(l->getType())) {
-    IRBuilder<NoFolder> b(l);auto r=l->getName().str();unsigned bits=l->getType()->getIntegerBitWidth();
-    for(unsigned k=0;k<(bits+63)/64;++k) {
-      auto *p=b.CreateGEP(b.getInt64Ty(),l->getPointerOperand(),b.getInt64(k),"nz.p"+std::to_string(k)+"."+r);
-      auto *v=b.CreateLoad(IntegerType::get(f.getContext(),std::min(64u,bits-64*k)),p,"nz.m"+std::to_string(k)+"."+r);v->setAlignment(commonAlignment(l->getAlign(),8*k));parts[l].push_back(v);
-    }
-    dead.push_back(l);
-  }
-  // The canonical packing graph created above is temporary, never an ISA-wide operation.
-  std::function<Value *(Value *,unsigned,IRBuilder<> &)> limb=[&](Value *v,unsigned k,IRBuilder<> &b)->Value * {
-    unsigned bits=v->getType()->getIntegerBitWidth(),w=std::min(64u,bits-64*k);auto *ty=IntegerType::get(f.getContext(),w);
-    if(parts.count(v))return parts[v][k];
-    if(auto *c=dyn_cast<ConstantInt>(v))return ConstantInt::get(ty,c->getValue().lshr(64*k).trunc(w));
-    if(auto *z=dyn_cast<ZExtInst>(v)) {
-      auto *in=z->getOperand(0);auto n=in->getType()->getIntegerBitWidth();
-      if(64*k>=n)return ConstantInt::get(ty,0);
-      auto *value=n>128?limb(in,k,b):in;
-      if(n<=128 && k)value=b.CreateLShr(value,ConstantInt::get(value->getType(),64*k));
-      return b.CreateZExtOrTrunc(value,ty);
-    }
-    if(auto *op=dyn_cast<BinaryOperator>(v)) {
-      if(op->getOpcode()==Instruction::Or) {
-        auto *x=limb(op->getOperand(0),k,b),*y=limb(op->getOperand(1),k,b);
-        if(auto *c=dyn_cast<ConstantInt>(x);c && c->isZero())return y;
-        if(auto *c=dyn_cast<ConstantInt>(y);c && c->isZero())return x;
-        return b.CreateOr(x,y);
-      }
-      if((op->getOpcode()==Instruction::Shl || op->getOpcode()==Instruction::LShr) && isa<ConstantInt>(op->getOperand(1))) {
-        unsigned shift=cast<ConstantInt>(op->getOperand(1))->getLimitedValue();
-        if(shift%64==0) {
-          int index=op->getOpcode()==Instruction::Shl?int(k)-int(shift/64):int(k)+int(shift/64);
-          if(index<0 || unsigned(index)*64>=bits)return ConstantInt::get(ty,0);
-          return b.CreateZExtOrTrunc(limb(op->getOperand(0),index,b),ty);
-        }
-      }
-    }
-    unimplemented("§12 N22 general wide limb operation",2,dyn_cast<Instruction>(v));
-  };
-  for(auto *i:work)if(auto *t=dyn_cast<TruncInst>(i);t && wide(t->getOperand(0)->getType()) && t->getType()->getIntegerBitWidth()<=64) {
-    IRBuilder<> b(t);auto *v=limb(t->getOperand(0),0,b);v=b.CreateTruncOrBitCast(v,t->getType());t->replaceAllUsesWith(v);dead.push_back(t);
-  }
-  unsigned ordinal=0;
-  for(auto *i:work)if(auto *s=dyn_cast<StoreInst>(i);s && wide(s->getValueOperand()->getType())) {
-    IRBuilder<> b(s);auto r=f.getName().str()+"."+std::to_string(ordinal++);auto *v=s->getValueOperand();unsigned bits=v->getType()->getIntegerBitWidth();
-    for(unsigned k=0;k<(bits+63)/64;++k) {
-      auto *value=limb(v,k,b);auto *p=b.CreateGEP(b.getInt64Ty(),s->getPointerOperand(),b.getInt64(k),"nz.q"+std::to_string(k)+"."+r);
-      b.CreateStore(value,p)->setAlignment(commonAlignment(s->getAlign(),8*k));
-    }
-    s->eraseFromParent();
-  }
-  // Remove the now-unused wide reconstruction, including its narrow extensions.
-  bool more=true;while(more) {more=false;SmallVector<Instruction *> erase;
-    for(auto &i:instructions(f))if(i.use_empty() && !i.isTerminator() && (isa<CastInst>(i)||isa<BinaryOperator>(i)|| (isa<LoadInst>(i) && parts.count(&i))))erase.push_back(&i);
-    // Only temporary wide packing and its own input casts; leave unrelated dead source rows alone.
-    for(auto *i:erase)if(wide(i->getType()) || (isa<TruncInst>(i) && wide(i->getOperand(0)->getType()))) {i->eraseFromParent();more=true;}
-  }
-}
+
 }
 
 namespace bennett {
