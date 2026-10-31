@@ -567,9 +567,72 @@ std::set<Function *> Analysis::candidates(Value *v, FunctionType *type) {
         r.insert(resolve(&f));
   return r;
 }
+struct Leaf {
+  std::vector<unsigned> path;
+  uint64_t offset;
+  Type *type;
+};
+static std::vector<Leaf> leaves(Type *t, const DataLayout &dl) {
+  std::vector<Leaf> result;
+  std::function<void(Type *, std::vector<unsigned>, uint64_t)> walk =
+      [&](Type *ty, std::vector<unsigned> p, uint64_t offset) {
+        if (auto *st = dyn_cast<StructType>(ty)) {
+          auto *layout = dl.getStructLayout(st);
+          for (unsigned i = 0; i < st->getNumElements(); ++i) {
+            auto q = p;
+            q.push_back(i);
+            walk(st->getElementType(i), q,
+                 offset + layout->getElementOffset(i));
+          }
+        } else if (auto *at = dyn_cast<ArrayType>(ty)) {
+          for (unsigned i = 0; i < at->getNumElements(); ++i) {
+            auto q = p;
+            q.push_back(i);
+            walk(at->getElementType(), q,
+                 offset + i * dl.getTypeAllocSize(at->getElementType())
+                                  .getKnownMinValue());
+          }
+        } else if (auto *vt = dyn_cast<VectorType>(ty)) {
+          unsigned bits =
+              dl.getTypeSizeInBits(vt->getElementType()).getKnownMinValue();
+          for (unsigned i = 0; i < vt->getElementCount().getKnownMinValue(); ++i) {
+            auto q = p;
+            q.push_back(i);
+            walk(vt->getElementType(), q, offset + i * bits / 8);
+          }
+        } else
+          result.push_back({p, offset, ty});
+      };
+  walk(t, {}, 0);
+  return result;
+}
 void Analysis::bind(CallBase &c, Function *f) {
-  if (!f || f->isDeclaration())
+  if (!f) return;
+  if(f->isDeclaration()) {
+    AV unknown;unknown.top=true;
+    if(c.getType()->isAggregateType() || c.getType()->isVectorTy())
+      for(auto &leaf:leaves(c.getType(),M.getDataLayout()))setField(&c,leaf.path,unknown);
+    else changed|=values[&c].merge(unknown);
+    std::set<const Value *> reachable;bool opaque=false;
+    for(Value *v:c.args())if(v->getType()->isPointerTy()) {
+      auto address=get(v);opaque|=address.top;
+      for(auto &p:address.atoms)if(p.kind==Atom::Ptr) {
+        if(!p.object)opaque=true;else reachable.insert(p.object);
+      }
+    }
+    bool more=true;
+    while(more) {
+      more=false;
+      for(auto &slot:slots)if(opaque || reachable.count(slot.object))
+        for(auto &p:slot.value.atoms)if(p.kind==Atom::Ptr) {
+          if(!p.object && !opaque){opaque=true;more=true;}
+          else more|=reachable.insert(p.object).second;
+        }
+    }
+    if(opaque)for(auto &slot:slots)reachable.insert(slot.object);
+    for(auto *object:reachable)store(unknown,atom(Atom::Ptr,object,0,-1),1);
     return;
+  }
   edges[c.getFunction()].insert(f);
   unsigned i = 0;
   for (Argument &a : f->args()) {
@@ -630,46 +693,8 @@ static bool allocation(const Function *f) {
                                               "__bennett_nz_alloc"};
   return names.count(f->getName().str()) ||
          f->hasFnAttribute(Attribute::AllocSize) ||
-         f->hasFnAttribute(Attribute::AllocKind);
-}
-struct Leaf {
-  std::vector<unsigned> path;
-  uint64_t offset;
-  Type *type;
-};
-static std::vector<Leaf> leaves(Type *t, const DataLayout &dl) {
-  std::vector<Leaf> result;
-  std::function<void(Type *, std::vector<unsigned>, uint64_t)> walk =
-      [&](Type *ty, std::vector<unsigned> p, uint64_t offset) {
-        if (auto *st = dyn_cast<StructType>(ty)) {
-          auto *layout = dl.getStructLayout(st);
-          for (unsigned i = 0; i < st->getNumElements(); ++i) {
-            auto q = p;
-            q.push_back(i);
-            walk(st->getElementType(i), q,
-                 offset + layout->getElementOffset(i));
-          }
-        } else if (auto *at = dyn_cast<ArrayType>(ty)) {
-          for (unsigned i = 0; i < at->getNumElements(); ++i) {
-            auto q = p;
-            q.push_back(i);
-            walk(at->getElementType(), q,
-                 offset + i * dl.getTypeAllocSize(at->getElementType())
-                                  .getKnownMinValue());
-          }
-        } else if (auto *vt = dyn_cast<VectorType>(ty)) {
-          unsigned bits =
-              dl.getTypeSizeInBits(vt->getElementType()).getKnownMinValue();
-          for (unsigned i = 0; i < vt->getElementCount().getKnownMinValue(); ++i) {
-            auto q = p;
-            q.push_back(i);
-            walk(vt->getElementType(), q, offset + i * bits / 8);
-          }
-        } else
-          result.push_back({p, offset, ty});
-      };
-  walk(t, {}, 0);
-  return result;
+         (f->hasFnAttribute(Attribute::AllocKind) &&
+          (uint64_t(f->getFnAttribute(Attribute::AllocKind).getAllocKind()) & uint64_t(AllocFnKind::Alloc)));
 }
 AV Analysis::field(const Value *v, const Path &path) {
   if (path.empty())
@@ -1153,8 +1178,11 @@ void Analysis::step(Instruction &i) {
                   for (auto &x : s.value.atoms)
                     if (x.kind == Atom::Root)
                       partial.atoms.insert(x);
-                  store(partial, atom(Atom::Ptr, d.object, d.offset, -1),
-                        s.bytes);
+                  if(len && !p.stride && !d.stride && !s.stride) {
+                    auto lo=std::max((__int128)p.offset,(__int128)s.offset);
+                    auto hi=std::min((__int128)p.offset+len->getLimitedValue(),(__int128)s.offset+s.bytes);
+                    store(partial,atom(Atom::Ptr,d.object,d.offset+(int64_t)(lo-p.offset)),hi-lo);
+                  } else store(partial, atom(Atom::Ptr, d.object, d.offset, -1),s.bytes);
                 }
               }
     } else if (isa<MemSetInst>(c) || n=="__bennett_rt_memset") {
@@ -1197,7 +1225,7 @@ void Analysis::step(Instruction &i) {
       if (extent) store(integer(APInt(8,0)), a, extent, true);
       if (n == "posix_memalign") {
         store(a, get(c->getArgOperand(0)), M.getDataLayout().getPointerSize());
-        a.top = true;
+        a={};a.top = true;
       }
     } else if (f && !f->isDeclaration())
       bind(*c, f);
@@ -1205,26 +1233,7 @@ void Analysis::step(Instruction &i) {
       for (auto *g : candidates(c->getCalledOperand(), c->getFunctionType()))
         bind(*c, g);
     } else if (!markers().count(n.str()) && !f->isIntrinsic() && n != "free" && n != "__bennett_nz_free") {
-      a.top = true;
-      std::set<const Value *> reachable;
-      for (Value *v : c->args())
-        for (auto &p : get(v).atoms)
-          if (p.kind == Atom::Ptr)
-            reachable.insert(p.object);
-      bool more = true;
-      while (more) {
-        more = false;
-        for (auto &slot : slots)
-          if (reachable.count(slot.object))
-            for (auto &p : slot.value.atoms)
-              if (p.kind == Atom::Ptr)
-                more |= reachable.insert(p.object).second;
-      }
-      for (auto *obj : reachable) {
-        AV top;
-        top.top = true;
-        store(top, atom(Atom::Ptr, obj, 0, -1), 1);
-      }
+      bind(*c,f);
     }
     if (f && markers().count(n.str()))
       for (unsigned pos : regionOperands(n)) {

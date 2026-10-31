@@ -115,6 +115,37 @@ define i128 @top() {
  ret i128 %v
 }""", {'PTR(@g,0,-1)', 'PTR(EXT,0,-1)'}, True),
 
+    'PT8-partial-copy-contained-destination': (
+        'e-p:64:64',
+        """@g = internal global i64 42
+declare void @llvm.memcpy.p0.p0.i64(ptr,ptr,i64,i1)
+define i32 @top() {
+ %dst = alloca [8 x i8]
+ call void @llvm.memcpy.p0.p0.i64(ptr %dst, ptr @g, i64 2, i1 false)
+ %tail = getelementptr i8, ptr %dst, i64 4
+ %v = load i32, ptr %tail
+ ret i32 %v
+}""", {'INT(0)'}, False),
+    'PT12-indirect-undefined-result': (
+        'e-p:64:64',
+        """declare i32 @external(ptr)
+define i32 @top(i1 %c) {
+ %fp = select i1 %c, ptr @external, ptr @external
+ %dst = alloca i32
+ %v = call i32 %fp(ptr %dst)
+ ret i32 %v
+}""", set(), True),
+    'PT12-indirect-undefined-reachable-memory': (
+        'e-p:64:64',
+        """declare i32 @external(ptr)
+define i32 @top(i1 %c) {
+ %fp = select i1 %c, ptr @external, ptr @external
+ %dst = alloca i32
+ %r = call i32 %fp(ptr %dst)
+ %v = load i32, ptr %dst
+ ret i32 %v
+}""", set(), True),
+
     'PT12-uinc-wrap-select-union': (
         'e-p:64:64',
         """@g = internal global i8 0
