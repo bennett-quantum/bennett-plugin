@@ -6,22 +6,23 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch and the published replay/lift inventory are complete (bp-kv5 and bp-311 closed);** next work is `bd ready`. Obligations live only in bd (`bd list`).
+(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch, the published replay/lift inventory and staged shadow-stack budgets are complete (bp-kv5, bp-311 and bp-piq closed);** next work is `bd ready`. Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
   pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
   the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
   and 23 recognition, analysis_edges, reference_images, materialisation, region_keys, scalars, descriptors,
-  production and production_{environments,dispatch,shapes,budgets,records}, then production_cross_major, corpus_gate.
+  production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate.
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
 Counts (LLVM 18 and 23, each): legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge
-(cells 920/924 on 18, 788/792 on 23); recognition 73/73; analysis_edges 17/17; reference_images 6/6;
-materialisation 14/14; region_keys 14/14; 22 scalar objects byte-exact with 70 run vectors; 222/222 object
-pairs byte-identical across majors, 40 equal to published fixtures; all 198 prior hashes preserved.
-Descriptor dispatch: 23 cases / 55 vectors per major. Full object sizes, hashes and goldens are in
+(cells 920/924 on 18, 788/792 on 23); recognition 73/73 on 18, 74/74 on 23; analysis_edges 17/17; reference_images 6/6;
+materialisation and region_keys 14/14 on 18, 15/15 on 23; 22 scalar objects byte-exact with 70 run vectors; 232/232 object
+pairs byte-identical across majors, 45 equal to published fixtures; all 222 prior hashes preserved.
+Descriptor dispatch: 23 cases / 55 vectors per major. Budget staging: H16→H32 byte-exact,
+316/316 step-budget prefixes and the published 316-step vector per major. Full object sizes, hashes and goldens are in
 `docs/verification.json` (latest pass only). Sole deferral:
 fp-rot-fastmath-reassoc (bp-7ni).
 
@@ -88,3 +89,9 @@ entry-replay-byte, rung4-mini, rung8-mini, listsum and entry-stack byte-exact on
 N24 static/dynamic frames, idempotent init, zero fill, logical bounds and save/restore; nine stack cases and a production launch per major.
 Receipt caught an unused ENTROPY prologue byte drift; restored it and added prior-object preservation to the gate before the corpus.
 Final gate exit 0, 66/65/1/0/0 each, no new deferrals; 222 equal pairs, 40 published matches, all 198 previous hashes preserved.
+
+### Pass 11 - 2026-10-31 - c63c721 (bp-piq closed)
+§9.2 provisional baseline generation, one identity overlay and fresh final generation share frozen maxima; tokens retain both identities.
+§17.3 private single-frame bookkeeping proof; contained program accesses; H16→H32 objects byte-exact on LLVM 18/23 against pinned-checker goldens.
+Five staging cases, four unsafe-proof refusals and all 316 row-budget prefixes per major; published final run code=0, payload=7, steps=316.
+One final gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal pairs, 45 published matches, all 222 previous hashes preserved.
