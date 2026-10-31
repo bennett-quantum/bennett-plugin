@@ -238,6 +238,7 @@ struct Entry {
     rows.push_back("trap"); rows.push_back("^" + done + "(" + (result.empty() ? "" : result+":i1") + "):");
   }
   unsigned width(Type *t) {
+    if(t->isPointerTy())return m.getDataLayout().getPointerTypeSizeInBits(t);
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
       return t->getIntegerBitWidth();
     unimplemented("§17.4 CC scalar carrier", 1, &f);
@@ -339,6 +340,10 @@ struct Entry {
     }
     return nullptr;
   }
+  AV descriptorField(CallBase &c,uint64_t off,Type *t) {
+    if(automaticSnapshot && !memoryDescriptors)if(auto *v=fieldValue(c,off,t))return a.get(v);
+    return a.readAt(c,c.getArgOperand(2),off,t);
+  }
   // The fast path above is an optimisation only. All other reads use the
   // actual caller memory at the marker, including predecessor stores/phis.
   std::string fieldOperand(CallBase &c, uint64_t off, Type *t) {
@@ -432,27 +437,27 @@ struct Entry {
     // field requires dispatch. ARG value bits remain runtime arguments.
     for(auto *fn:candidates) {
       for(unsigned off:{8u,unsigned(hl->getElementOffset(4)),unsigned(hl->getElementOffset(5))}) {
-        auto v=a.readAt(c,c.getArgOperand(2),off,off==8?static_cast<Type *>(u32):ptr);
+        auto v=descriptorField(c,off,off==8?static_cast<Type *>(u32):ptr);
         general |= v.top || v.atoms.size()!=1;
       }
       for(unsigned i=0;i<fn->arg_size();++i) {
-        auto off=hl->getSizeInBytes()+i*bl->getSizeInBytes();auto k=a.readAt(c,c.getArgOperand(2),off,u32);
-        auto q=a.readAt(c,c.getArgOperand(2),off+bl->getElementOffset(2),ptr);
+        auto off=hl->getSizeInBytes()+i*bl->getSizeInBytes();auto k=descriptorField(c,off,u32);
+        auto q=descriptorField(c,off+bl->getElementOffset(2),ptr);
         general |= q.top || q.atoms.size()!=1;
         if(!singletonInt(k) || integer(k,&c)!=2) {
-          auto size=a.readAt(c,c.getArgOperand(2),off+bl->getElementOffset(4),u64);general |= size.top || size.atoms.size()!=1;
+          auto size=descriptorField(c,off+bl->getElementOffset(4),u64);general |= size.top || size.atoms.size()!=1;
         }
       }
-      auto nd=a.readAt(c,c.getArgOperand(2),8,u32);
+      auto nd=descriptorField(c,8,u32);
       if(singletonInt(nd))for(unsigned j=0;j<integer(nd,&c);++j) {
         auto off=hl->getSizeInBytes()+fn->arg_size()*bl->getSizeInBytes()+j*24;
-        for(unsigned d:{0u,8u,16u}){auto v=a.readAt(c,c.getArgOperand(2),off+d,d==0?static_cast<Type *>(u32):d==8?static_cast<Type *>(ptr):u64);general |= v.top || v.atoms.size()!=1;}
+        for(unsigned d:{0u,8u,16u}){auto v=descriptorField(c,off+d,d==0?static_cast<Type *>(u32):d==8?static_cast<Type *>(ptr):u64);general |= v.top || v.atoms.size()!=1;}
       }
     }
     if(!general){descriptorLegacy(c);return;}
     generalDescriptor=true; generalUsed=true;
     auto id=std::to_string(dispatchBlock++),done="dispatch"+id+"done",bad="dispatch"+id+"bad";
-    auto field=[&](uint64_t off,Type *t){return a.readAt(c,c.getArgOperand(2),off,t);};
+    auto field=[&](uint64_t off,Type *t){return descriptorField(c,off,t);};
     auto pw=m.getDataLayout().getPointerSizeInBits();
     auto choose=[&](uint64_t off,Type *t,std::vector<AV> choices,const std::function<void(AV)> &body) {
       auto actual=field(off,t);std::map<uint64_t,AV> keyed;
@@ -548,7 +553,7 @@ struct Entry {
     auto *hl = m.getDataLayout().getStructLayout(h), *bl = m.getDataLayout().getStructLayout(b);
     std::vector<std::pair<uint64_t,std::vector<uint64_t>>> fields;
     auto domain = [&](uint64_t off, Type *t, std::vector<uint64_t> valid) {
-      auto v = a.readAt(c,c.getArgOperand(2),off,t);
+      auto v = descriptorField(c,off,t);
       if (!v.top && v.atoms.size() == 1) return;
       if (!v.top) {
         std::vector<uint64_t> finite;
@@ -607,7 +612,7 @@ struct Entry {
     auto &dl = m.getDataLayout();
     auto *hl = dl.getStructLayout(h), *bl = dl.getStructLayout(b);
     auto field = [&](uint64_t off, Type *t) {
-      return selectedFields.count(off) ? selectedFields.at(off) : a.readAt(c, desc, off, t);
+      return selectedFields.count(off) ? selectedFields.at(off) : descriptorField(c, off, t);
     };
     if (integer(field(0, u32), &c) != 2 || integer(field(12, u32), &c) != 0)
       fail("T-IFACE", "§8.1 descriptor header", &c);
@@ -747,7 +752,7 @@ struct Entry {
     auto path = out + "/oracle-" + std::to_string(references.size());
     auto capacities = table.capacities;
     std::map<std::string,std::string> globalNames;
-    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection, &globalNames, baseline[4]);
+    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection, &globalNames, baseline[4], automaticSnapshot?snapshotExponent:0);
     auto candidate = read(path + "/ref.bennett");
     auto selection = oracleIdentity(candidate);
     table.overlay(budget, selection);
@@ -762,7 +767,7 @@ struct Entry {
       normaliseScalar(*finalFunction);
       globalNames.clear();
       lowerScalar(*finalModule, *finalFunction, current, path, capacities[2],
-                  capacities[1], projection, &globalNames, budget[4]);
+                  capacities[1], projection, &globalNames, budget[4], automaticSnapshot?snapshotExponent:0);
       candidate = read(path + "/ref.bennett");
     }
     if (table.enabled) resolvedShapes.push_back(json::Object{
@@ -798,7 +803,10 @@ struct Entry {
     } else if (discard) {
       tgt = fresh("qreg[1]"); rows.push_back(tgt + " = qreg.new any 1");
     } else tgt = compilingInplace ? inplaceTarget : handle(output, &c);
-    auto call = "oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt + " " + faultRegister + " (" + join(mems) + ") (" + join(args) + ")";
+    std::string snapshotData,snapshotQ;
+    auto callMems=mems;
+    if(automaticSnapshot){snapshotData=buildSnapshot();snapshotQ=prepareSnapshot(snapshotData);callMems.insert(callMems.begin(),snapshotQ);}
+    auto call = "oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt + " " + faultRegister + " (" + join(callMems) + ") (" + join(args) + ")";
     rows.push_back(call);
     if (multi && projection) {
       auto &slice=slices[projection];auto view=fresh("qreg["+std::to_string(slice.width)+"]");
@@ -808,6 +816,7 @@ struct Entry {
       rows.push_back("action_call @"+xorAction+" ("+view+") ("+tgt+") () ()");rows.push_back(call);
       rows.push_back("qreg.free "+faultRegister);rows.push_back("qreg.free "+tgt);
     } else if (discard) rows.push_back("qreg.free " + tgt);
+    if(automaticSnapshot)releaseSnapshot(snapshotQ,snapshotData);
     }
   }
   void verifyInverse(unsigned forward, unsigned inverse, unsigned bits, CallBase &at) {
@@ -955,7 +964,9 @@ struct Entry {
       rows.push_back("action_call @" + name + " (" + src + ") () () ()");
     }
   }
+#include "runtime/CallerSnapshot.inc"
   void lower() {
+    setupSnapshot();
     // Descriptor memory has no device representation: its fields are virtual
     // operands. Elide only local storage whose complete use closure is records.
     for (Instruction &i : instructions(f))
@@ -1080,7 +1091,7 @@ struct Entry {
       if (&bb == &f.getEntryBlock()) for (auto *site : fileOrder) {
         auto zero = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
         auto size = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),m.getDataLayout().getPointerSize()));
-        auto p = files.at(site).tag; rows.push_back(p + " = alloc " + size); localMemory.push_back(p); allocatedBytes+=m.getDataLayout().getPointerSize();
+        auto p = files.at(site).tag; rows.push_back(p + " = alloc " + size); localMemory.push_back(p); allocatedBytes+=m.getDataLayout().getPointerSize();recordAllocation(p,size);
         rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + p + " " + zero);
       }
       for (Instruction &i : bb) {
@@ -1104,6 +1115,7 @@ struct Entry {
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
+          if (n == "__bennett_nz_fault") { rows.push_back("trap"); break; }
           if (n == "llvm.trap") { rows.push_back("trap"); break; }
           if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
             auto cls = integer(a.get(c->getArgOperand(0)), c),
@@ -1129,7 +1141,12 @@ struct Entry {
             inplace(*c);
           else if (n == "__bennett_gate" || n == "__bennett_measure")
             gate(*c);
-          else
+          else if(n=="__bennett_nz_alloc") {
+            auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
+          } else if(n=="__bennett_nz_free") {
+            auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
+            auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
+          } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
           names[g] = gep(cast<GEPOperator>(g));
@@ -1138,7 +1155,7 @@ struct Entry {
           auto *count = dyn_cast<ConstantInt>(al->getArraySize());
           if (!count) unimplemented("§17.3 dynamic CC stack extent",1,al);
           auto bytes = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),n*count->getZExtValue()));
-          auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p); allocatedBytes+=std::max(uint64_t(1),n*count->getZExtValue());
+          auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p); allocatedBytes+=std::max(uint64_t(1),n*count->getZExtValue());recordAllocation(p,bytes);
         } else if (auto *st = dyn_cast<StoreInst>(&i)) {
           auto value = operand(st->getValueOperand()), p = operand(st->getPointerOperand());
           auto w = st->getValueOperand()->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(st->getValueOperand()->getType());
@@ -1273,6 +1290,7 @@ std::string linkReferences(Entry &e) {
     auto &sec=parsed[i];auto syms=parse(sec.at("symbols"));auto suffix=i?std::to_string(i):"";
     std::map<std::string,std::string> rename;
     rename["ref"]="ref"+suffix;rename["L1"]=i?"L1_"+suffix:"L1";
+    for(auto &v:*syms.getAsObject()) {auto *sym=v.second.getAsObject();auto n=sym->getString("name")->str();if(sym->getString("kind")=="lproc")rename[n]=i?n+"_"+suffix:n;}
     for(auto &g:e.referenceGlobals[i]) rename[g.first]=globalSymbols.at(g.second);
     auto replace=[&](std::string text) {
       std::string result;size_t last=0;std::regex refs(R"(@([A-Za-z_][A-Za-z_0-9]*))");
@@ -1311,6 +1329,13 @@ std::string linkReferences(Entry &e) {
   unsigned h=0,tab=0;
   while((uint64_t(1)<<h)<endAddress)++h;
   while((uint64_t(1)<<tab)<data.size()+memCount+heapLimit)++tab;
+  if(e.automaticSnapshot) {
+    // A_tab bounds one oracle's pre-entries, not the union of all oracle
+    // interface maps. Keep the same static table capacity used to size S.
+    uint64_t largest=0;for(auto &owner:interfaces)largest=std::max(largest,uint64_t(owner.second.getAsObject()->size()));
+    if(data.size()+largest+heapLimit>(uint64_t(1)<<e.snapshotTableExponent))fail("output","snapshot allocation-table capacity underestimated",&e.f);
+    tab=e.snapshotTableExponent;
+  }
   json::Object layout{{"A_tab",tab},{"H",h},{"S_cells",int64_t(stack)},{"globals",std::move(globals)},
     {"heap_base",int64_t(heap)},{"heap_limit_max",int64_t(heapLimit)},{"interface_regions",std::move(interfaces)},{"null_size",4096},{"ptr_width",pw}};
   std::map<std::string,std::string> allLeaves;
@@ -1327,30 +1352,42 @@ std::string linkReferences(Entry &e) {
     symbols[std::to_string(symbols.size())]=json::Object{{"name",name},{"kind",kind},{"signature",std::move(sig)},{"interface_hash",ih}};
   };
   for(auto &v:data) { hashes[v.first]=hash(prefix+dataSignatures.at(v.first)+"\n"+v.first+" "+v.second+"\n"); addSymbol(v.first,"data",parse(dataSignatures.at(v.first)),hashes.at(v.first)); }
-  // Lprocs depend on images; wrappers depend on lprocs. This scalar production
-  // path has one lproc per reference; remaining call-graph lifts stay tracked.
-  for(auto kind:{"lproc","oracle"}) for(auto &f:functions) if(f.kind==kind) {
-    auto newline=f.body.find('\n');std::string canonical=f.body.substr(0,newline+1),refs;auto rest=f.body.substr(newline+1);
-    std::set<std::string> referenced;size_t last=0;std::regex token(R"(@([A-Za-z_][A-Za-z_0-9]*))");
-    for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it) {
-      auto n=(*it)[1].str();
-      if(!hashes.count(n)) {
-        auto *owner=layout.getObject("interface_regions")->getObject(f.name);
-        if(f.kind=="oracle" && owner && owner->get(n)) { canonical+=rest.substr(last,it->position()+it->length()-last);last=it->position()+it->length();continue; }
-        fail("output","unresolved production symbol "+n,&e.f);
+  // Hash arbitrary linked closures, including recursive SCCs, after relocation.
+  std::map<std::string,Symbol *> members;
+  for(auto &f:functions)members[f.name]=&f;
+  std::regex token(R"(@([A-Za-z_][A-Za-z_0-9]*))");
+  std::map<std::string,std::set<std::string>> edges;
+  for(auto &f:functions) {auto rest=f.body.substr(f.body.find('\n')+1);for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it)if(members.count((*it)[1]))edges[f.name].insert((*it)[1]);}
+  auto reaches=[&](std::string from,std::string to) {std::set<std::string> seen;std::function<bool(std::string)> walk=[&](std::string n){if(n==to)return true;if(!seen.insert(n).second)return false;for(auto &v:edges[n])if(walk(v))return true;return false;};return walk(from);};
+  std::function<void(std::string)> hashFunction=[&](std::string name) {
+    if(hashes.count(name))return;
+    std::vector<std::string> group;for(auto &v:members)if(reaches(name,v.first)&&reaches(v.first,name))group.push_back(v.first);
+    std::set<std::string> inside(group.begin(),group.end());bool cyclic=group.size()>1 || edges[name].count(name);
+    for(auto &n:group)for(auto &edge:edges[n])if(!inside.count(edge))hashFunction(edge);
+    std::string envelopes;
+    for(auto &n:group) {
+      auto &f=*members.at(n);auto newline=f.body.find('\n');std::string canonical=f.body.substr(0,newline+1),refs;auto rest=f.body.substr(newline+1);
+      std::set<std::string> referenced;size_t last=0;
+      for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it) {
+        auto v=(*it)[1].str();std::string replacement;
+        if(cyclic && inside.count(v))replacement="$"+std::to_string(std::find(group.begin(),group.end(),v)-group.begin());
+        else if(hashes.count(v)) {replacement=hashes.at(v);if(referenced.insert(v).second)refs+=replacement+"\n";}
+        else {auto *owner=layout.getObject("interface_regions")->getObject(f.name);if(f.kind!="oracle" || !owner || !owner->get(v))fail("output","unresolved production symbol "+v,&e.f);replacement=v;}
+        canonical+=rest.substr(last,it->position()-last)+"@"+replacement;last=it->position()+it->length();
       }
-      canonical+=rest.substr(last,it->position()-last)+"@"+hashes.at(n);last=it->position()+it->length();
-      if(referenced.insert(n).second)refs+=hashes.at(n)+"\n";
+      canonical+=rest.substr(last);std::string images,leaves;
+      for(auto &v:data)if(f.kind=="oracle" || referenced.count(v.first))images+="data "+v.first+" "+v.second+"\n";
+      for(auto &v:allLeaves) {
+        bool include=f.kind=="oracle" ? !StringRef(v.first).starts_with("interface_regions.") || StringRef(v.first).starts_with("interface_regions."+f.name+".") : false;
+        if(f.kind=="lproc" && StringRef(v.first).starts_with("globals."))include=referenced.count(StringRef(v.first).drop_front(8).str());
+        if(include)leaves+="layout "+v.first+" "+v.second+"\n";
+      }
+      envelopes+=prefix+jcs(f.sig)+"\n"+canonical+"\n"+images+leaves+refs;
     }
-    canonical+=rest.substr(last);std::string images,leaves;
-    for(auto &v:data) if(f.kind=="oracle" || referenced.count(v.first)) images+="data "+v.first+" "+v.second+"\n";
-    for(auto &v:allLeaves) {
-      bool include=f.kind=="oracle" ? !StringRef(v.first).starts_with("interface_regions.") || StringRef(v.first).starts_with("interface_regions."+f.name+".") : false;
-      if(f.kind=="lproc" && StringRef(v.first).starts_with("globals.")) include=referenced.count(StringRef(v.first).drop_front(8).str());
-      if(include)leaves+="layout "+v.first+" "+v.second+"\n";
-    }
-    hashes[f.name]=hash(prefix+jcs(f.sig)+"\n"+canonical+"\n"+images+leaves+refs);addSymbol(f.name,f.kind,parse(jcs(f.sig)),hashes.at(f.name));
-  }
+    auto digest=hash(envelopes);for(unsigned i=0;i<group.size();++i)hashes[group[i]]=cyclic?hash(digest+":"+std::to_string(i)):digest;
+  };
+  for(auto kind:{"lproc","oracle"})for(auto &f:functions)if(f.kind==kind)hashFunction(f.name);
+  for(auto kind:{"lproc","oracle"})for(auto &f:functions)if(f.kind==kind)addSymbol(f.name,f.kind,parse(jcs(f.sig)),hashes.at(f.name));
   std::string object=e.reference.substr(0,e.reference.find("\n\nsection "))+"\n\nsection symbols\n"+jcs(json::Value(std::move(symbols)))+"\n\nsection functions\n";
   for(auto &f:functions)object+=f.body+"\n";
   if(!data.empty()) { object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n"; }
@@ -1496,9 +1533,31 @@ std::string launchObject(Entry &e, json::Object &record,
                      {"signature", parse(x.second.first)}};
     actionBodies += "\n" + x.second.second;
   }
+  std::function<void(std::string)> helper=[&](std::string name) {
+    if(hashes.count(name))return;
+    auto &item=e.snapshotFunctions.at(name);auto text=item.second;auto nl=text.find('\n');auto rest=text.substr(nl+1);std::string canonical=text.substr(0,nl+1),refs;size_t last=0;std::set<std::string> seen;
+    std::regex token(R"(@([A-Za-z_][A-Za-z_0-9]*))");
+    for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it) {auto n=(*it)[1].str();helper(n);canonical+=rest.substr(last,it->position()-last)+"@"+hashes.at(n);last=it->position()+it->length();if(seen.insert(n).second)refs+=hashes.at(n)+"\n";}
+    canonical+=rest.substr(last);
+    std::string memoryEnvelope;
+    if(sections.count("layout")) {
+      if(sections.count("data")){SmallVector<StringRef> lines;StringRef(sections["data"]).split(lines,'\n');for(auto line:lines)memoryEnvelope+="data "+line.str()+"\n";}
+      auto layout=parse(sections["layout"]);std::map<std::string,std::string> leaves;
+      for(auto &v:*layout.getAsObject()) {
+        if(v.first=="globals")for(auto &g:*v.second.getAsObject())leaves["globals."+g.first.str()]=jcs(g.second);
+        else if(v.first=="interface_regions" && name!="xor128") {for(auto &owner:*v.second.getAsObject())for(auto &region:*owner.second.getAsObject())leaves["interface_regions."+owner.first.str()+"."+region.first.str()]=jcs(region.second);}
+        else if(v.first!="interface_regions")leaves[v.first.str()]=jcs(v.second);
+      }
+      for(auto &leaf:leaves)memoryEnvelope+="layout "+leaf.first+" "+leaf.second+"\n";
+    }
+    hashes[name]=hash("isa=0.8\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+item.first+"\n"+canonical+"\n"+memoryEnvelope+refs);
+    (*so)[std::to_string(so->size())]=json::Object{{"name",name},{"kind",name=="xor128"?"oracle":"cc"},{"signature",parse(item.first)},{"interface_hash",hashes.at(name)}};
+    actionBodies+="\n"+text;
+  };
+  for(auto &item:e.snapshotFunctions)helper(item.first);
   std::string canonical, refs;
   std::set<std::string> referenced;
-  std::regex token(R"(@(ref[0-9]*|M[0-9]+)\b)");
+  std::regex token(R"(@(ref[0-9]*|M[0-9]+|B[0-9]+|U[0-9]+|xor128)\b)");
   size_t last = 0;
   for (std::sregex_iterator it(body.begin(), body.end(), token), end; it != end;
        ++it) {
@@ -1576,8 +1635,8 @@ std::string launchObject(Entry &e, json::Object &record,
   json::Array budgets;
   for (auto &b : e.budgets) {
     auto name = b.getString("region").value_or("ref").str();
-    if (!b.get("selection_identity")) b["selection_identity"] = referenceHashes.at(name);
-    b["identity"] = referenceHashes.at(name);
+    if (!b.get("selection_identity")) b["selection_identity"] = hashes.at(name);
+    b["identity"] = hashes.at(name);
     budgets.push_back(std::move(b));
   }
   record["budgets"] = std::move(budgets);
@@ -1831,6 +1890,29 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
               table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
         }
   }
+  bool preparedCaller=false;
+  std::vector<Function *> callers;
+  for(auto &fn:m)if(!fn.isDeclaration() && a.tiers[&fn].count("CC"))callers.push_back(&fn);
+  for(auto *fn:callers) {
+    Entry probe{m,a,*fn,"",stack,table};if(!probe.wantsSnapshot() || fn->hasFnAttribute("bennett.cc.snapshot"))continue;
+    fn->addFnAttr("bennett.cc.snapshot");preparedCaller=true;
+    for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle")
+      if(auto *al=dyn_cast<AllocaInst>(getUnderlyingObject(c->getArgOperand(2))))al->setMetadata("bennett.cc.descriptor",MDNode::get(m.getContext(),{}));
+    prepareStack(m,*fn,table.capacities[4]);
+    if(auto *init=m.getFunction("__bennett_rt_ss_init");init && !init->isDeclaration()) {IRBuilder<> b(&*fn->getEntryBlock().getFirstInsertionPt());b.CreateCall(init,{b.getInt64(table.capacities[4])});}
+    // Materialised classical helpers use this same CC allocator and memory.
+    // Inline acyclic calls before the ordinary SSA/CFG lowering, including
+    // logical-stack bookkeeping. Marker calls stay as launch operations.
+    while(true) {
+      CallBase *site=nullptr;
+      for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && !c->getCalledFunction()->isDeclaration() && !markers().count(c->getCalledFunction()->getName().str())) {site=c;break;}
+      if(!site)break;
+      if(site->getCalledFunction()==fn)break;
+      InlineFunctionInfo info;if(!InlineFunction(*site,info).isSuccess())fail("output","caller snapshot helper inlining failed",site);
+    }
+    normaliseScalar(*fn);
+  }
+  if(preparedCaller) {Analysis prepared(m);prepared.run();lowerProduction(m,prepared,out,stack,budgetDefault,budgetFile);return;}
   if (auto ec = sys::fs::create_directories(out)) fail("output", ec.message());
   ValueToValueMapTy vm;
   auto device = CloneModule(m, vm);
@@ -1845,7 +1927,8 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       fail("output", ec.message());
     Entry e{m, a, *f, dir, stack, table};
     e.lower();
-    if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
+    if(e.automaticSnapshot)e.ccHeapBytes=e.table.capacities[1];
+    else if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
     json::Object record{{"dialect", "0.2.10"},
                         {"isa", "0.8"},
                         {"llvm_version", LLVM_VERSION_STRING},
@@ -1870,7 +1953,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     write(dir + "/launch.bennett", obj);
     write(dir + "/all-coverage.json", jcs(json::Value(completeCoverage(obj))) + "\n");
     auto build = jcs(json::Value(std::move(record)));
-    hostStub(*f, obj, *parse(build).getAsObject());
+
     write(dir + "/build.json", build + "\n");
     cert["producer"] = json::Object{
         {"name", "bennett-plugin"},
@@ -1887,6 +1970,12 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
         json::Object{{"entry", f->getName()},
                      {"object", f->getName().str() + "/launch.bennett"},
                      {"build_sha256", hash(build)}});
+  }
+  // Snapshot analysis of every entry sees the linked source memory, before
+  // native stubs add embedded objects and launch-API string globals.
+  for(auto *entry:entries) {
+    auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
+    hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject());
   }
   for (Function &f : *device)
     if (!f.isDeclaration() && a.tiers[m.getFunction(f.getName())].count("L"))

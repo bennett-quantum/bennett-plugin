@@ -34,30 +34,38 @@ void prepareEntryReplay(Module &m,unsigned exponent) {
     loop(chunks,[&](Value *j) {auto *off=b.CreateMul(j,b.getInt64(16));auto *st=b.CreateStore(load(b.getInt128Ty(),gep(src,off)),gep(dst,off));st->setAlignment(Align(1));});
     loop(b.CreateSub(n,tail),[&](Value *j) {auto *off=b.CreateAdd(tail,j);auto *st=b.CreateStore(load(i8,gep(src,off)),gep(dst,off));st->setAlignment(Align(1));});
   };
-  uint64_t globalBytes=0;
   auto globals=entryGlobals(m);
-  for(auto *g:globals)globalBytes+=m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue();
   auto *globalData=gep(records,b.CreateMul(k,b.getInt64(16)));
-  auto *heapData=gep(globalData,b.getInt64(globalBytes));
+  // Finish the complete allocation history before restoring any bytes. The
+  // first returned pointer and bump rule recover every base without making
+  // a private allocation for a pointer table.
   auto *pre=b.GetInsertBlock(),*head=BasicBlock::Create(ctx,"history",f),*step=BasicBlock::Create(ctx,"allocation",f),*done=BasicBlock::Create(ctx,"globals",f);
-  b.CreateBr(head);b.SetInsertPoint(head);auto *index=b.CreatePHI(i64,2);auto *data=b.CreatePHI(ptr,2);
-  index->addIncoming(b.getInt64(0),pre);data->addIncoming(heapData,pre);
+  b.CreateBr(head);b.SetInsertPoint(head);auto *index=b.CreatePHI(i64,2);auto *first=b.CreatePHI(ptr,2);
+  index->addIncoming(b.getInt64(0),pre);first->addIncoming(ConstantPointerNull::get(ptr),pre);
   b.CreateCondBr(b.CreateICmpULT(index,k),step,done);b.SetInsertPoint(step);
   auto *r=gep(records,b.CreateMul(index,b.getInt64(16)));auto *size=load(i64,r);auto *live=load(i64,gep(r,b.getInt64(8)));auto *p=b.CreateCall(alloc,{size});
-  auto *dead=BasicBlock::Create(ctx,"dead",f),*copy=BasicBlock::Create(ctx,"copy",f),*advance=BasicBlock::Create(ctx,"advance",f);
-  b.CreateCondBr(b.CreateICmpEQ(live,b.getInt64(0)),dead,copy);
+  auto *base=b.CreateSelect(b.CreateICmpEQ(index,b.getInt64(0)),p,first);
+  auto *dead=BasicBlock::Create(ctx,"dead",f),*advance=BasicBlock::Create(ctx,"advance",f);
+  b.CreateCondBr(b.CreateICmpEQ(live,b.getInt64(0)),dead,advance);
   b.SetInsertPoint(dead);b.CreateCall(free,{p});b.CreateBr(advance);
-  b.SetInsertPoint(copy);
-  copyBytes(p,data,size);
-  auto *afterCopy=gep(data,size);auto *copyEnd=b.GetInsertBlock();b.CreateBr(advance);
-  b.SetInsertPoint(advance);auto *nextData=b.CreatePHI(ptr,2);nextData->addIncoming(data,dead);nextData->addIncoming(afterCopy,copyEnd);
-  auto *next=b.CreateAdd(index,b.getInt64(1));b.CreateBr(head);index->addIncoming(next,advance);data->addIncoming(nextData,advance);
+  b.SetInsertPoint(advance);auto *next=b.CreateAdd(index,b.getInt64(1));b.CreateBr(head);index->addIncoming(next,advance);first->addIncoming(base,advance);
   b.SetInsertPoint(done);Value *cursor=globalData;
   for(auto *g:globals) {
     auto n=m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue();
-    copyBytes(g,cursor,b.getInt64(n));
-    cursor=gep(cursor,b.getInt64(n));
+    copyBytes(g,cursor,b.getInt64(n));cursor=gep(cursor,b.getInt64(n));
   }
-  b.CreateRetVoid();
+  pre=b.GetInsertBlock();head=BasicBlock::Create(ctx,"heap",f);step=BasicBlock::Create(ctx,"segment",f);done=BasicBlock::Create(ctx,"return",f);
+  b.CreateBr(head);b.SetInsertPoint(head);index=b.CreatePHI(i64,2);auto *offset=b.CreatePHI(i64,2);auto *data=b.CreatePHI(ptr,2);
+  index->addIncoming(b.getInt64(0),pre);offset->addIncoming(b.getInt64(0),pre);data->addIncoming(cursor,pre);
+  b.CreateCondBr(b.CreateICmpULT(index,k),step,done);b.SetInsertPoint(step);
+  r=gep(records,b.CreateMul(index,b.getInt64(16)));size=load(i64,r);live=load(i64,gep(r,b.getInt64(8)));
+  auto *copy=BasicBlock::Create(ctx,"copy",f);advance=BasicBlock::Create(ctx,"next",f);
+  b.CreateCondBr(b.CreateICmpEQ(live,b.getInt64(0)),advance,copy);
+  b.SetInsertPoint(copy);copyBytes(gep(first,offset),data,size);
+  auto *afterCopy=gep(data,size);auto *copyEnd=b.GetInsertBlock();b.CreateBr(advance);
+  b.SetInsertPoint(advance);auto *nextData=b.CreatePHI(ptr,2);nextData->addIncoming(data,step);nextData->addIncoming(afterCopy,copyEnd);
+  auto *extent=b.CreateSelect(b.CreateICmpEQ(size,b.getInt64(0)),b.getInt64(1),size);auto *nextOffset=b.CreateAdd(offset,extent);
+  next=b.CreateAdd(index,b.getInt64(1));b.CreateBr(head);index->addIncoming(next,advance);offset->addIncoming(nextOffset,advance);data->addIncoming(nextData,advance);
+  b.SetInsertPoint(done);b.CreateRetVoid();
 }
 } // namespace bennett
