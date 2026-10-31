@@ -1,15 +1,15 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "fifteenth",
+    "name": "sixteenth",
     "date": "2026-10-31",
     "commits": [
-      "31612b6",
-      "399cf40",
-      "3d41121"
+      "b1d55f1",
+      "05fb69c",
+      "dc2fe4c"
     ],
-    "code_head": "3d4112120e5849a08809163b507362cceb71fdc7",
-    "recorded_at": "2026-10-31T20:31:26+00:00",
+    "code_head": "dc2fe4ce2ce7a4d3a710675b30a0bf0432c7c1c1",
+    "recorded_at": "2026-10-31T21:20:12+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
@@ -20,8 +20,8 @@
       "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
     },
     "plugin_sha256": {
-      "18": "7af78d68218d6f0ec7971cf6f4b9d3cfdefa3abf81122b86bdf65e761297933e",
-      "23": "195b095a58d9d63672e566429eca8521d00feb341cd771b32a5e2cfc157021d2"
+      "18": "226a3a959ebb330dc6a5fb0cf278954320d256bc35fc894f0a28ceb61fe97388",
+      "23": "164caea6cc20d925d41ad9b1000a56f7631abb21759bfe82c7a6a61384bd79b7"
     },
     "gate": {
       "command": "scripts/gate",
@@ -50,35 +50,39 @@
           "passed": 23
         },
         "materialisation": {
-          "cases": 33,
-          "passed": 33
+          "cases": 35,
+          "passed": 35
         },
         "softfloat": {
           "cases": 84,
           "passed": 84,
           "known_remainders": [
             {
-              "name": "published-production-N22-remainder",
+              "name": "published-production-next-rule",
               "ok": true,
-              "detail": "bennett: unimplemented: \u00a712 N22 general wide limb operation (milestone 2) at   %41 = select i1 %37, i512 -1, i512 %40\n",
+              "detail": "bennett: unimplemented: \u00a714 calls (missing linked definition) (milestone 2) at   call void @__bennett_rt_memmove(ptr %nz.fp.bennett_sf_eval, ptr %22, i64 20)\n",
               "expected_unimplemented": true,
-              "determining_sentence": "`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (\u00a712.7)."
+              "determining_sentence": "N26: call void @__bennett_rt_memmove(ptr d, ptr s, i64 n); production runtime closure is required."
             }
           ]
         },
+        "wide": {
+          "cases": 110,
+          "passed": 110
+        },
         "region-keys": {
-          "cases": 42,
-          "passed": 42
+          "cases": 45,
+          "passed": 45
         },
         "validation": {
           "cases": 49,
           "passed": 49
         },
         "full-key-audit": {
-          "cases": 49,
-          "matched": 38,
-          "unmatched": 11,
-          "accounted": 11,
+          "cases": 50,
+          "matched": 41,
+          "unmatched": 9,
+          "accounted": 9,
           "unaccounted": []
         },
         "descriptors": {
@@ -158,35 +162,39 @@
           "passed": 23
         },
         "materialisation": {
-          "cases": 34,
-          "passed": 34
+          "cases": 36,
+          "passed": 36
         },
         "softfloat": {
           "cases": 87,
           "passed": 87,
           "known_remainders": [
             {
-              "name": "published-production-N22-remainder",
+              "name": "published-production-next-rule",
               "ok": true,
-              "detail": "bennett: unimplemented: \u00a712 N22 general wide limb operation (milestone 2) at   %68 = select i1 %nz.c.7, i512 0, i512 %nz.s.8\n",
+              "detail": "bennett: unimplemented: \u00a712.8 N27 wide integer intrinsic (bp-jx3): the fixed expansions of \u00a712.8 (milestone 2) at   %908 = tail call range(i512 0, 513) i512 @llvm.ctlz.i512(i512 %882, i1 false)\n",
               "expected_unimplemented": true,
-              "determining_sentence": "`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (\u00a712.7)."
+              "determining_sentence": "N27: the fixed expansions of \u00a712.8; ctlz of i512 requires the wide slot ABI (bp-jx3)."
             }
           ]
         },
+        "wide": {
+          "cases": 110,
+          "passed": 110
+        },
         "region-keys": {
-          "cases": 43,
-          "passed": 43
+          "cases": 46,
+          "passed": 46
         },
         "validation": {
           "cases": 49,
           "passed": 49
         },
         "full-key-audit": {
-          "cases": 50,
-          "matched": 39,
-          "unmatched": 11,
-          "accounted": 11,
+          "cases": 51,
+          "matched": 42,
+          "unmatched": 9,
+          "accounted": 9,
           "unaccounted": []
         },
         "descriptors": {
@@ -268,11 +276,11 @@
       }
     },
     "object_pairs": {
-      "count": 263,
+      "count": 264,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 178,
-      "preserved_previous_objects": 260,
+      "production_cross_major_pairs": 179,
+      "preserved_previous_objects": 263,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
@@ -1850,6 +1858,12 @@
           "object": "softfloat/production/top/oracle-0/ref.bennett",
           "bytes": 1846,
           "sha256": "3362f52693951b198f5bae405b4f7b05589a73c8df8c72597029d8c204f01c73",
+          "published_golden": null
+        },
+        {
+          "object": "wide/production/ref.bennett",
+          "bytes": 27165,
+          "sha256": "4d9c38e89fd74e9e7ede30d1ad6eb6d284fd2a766286df1499b68b8529ce5343",
           "published_golden": null
         }
       ]

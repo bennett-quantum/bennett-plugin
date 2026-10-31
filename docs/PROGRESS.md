@@ -119,3 +119,9 @@ Seven FP carriers, N16 unfused fmuladd, i128/wide slots, N33 routing, FP atomics
 Pinned arith publications close native comparison: fp-rot-fastmath-reassoc agrees in all 26 cells; 84/87 FP checks include one explicit real-production N22 refusal per major, never numerical production closure.
 Stopped incomplete gates for a red→green host-initializer regression and the mid-pass arith publication; remaining production/staged obligations and determining sentences are only in bd; HANDOFF untouched.
 Final complete gate exit 0, 66/66/0/0/0 each, zero deferrals; 263 equal pairs, 45 published matches, all 260 prior hashes preserved.
+
+### Pass 16 - 2026-10-31 - b1d55f1, 05fb69c, dc2fe4c (eighth M2 pass; bp-9m8 closed)
+N22 limb select/phi, carry/borrow, bitwise/icmp/casts, function ABI, nonbyte/aggregate memory and N21 packing; integer-only mul/div/rem/shift slot runtimes; 110/110 N22 families per major including ISA execution and faults 5/6.
+Published n-wideint/n-wide-sub materialisations and keys match; initial full gate caught eight stripped-name identity crashes per major, fixed with tracking handles and a red→green regression in dc2fe4c.
+Pinned real arith production passes select i512 and reaches different rules; exact N26/N27 production and remaining soft-float obligations stay only in bp-w2b/bp-jx3/bp-7ni/bp-xms; HANDOFF untouched.
+Final full gate exit 0, 66/66/0/0/0 each, zero deferrals; 264 equal pairs, 45 published matches, all 263 prior hashes preserved; latest receipt in docs/verification.json.
