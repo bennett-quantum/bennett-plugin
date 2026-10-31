@@ -31,7 +31,7 @@ def program(region,params=(),devices=(),target='null',calls=None,extra=''):
 '''+DECL
 
 def sources():
- old=json.loads((R/'docs/verification.json').read_text())['seventh_pass']['remaining_production_probes']['runs']['18']['memory-handle']['source']
+ old=(R/'tests/probes/memory-handle.ll').read_text()
  cases={
  'memory-handle':old,
  'retired-handle':old.replace(' call void @__bennett_gate(i32 1, ptr %q, i64 0)', ' call void @__bennett_qfree(ptr %q)\n call void @__bennett_gate(i32 1, ptr %q, i64 0)',1),

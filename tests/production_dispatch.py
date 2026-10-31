@@ -7,7 +7,7 @@ from contracts import ROOT as R
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
  d=R/f'.tmp/production-dispatch/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
- old=json.loads((R/'docs/verification.json').read_text())['seventh_pass']['remaining_production_probes']['runs'][str(a.major)]['finite-kind']['source']
+ old=(R/'tests/probes/finite-kind.ll').read_text()
  cases=[]
  def observed(src):
   src=src.replace('define void @top(', 'define i1 @top(').replace(' ret void\n}', ' ret i1 %observed\n}')
