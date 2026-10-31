@@ -24,6 +24,8 @@ struct Atom {
   const llvm::Value *object = nullptr;
   int64_t offset = 0, stride = 0; // stride=-1: arbitrary, >0: residue, 0: exact
   llvm::APInt integer = llvm::APInt(1, 0);
+  // An unknown numerical address is not a host/opaque origin (PT2/PT4/PT5).
+  bool numerical = false;
   bool operator<(const Atom &b) const;
 };
 struct AV {
@@ -38,6 +40,7 @@ struct Slot {
   uint64_t bytes;
   AV value;
   bool filled = false;
+  bool numerical = false;
 };
 class Analysis {
   llvm::Module &M;
@@ -58,6 +61,8 @@ class Analysis {
   void step(llvm::Instruction &);
   void store(const AV &, const AV &, uint64_t, bool filled = false);
   AV load(const AV &, llvm::Type *);
+  AV convert(const AV &, llvm::Type *, llvm::Type *, unsigned);
+  AV displace(const AV &, const llvm::APInt &, unsigned);
   void bind(llvm::CallBase &, llvm::Function *);
 
 public:

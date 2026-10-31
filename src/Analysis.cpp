@@ -35,9 +35,9 @@ static AV integer(APInt n) {
   return a;
 }
 bool Atom::operator<(const Atom &b) const {
-  auto x = std::make_tuple(kind, object, offset, stride, integer.getBitWidth());
+  auto x = std::make_tuple(kind, object, offset, stride, integer.getBitWidth(), numerical);
   auto y = std::make_tuple(b.kind, b.object, b.offset, b.stride,
-                           b.integer.getBitWidth());
+                           b.integer.getBitWidth(), b.numerical);
   return x < y || (x == y && integer.ult(b.integer));
 }
 bool AV::merge(const AV &v) {
@@ -70,6 +70,70 @@ bool AV::roots() const {
     if (a.kind == Atom::Root)
       return true;
   return false;
+}
+static void numericalUnknown(AV &result) {
+  Atom ext{Atom::Ptr,nullptr,0,-1,APInt(1,0)};
+  ext.numerical=true;
+  result.atoms.insert(ext);
+  result.top=true;
+}
+AV Analysis::convert(const AV &source,Type *from,Type *to,unsigned opcode) {
+  if(opcode==Instruction::AddrSpaceCast) return source; // PT3 copies, not PT4.
+  AV result;result.top=source.top;
+  unsigned width=M.getDataLayout().getTypeSizeInBits(to).getKnownMinValue();
+  unsigned input=M.getDataLayout().getTypeSizeInBits(from).getKnownMinValue();
+  for(auto a:source.atoms) {
+    if(a.kind==Atom::Int) {
+      a.integer=opcode==Instruction::SExt?a.integer.sextOrTrunc(width):a.integer.zextOrTrunc(width);
+      if(to->isPointerTy() && !a.integer.isZero()) numericalUnknown(result);
+    } else if(a.kind==Atom::Ptr && a.object) {
+      unsigned pointerWidth=M.getDataLayout().getPointerTypeSizeInBits(a.object->getType());
+      bool widenedInteger=from->isIntegerTy() && to->isIntegerTy() && width>input;
+      if(width<pointerWidth || widenedInteger) {
+        a.offset=0;a.stride=-1;numericalUnknown(result);
+      }
+    }
+    result.atoms.insert(a);
+  }
+  return result;
+}
+AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth) {
+  if(delta.isZero()) return source;
+  AV result;result.top=source.top;
+  unsigned bits=delta.getBitWidth();
+  for(auto a:source.atoms) {
+    if(a.kind!=Atom::Ptr || !a.object) {result.atoms.insert(a);continue;}
+    // All aligned low-bit patterns, including wrap with preserved high bits.
+    if(bits<pointerWidth && bits<63 && !a.stride) {
+      uint64_t alignment=1,size=UINT64_MAX;
+      if(auto *g=dyn_cast<GlobalVariable>(a.object)) {
+        alignment=g->getAlign().valueOrOne().value();
+        if(!g->getAlign()) alignment=M.getDataLayout().getABITypeAlign(g->getValueType()).value();
+        size=M.getDataLayout().getTypeAllocSize(g->getValueType()).getKnownMinValue();
+      } else if(auto *alloc=dyn_cast<AllocaInst>(a.object)) {
+        alignment=alloc->getAlign().value();
+        if(auto *count=dyn_cast<ConstantInt>(alloc->getArraySize()))
+          size=(uint64_t)std::min<unsigned __int128>(UINT64_MAX,(unsigned __int128)count->getLimitedValue()*M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue());
+      }
+      int64_t modulus=int64_t(1)<<bits;
+      int64_t step=std::min<uint64_t>(alignment,modulus);
+      int64_t residue=(a.offset%step+step)%step;
+      int64_t low=residue,high=modulus-step+residue,d=delta.getSExtValue();
+      auto include=[&](__int128 offset) {
+        auto p=a;
+        if(offset<INT64_MIN || offset>INT64_MAX) {p.offset=0;p.stride=-1;numericalUnknown(result);}
+        else {p.offset=(int64_t)offset;if(offset<0 || (unsigned __int128)offset>=size) numericalUnknown(result);}
+        result.atoms.insert(p);
+      };
+      if(low+d<modulus && high+d>=0) include((__int128)a.offset+d);
+      if(high+d>=modulus) include((__int128)a.offset+d-modulus);
+      if(low+d<0) include((__int128)a.offset+d+modulus);
+    } else {
+      a.offset=(APInt(64,a.offset)+delta.sextOrTrunc(64)).getSExtValue();
+      result.atoms.insert(a);
+    }
+  }
+  return result;
 }
 Function *resolve(Value *v) {
   if (auto *ga = dyn_cast<GlobalAlias>(v))
@@ -249,24 +313,14 @@ AV Analysis::get(const Value *v) {
     if (c->getOpcode()==Instruction::BitCast)
       return bitcast(c->getOperand(0),c->getType(),{});
     if (c->isCast()) {
-      auto a = get(c->getOperand(0));
-      if (c->getOpcode() == Instruction::IntToPtr && !a.roots())
-        a.top = true;
-      return a;
+      return convert(get(c->getOperand(0)),c->getOperand(0)->getType(),c->getType(),c->getOpcode());
     }
     if (c->getOpcode() == Instruction::GetElementPtr) {
       auto *g = cast<GEPOperator>(c);
       APInt off(M.getDataLayout().getIndexTypeSizeInBits(g->getType()), 0);
       auto a = get(c->getOperand(0));
       if (g->accumulateConstantOffset(M.getDataLayout(), off)) {
-        AV r;
-        for (auto b : a.atoms) {
-          if (b.kind == Atom::Ptr)
-            b.offset += off.getSExtValue();
-          r.atoms.insert(b);
-        }
-        r.top = a.top;
-        return r;
+        return displace(a,off,M.getDataLayout().getPointerTypeSizeInBits(c->getType()));
       }
     }
     AV a;
@@ -324,11 +378,11 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
     if (a.kind == Atom::Ptr) {
       for (auto &s : slots)
         if (s.object == a.object && s.offset == a.offset &&
-            s.stride == a.stride && s.bytes == size && s.filled == filled) {
+            s.stride == a.stride && s.bytes == size && s.filled == filled && s.numerical==a.numerical) {
           changed |= s.value.merge(v);
           goto next;
         }
-      slots.push_back({a.object, a.offset, a.stride, size, v, filled});
+      slots.push_back({a.object, a.offset, a.stride, size, v, filled, a.numerical});
       changed = true;
     next:;
     }
@@ -745,14 +799,8 @@ bool Analysis::composite(Instruction &i) {
         cast<VectorType>(sh->getOperand(0)->getType())->getElementCount().getKnownMinValue();
     for (unsigned k = 0; k < mask.size(); ++k) {
       int j = mask[k];
-      if (j < 0)
-        setField(
-            &i, {k},
-            integer(APInt(dl.getTypeSizeInBits(
-                                cast<VectorType>(i.getType())->getElementType())
-                              .getKnownMinValue(),
-                          0)));
-      else
+      // N7 zeroes the mask element, which selects source lane zero.
+      if (j < 0) j = 0;
         setField(&i, {k},
                  field(sh->getOperand(j >= n ? 1 : 0), {(unsigned)j % n}));
     }
@@ -851,7 +899,16 @@ void Analysis::step(Instruction &i) {
   if (auto *rmw = dyn_cast<AtomicRMWInst>(&i)) {
     a = load(get(rmw->getPointerOperand()), rmw->getType());
     AV next, operand = get(rmw->getValOperand()); next.top = a.top || operand.top;
-    for (auto &x : a.atoms) for (auto &y : operand.atoms)
+    if (rmw->getOperation() == AtomicRMWInst::Xchg)
+      next = operand; // Includes pointers/FN/ROOT, not just integer pairs.
+    else if (rmw->getOperation() == AtomicRMWInst::Min ||
+             rmw->getOperation() == AtomicRMWInst::Max ||
+             rmw->getOperation() == AtomicRMWInst::UMin ||
+             rmw->getOperation() == AtomicRMWInst::UMax) {
+      // S2 models N9's select using PT3's unconditional operand union.
+      next = a;
+      next.merge(operand);
+    } else for (auto &x : a.atoms) for (auto &y : operand.atoms)
       if (x.kind == Atom::Int && y.kind == Atom::Int) {
         APInt n = x.integer; const APInt &v = y.integer;
         switch (rmw->getOperation()) {
@@ -893,6 +950,10 @@ void Analysis::step(Instruction &i) {
     APInt off(bits, 0);
     if (!g->collectOffset(M.getDataLayout(), bits, vars, off))
       unimplemented("§5 PT2 GEP offset", 2, g);
+    if(vars.empty()) {
+      changed|=values[&i].merge(displace(base,off,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
+      return;
+    }
     a = base;
     for (auto &entry : vars) {
       AV r;
@@ -956,29 +1017,7 @@ void Analysis::step(Instruction &i) {
     a = get(s->getTrueValue());
     a.merge(get(s->getFalseValue()));
   } else if (auto *c = dyn_cast<CastInst>(&i)) {
-    a = get(c->getOperand(0));
-    if (c->getOpcode() == Instruction::IntToPtr) {
-      bool hasFn = false;
-      for (auto &x : a.atoms)
-        hasFn |= x.kind == Atom::Fn;
-      if (!a.roots() && !hasFn) {
-        a.top = true;
-        a.merge(atom(Atom::Ptr));
-      }
-    } else if (c->getType()->isIntegerTy()) {
-      AV r;
-      r.top = a.top;
-      for (auto x : a.atoms) {
-        if (x.kind == Atom::Int) {
-          unsigned w = c->getType()->getIntegerBitWidth();
-          x.integer = c->getOpcode() == Instruction::SExt
-                          ? x.integer.sextOrTrunc(w)
-                          : x.integer.zextOrTrunc(w);
-        }
-        r.atoms.insert(x);
-      }
-      a = r;
-    }
+    a=convert(get(c->getOperand(0)),c->getOperand(0)->getType(),c->getType(),c->getOpcode());
   } else if (isa<FreezeInst>(i))
     a = get(i.getOperand(0));
   else if (auto *c = dyn_cast<CallBase>(&i)) {
@@ -986,9 +1025,9 @@ void Analysis::step(Instruction &i) {
     StringRef n = f ? f->getName() : StringRef();
     if (n == "__bennett_qalloc" || n == "__bennett_qborrow")
       a = atom(Atom::Root, c);
-    else if (auto *mem = dyn_cast<MemTransferInst>(c)) {
-      AV src = get(mem->getSource()), dst = get(mem->getDest());
-      auto *len = dyn_cast<ConstantInt>(mem->getLength());
+    else if (isa<MemTransferInst>(c) || n=="__bennett_rt_memmove") {
+      AV src = get(c->getArgOperand(1)), dst = get(c->getArgOperand(0));
+      auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
       auto snapshot = slots;
       for (auto s : snapshot)
         for (auto &p : src.atoms)
@@ -1017,11 +1056,11 @@ void Analysis::step(Instruction &i) {
                         s.bytes);
                 }
               }
-    } else if (auto *fill = dyn_cast<MemSetInst>(c)) {
-      auto *len = dyn_cast<ConstantInt>(fill->getLength());
-      auto p = get(fill->getDest());
+    } else if (isa<MemSetInst>(c) || n=="__bennett_rt_memset") {
+      auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
+      auto p = get(c->getArgOperand(0));
       if (len && len->getValue().getActiveBits() < 63)
-        store(get(fill->getValue()), p, len->getZExtValue(), true);
+        store(get(c->getArgOperand(1)), p, len->getZExtValue(), true);
       else {
         AV top;
         top.top = true;
@@ -1483,7 +1522,7 @@ void Analysis::checkHandles() {
         fail("BD-E-HANDLE-ESCAPE", "§6.4 exported return", r);
     }
   for (auto &s : slots)
-    if (!s.object && s.value.roots())
+    if (!s.object && !s.numerical && s.value.roots())
       fail("BD-E-HANDLE-ESCAPE", "§6.4 EXT slot");
   // Reachable pointee slots crossing opaque calls are also escapes.
   for (Function &f : M)

@@ -3,12 +3,19 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/Scalar/LowerWidenableCondition.h"
 #include "llvm/Config/llvm-config.h"
 using namespace llvm;
 namespace bennett {
 // M1 scalar materialisation slice. Other rules remain explicit M2 obligations;
 // this function is not a full §12 validator or a production conformance verdict.
 void normaliseScalar(Function &f) {
+  // N0's last lowering, invoked only when this intrinsic occurs.
+  bool widenable=false;
+  for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i))
+    widenable|=c->getIntrinsicID()==Intrinsic::experimental_widenable_condition;
+  if(widenable) {FunctionAnalysisManager analyses;LowerWidenableConditionPass().run(f,analyses);}
   auto removeAttrs = [&](AttributeList attrs) {
     static const std::set<std::string> erased = {
       "noundef","nonnull","range","align","dereferenceable","dereferenceable_or_null",
@@ -34,20 +41,28 @@ void normaliseScalar(Function &f) {
     if (isa<FPMathOperator>(i)) i.setFastMathFlags(FastMathFlags());
   for (Instruction &i : instructions(f)) {
     SmallVector<std::pair<unsigned,MDNode *>> md; i.getAllMetadataOtherThanDebugLoc(md);
-    for (auto &m : md) i.setMetadata(m.first,nullptr);
+    for (auto &m : md)
+      if(m.first!=f.getContext().getMDKindID("bennett.rstep")) i.setMetadata(m.first,nullptr);
   }
   f.setAttributes(removeAttrs(f.getAttributes()));
   for (Instruction &i : instructions(f))
     if (auto *c = dyn_cast<CallBase>(&i)) c->setAttributes(removeAttrs(c->getAttributes()));
   SmallVector<Instruction *> work;
   for (Instruction &i : instructions(f)) work.push_back(&i);
-  // N5/N6.
-  for (Instruction *&i : work)
-    if (auto *c = dyn_cast<IntrinsicInst>(i)) {
-      StringRef name=c->getCalledFunction()->getName();
-      bool erase=name.starts_with("llvm.assume") || name.starts_with("llvm.lifetime.") || name.starts_with("llvm.dbg.") || name=="llvm.sideeffect" || name=="llvm.donothing";
-      if (erase) { if (!c->use_empty()) unimplemented("§12 scalar intrinsic result",2,c); c->eraseFromParent(); i=nullptr; }
-    }
+  // N5/N6. Identity calls are replaced before deleting the effect-free calls;
+  // reverse order removes token consumers before their producers.
+  auto family=[](StringRef name,StringRef prefix) {return name==prefix || (name.starts_with(prefix) && name.drop_front(prefix.size()).starts_with("."));};
+  for(Instruction *&i:work) if(auto *c=dyn_cast<IntrinsicInst>(i)) {
+    StringRef name=c->getCalledFunction()->getName();
+    bool identity=false;
+    for(StringRef prefix:{"llvm.expect","llvm.annotation","llvm.ptr.annotation","llvm.launder.invariant.group","llvm.strip.invariant.group","llvm.ssa.copy","llvm.arithmetic.fence","llvm.threadlocal.address","llvm.protected.field.ptr","llvm.ptrauth.sign","llvm.ptrauth.auth","llvm.ptrauth.resign","llvm.ptrauth.auth.with.pc.and.resign","llvm.ptrauth.strip"}) identity|=family(name,prefix);
+    if(identity) {c->replaceAllUsesWith(c->getArgOperand(0));c->eraseFromParent();i=nullptr;}
+  }
+  for(auto it=work.rbegin();it!=work.rend();++it) if(auto *c=dyn_cast_or_null<IntrinsicInst>(*it)) {
+    StringRef name=c->getCalledFunction()->getName();bool erase=false;
+    for(StringRef prefix:{"llvm.assume","llvm.sideeffect","llvm.donothing","llvm.pseudoprobe","llvm.fake.use","llvm.dbg","llvm.experimental.noalias.scope.decl","llvm.codeview.annotation","llvm.var.annotation","llvm.reloc.none","llvm.prefetch","llvm.pcmarker","llvm.clear_cache","llvm.experimental.convergence","llvm.seh","llvm.xray","llvm.experimental.stackmap","llvm.eh.unwind.init","llvm.asan.check.memaccess","llvm.hwasan.check.memaccess","llvm.lifetime","llvm.invariant.start","llvm.invariant.end"}) erase|=family(name,prefix);
+    if(erase) {if(!c->use_empty()) unimplemented("§12 N5/N6 live intrinsic result",2,c);c->eraseFromParent();*it=nullptr;}
+  }
   // N7 recursive constant replacement (including constant aggregate fields).
   std::function<Constant *(Constant *)> zero = [&](Constant *c)->Constant * {
     if (isa<UndefValue>(c) || isa<PoisonValue>(c)) return Constant::getNullValue(c->getType());
@@ -91,9 +106,64 @@ void normaliseScalar(Function &f) {
       case AtomicRMWInst::Or:n=b.CreateOr(old,v,"nz.v."+r);break;
       case AtomicRMWInst::Xor:n=b.CreateXor(old,v,"nz.v."+r);break;
       case AtomicRMWInst::Nand: {auto *t=b.CreateAnd(old,v,"nz.a."+r);n=b.CreateXor(t,Constant::getAllOnesValue(v->getType()),"nz.v."+r);break;}
+      case AtomicRMWInst::Min:
+      case AtomicRMWInst::Max:
+      case AtomicRMWInst::UMin:
+      case AtomicRMWInst::UMax: {
+        auto op=a->getOperation();
+        auto pred=op==AtomicRMWInst::Min?CmpInst::ICMP_SLT:
+                  op==AtomicRMWInst::Max?CmpInst::ICMP_SGT:
+                  op==AtomicRMWInst::UMin?CmpInst::ICMP_ULT:CmpInst::ICMP_UGT;
+        auto *k=b.CreateICmp(pred,old,v,"nz.k."+r);
+        n=b.CreateSelect(k,old,v,"nz.v."+r);break;
+      }
+      case AtomicRMWInst::UIncWrap: {
+        auto *k=b.CreateICmpUGE(old,v,"nz.k."+r);
+        auto *inc=b.CreateAdd(old,ConstantInt::get(v->getType(),1),"nz.i."+r);
+        n=b.CreateSelect(k,Constant::getNullValue(v->getType()),inc,"nz.v."+r);break;
+      }
+      case AtomicRMWInst::UDecWrap: {
+        auto *k=b.CreateICmpEQ(old,Constant::getNullValue(v->getType()),"nz.k."+r);
+        auto *g=b.CreateICmpUGT(old,v,"nz.g."+r);
+        auto *w=b.CreateOr(k,g,"nz.w."+r);
+        auto *d=b.CreateSub(old,ConstantInt::get(v->getType(),1),"nz.d."+r);
+        n=b.CreateSelect(w,v,d,"nz.v."+r);break;
+      }
+#if LLVM_VERSION_MAJOR >= 23
+      case AtomicRMWInst::USubCond:
+      case AtomicRMWInst::USubSat: {
+        auto *k=b.CreateICmpUGE(old,v,"nz.k."+r);
+        auto *s=b.CreateSub(old,v,"nz.s."+r);
+        Value *fallback=a->getOperation()==AtomicRMWInst::USubCond?static_cast<Value *>(old):Constant::getNullValue(v->getType());
+        n=b.CreateSelect(k,s,fallback,"nz.v."+r);break;
+      }
+#endif
       default:unimplemented("§12 N9 remaining atomic operations",2,a);
       }
       auto *s=b.CreateStore(n,a->getPointerOperand());s->setAlignment(a->getAlign());a->replaceAllUsesWith(old);a->eraseFromParent();i=nullptr;
+    }
+    if (auto *c=dyn_cast_or_null<AtomicCmpXchgInst>(i)) {
+      IRBuilder<> b(c);auto r=c->getName().str();
+      auto *old=b.CreateLoad(c->getCompareOperand()->getType(),c->getPointerOperand(),"nz.l."+r);old->setAlignment(c->getAlign());
+      auto *eq=b.CreateICmpEQ(old,c->getCompareOperand(),"nz.e."+r);
+      auto *value=b.CreateSelect(eq,c->getNewValOperand(),old,"nz.s."+r);
+      b.CreateStore(value,c->getPointerOperand())->setAlignment(c->getAlign());
+      auto *agg=b.CreateInsertValue(Constant::getNullValue(c->getType()),old,{0},"nz.a."+r);
+      c->setName("");auto *result=b.CreateInsertValue(agg,eq,{1},r);
+      c->replaceAllUsesWith(result);c->eraseFromParent();i=nullptr;
+    }
+  }
+  // N11: F(4), including deletion of the original successor suffix.
+  for (Instruction *i : work) if(auto *c=dyn_cast_or_null<IntrinsicInst>(i)) {
+    auto n=c->getCalledFunction()->getName();
+    if(n=="llvm.trap" || n=="llvm.debugtrap" || n=="llvm.ubsantrap" || n=="llvm.looptrap") {
+      IRBuilder<> b(c);auto *ty=Type::getInt64Ty(f.getContext());
+      auto fault=f.getParent()->getOrInsertFunction("__bennett_nz_fault",Type::getVoidTy(f.getContext()),ty);
+      b.CreateCall(fault,{ConstantInt::get(ty,4)});
+      // Later work entries can point into the erased suffix. Clear them first.
+      for(auto *&entry:work) if(entry && entry->getParent()==c->getParent() &&
+          (entry==c || c->comesBefore(entry))) entry=nullptr;
+      changeToUnreachable(c,false);
     }
   }
   // N10.
@@ -101,12 +171,29 @@ void normaliseScalar(Function &f) {
     StringRef n=c->getCalledFunction()->getName();Constant *v=nullptr;
     if (n.starts_with("llvm.is.constant.")) v=ConstantInt::getFalse(f.getContext());
     if (n.starts_with("llvm.objectsize.")) v=cast<ConstantInt>(c->getArgOperand(1))->isZero()?Constant::getAllOnesValue(c->getType()):Constant::getNullValue(c->getType());
+    if(n=="llvm.allow.runtime.check" || n=="llvm.allow.ubsan.check") v=ConstantInt::getTrue(f.getContext());
+    if(n.starts_with("llvm.allow.sanitize.")) v=ConstantInt::getFalse(f.getContext());
+    if(n.starts_with("llvm.get.dynamic.area.offset")) v=Constant::getNullValue(c->getType());
+    if(n.starts_with("llvm.vscale.")) v=ConstantInt::get(c->getType(),1);
     if(v) {c->replaceAllUsesWith(v);c->eraseFromParent();i=nullptr;}
+  }
+  // N12. N27 supplies the corresponding integer helper rewrite below.
+  for(Instruction *i:work) if(auto *c=dyn_cast_or_null<IntrinsicInst>(i)) {
+    auto n=c->getCalledFunction()->getName();
+    if(n.starts_with("llvm.abs.") || n.starts_with("llvm.ctlz.") || n.starts_with("llvm.cttz.")) c->setArgOperand(1,ConstantInt::getFalse(f.getContext()));
   }
   // N14. Preserve the unsafe shift only behind the defined zero-select.
   for (Instruction *&i : work) if (auto *op=dyn_cast_or_null<BinaryOperator>(i))
     if(op->isShift() && op->getType()->isIntegerTy()) {
       unsigned width=op->getType()->getIntegerBitWidth();auto *amount=op->getOperand(1);
+      // V7 explicitly admits the already materialised N14 pattern. A key
+      // printer visiting that closure again must not wrap its shift twice.
+      if(op->hasOneUse()) if(auto *s=dyn_cast<SelectInst>(*op->user_begin()))
+        if(s->getFalseValue()==op && isa<Constant>(s->getTrueValue()) &&
+           cast<Constant>(s->getTrueValue())->isNullValue())
+          if(auto *cmp=dyn_cast<ICmpInst>(s->getCondition());
+             cmp && cmp->getPredicate()==CmpInst::ICMP_UGE && cmp->getOperand(0)==amount)
+            if(auto *c=dyn_cast<ConstantInt>(cmp->getOperand(1));c && c->getValue()==width) continue;
       if(auto *c=dyn_cast<ConstantInt>(amount)) {
         if(c->getValue().uge(width)) {op->replaceAllUsesWith(Constant::getNullValue(op->getType()));op->eraseFromParent();i=nullptr;}
       } else {
@@ -116,21 +203,95 @@ void normaliseScalar(Function &f) {
         op->replaceUsesWithIf(select,[&](Use &u) {return u.getUser()!=select;});
       }
     }
-  // N15 total unsigned constant indices, then constant N21 lane renaming.
-  // N8 already ran; replaceAllUses updates its former users too.
-  SmallVector<Instruction *> lanes;
-  for(Instruction &i:instructions(f)) if(isa<ExtractElementInst>(i) || isa<InsertElementInst>(i)) lanes.push_back(&i);
-  for(Instruction *i:lanes) {
+  // N15/N21 lane renaming. Preserve the unsigned index width before building
+  // exact L and lane constants (an i1 index into four lanes must not alias 2/3).
+  std::map<Value *,SmallVector<Value *>> laneValues;
+  auto lanesOf=[&](Value *v)->SmallVector<Value *> {
+    if(laneValues.count(v)) return laneValues[v];
+    SmallVector<Value *> result;
+    if(auto *c=dyn_cast<Constant>(v))
+      for(unsigned k=0;k<cast<VectorType>(v->getType())->getElementCount().getKnownMinValue();++k) {
+        auto *e=c->getAggregateElement(k);if(!e) return {};result.push_back(e);
+      }
+    return result;
+  };
+  SmallVector<Instruction *> laneWork, deadVectors;
+  for(Instruction &i:instructions(f)) laneWork.push_back(&i);
+  for(Instruction *i:laneWork) {
     auto *extract=dyn_cast<ExtractElementInst>(i);
-    Value *vector=i->getOperand(0);
-    Value *index=i->getOperand(extract?1:2);
+    auto *insert=dyn_cast<InsertElementInst>(i);
+    if(!extract && !insert) continue;
+    auto *vector=i->getOperand(0);auto *index=i->getOperand(extract?1:2);
+    unsigned count=cast<VectorType>(vector->getType())->getElementCount().getKnownMinValue();
     auto *constant=dyn_cast<ConstantInt>(index);
-    if(!constant) continue;
-    auto count=cast<VectorType>(vector->getType())->getElementCount().getKnownMinValue();
-    Value *replacement=nullptr;
-    if(constant->getValue().uge(count)) replacement=extract?Constant::getNullValue(i->getType()):vector;
-    else if(extract) if(auto *v=dyn_cast<Constant>(vector)) replacement=v->getAggregateElement(constant->getZExtValue());
-    if(replacement) {i->replaceAllUsesWith(replacement);i->eraseFromParent();}
+    if(constant && constant->getValue().uge(count)) {
+      i->replaceAllUsesWith(extract?Constant::getNullValue(i->getType()):vector);i->eraseFromParent();continue;
+    }
+    auto values=lanesOf(vector);if(values.empty()) continue;
+    IRBuilder<> b(i);auto r=i->getName().str();
+    Value *wide=index;
+    if(!constant) {
+      unsigned width=std::max(index->getType()->getIntegerBitWidth(),Log2_64(count)+1);
+      wide=b.CreateZExtOrTrunc(index,IntegerType::get(f.getContext(),width),"nz.i."+r);
+    }
+    if(insert) {
+      if(constant) values[constant->getZExtValue()]=insert->getOperand(1);
+      else for(unsigned k=0;k<count;++k) {
+        auto *cmp=b.CreateICmpEQ(wide,ConstantInt::get(wide->getType(),k),"nz.k"+std::to_string(k)+"."+r);
+        values[k]=b.CreateSelect(cmp,insert->getOperand(1),values[k],"nz.l"+std::to_string(k)+"."+r);
+      }
+      laneValues[i]=values;deadVectors.push_back(i);
+    } else {
+      Value *replacement=nullptr;
+      if(constant) replacement=values[constant->getZExtValue()];
+      else {
+        auto *outside=b.CreateICmpUGE(wide,ConstantInt::get(wide->getType(),count),"nz.c."+r);
+        Value *value=Constant::getNullValue(i->getType());
+        for(unsigned k=0;k<count;++k) {
+          auto *cmp=b.CreateICmpEQ(wide,ConstantInt::get(wide->getType(),k),"nz.k"+std::to_string(k)+"."+r);
+          value=b.CreateSelect(cmp,values[k],value,k+1==count?"nz.e."+r:"nz.l"+std::to_string(k)+"."+r);
+        }
+        i->setName("");replacement=b.CreateSelect(outside,Constant::getNullValue(i->getType()),value,r);
+      }
+      i->replaceAllUsesWith(replacement);i->eraseFromParent();
+    }
+  }
+  // A vector may still have a genuine vector user; never erase that producer.
+  for(auto it=deadVectors.rbegin();it!=deadVectors.rend();++it)
+    if((*it)->use_empty()) (*it)->eraseFromParent();
+
+  // N26. The helpers are ordinary linked device functions; this rewrite does
+  // not supply their implementation or make an unknown call a passing object.
+  unsigned memoryOrdinal=0;
+  SmallVector<MemIntrinsic *> memory;
+  for(Instruction &i:instructions(f)) if(auto *m=dyn_cast<MemIntrinsic>(&i)) memory.push_back(m);
+  for(auto *m:memory) {
+    IRBuilder<> b(m);std::string r=m->hasName()?m->getName().str():f.getName().str()+"."+std::to_string(memoryOrdinal++);
+    auto *length=m->getLength();auto *i64=Type::getInt64Ty(f.getContext());
+    Value *n=length;
+    if(length->getType()!=i64) n=b.CreateZExtOrTrunc(length,i64,"nz.n."+r);
+    auto *ptr=PointerType::get(f.getContext(),0);auto *voidTy=Type::getVoidTy(f.getContext());
+    if(auto *copy=dyn_cast<MemTransferInst>(m)) {
+      if(copy->getDestAddressSpace()!=0 || copy->getSourceAddressSpace()!=0) unimplemented("§12 N26 address-space helper ABI",2,copy);
+      auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_memmove",voidTy,ptr,ptr,i64);
+      b.CreateCall(helper,{copy->getDest(),copy->getSource(),n});
+    } else if(auto *fill=dyn_cast<MemSetInst>(m)) {
+      if(fill->getDestAddressSpace()!=0) unimplemented("§12 N26 address-space helper ABI",2,fill);
+      auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_memset",voidTy,ptr,Type::getInt8Ty(f.getContext()),i64);
+      b.CreateCall(helper,{fill->getDest(),fill->getValue(),n});
+    } else unimplemented("§12 N26 memory intrinsic family",2,m);
+    m->eraseFromParent();
+  }
+  // N27 scalar count helpers (wide limb-slot ABI remains a separate rule).
+  SmallVector<IntrinsicInst *> counts;
+  for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
+    auto n=c->getCalledFunction()->getName();
+    if((n.starts_with("llvm.ctlz.") || n.starts_with("llvm.cttz.")) && c->getType()->isIntegerTy() && c->getType()->getIntegerBitWidth()<=128) counts.push_back(c);
+  }
+  for(auto *c:counts) {
+    auto n=c->getCalledFunction()->getName();auto op=n.starts_with("llvm.ctlz.")?"ctlz":"cttz";
+    auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_"+std::string(op)+"_i"+std::to_string(c->getType()->getIntegerBitWidth()),c->getFunctionType());
+    IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *replacement=b.CreateCall(helper,args);replacement->takeName(c);c->replaceAllUsesWith(replacement);c->eraseFromParent();
   }
 
 }

@@ -3,6 +3,43 @@
 import argparse,json,subprocess
 from contracts import ROOT as R
 CASES={
+'runtime-memmove':('''@src = internal global i8 7
+@dst = internal global i8 9
+declare void @__bennett_rt_memmove(ptr,ptr,i64)
+define i8 @top() {
+ call void @__bennett_rt_memmove(ptr @dst,ptr @src,i64 1)
+ %v = load i8, ptr @dst
+ ret i8 %v
+}''',[('top','%v',{'INT(7)','INT(9)'})]),
+'runtime-memset':('''@dst = internal global i16 0
+declare void @__bennett_rt_memset(ptr,i8,i64)
+define i16 @top() {
+ call void @__bennett_rt_memset(ptr @dst,i8 7,i64 2)
+ %v = load i16, ptr @dst
+ ret i16 %v
+}''',[('top','%v',{'INT(0)','INT(1799)'})]),
+'atomic-xchg-pointer':('''@cell = internal global ptr @old
+define internal void @old() { ret void }
+define internal void @new() { ret void }
+define ptr @top() {
+ %before = atomicrmw xchg ptr @cell, ptr @new seq_cst
+ %after = load ptr, ptr @cell
+ ret ptr %after
+}''',[('top','%before',{'FN(@old,0,0)','FN(@new,0,0)'}),('top','%after',{'FN(@old,0,0)','FN(@new,0,0)'})]),
+# N9's min/max uses an icmp plus PT3 select: both value operands union,
+# even when the comparison is a singleton. Do not import a refined analysis.
+'atomic-min-select':('''@cell = internal global i8 1
+define i8 @top() {
+ %before = atomicrmw min ptr @cell, i8 3 seq_cst
+ %after = load i8, ptr @cell
+ ret i8 %after
+}''',[('top','%before',{'INT(1)','INT(3)'}),('top','%after',{'INT(1)','INT(3)'})]),
+# N7 replaces an undefined shuffle MASK by lane index zero, not a zero lane.
+'shuffle-undef-mask':('''define i8 @top() {
+ %vec = shufflevector <2 x i8> <i8 7, i8 9>, <2 x i8> zeroinitializer, <2 x i32> <i32 undef, i32 1>
+ %v = extractelement <2 x i8> %vec, i32 0
+ ret i8 %v
+}''',[('top','%v',{'INT(7)'})]),
 'byval':('''@seed = internal global i8 7
 define internal i8 @copy(ptr byval(i8) %p) {
  store i8 9, ptr %p
