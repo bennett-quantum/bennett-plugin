@@ -174,6 +174,29 @@ define void @top() {
  ret void
 }""", {'INT(7)'}, False),
 
+    'N21-vp-reduction-select-unions': (
+        'e-p:64:64',
+        """declare i32 @llvm.vp.reduce.mul.v2i32(i32,<2 x i32>,<2 x i1>,i32)
+define i32 @top() {
+ %v = call i32 @llvm.vp.reduce.mul.v2i32(i32 3,<2 x i32> <i32 5,i32 7>,<2 x i1> <i1 true,i1 false>,i32 2)
+ ret i32 %v
+}""", {'INT(3)','INT(15)','INT(21)','INT(105)'}, False),
+    'N21-vp-selector-zero-arm': (
+        'e-p:64:64',
+        """declare <2 x i32> @llvm.vp.select.v2i32(<2 x i1>,<2 x i32>,<2 x i32>,i32)
+define i32 @top() {
+ %x = call <2 x i32> @llvm.vp.select.v2i32(<2 x i1> <i1 true,i1 false>,<2 x i32> <i32 5,i32 6>,<2 x i32> <i32 7,i32 9>,i32 2)
+ %v = extractelement <2 x i32> %x, i32 1
+ ret i32 %v
+}""", {'INT(0)','INT(6)','INT(9)'}, False),
+    'N27-extrema-select-union': (
+        'e-p:64:64',
+        """declare i32 @llvm.smax.i32(i32,i32)
+define i32 @top() {
+ %v = call i32 @llvm.smax.i32(i32 3,i32 7)
+ ret i32 %v
+}""", {'INT(3)','INT(7)'}, False),
+
     'PT12-uinc-wrap-select-union': (
         'e-p:64:64',
         """@g = internal global i8 0

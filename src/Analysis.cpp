@@ -773,8 +773,91 @@ AV Analysis::bitcast(const Value *source, Type *destination, const Path &path) {
     }
   llvm_unreachable("invalid bitcast lane path");
 }
+static AV laneBinary(unsigned opcode,const AV &x,const AV &y,Module &m) {
+  AV value;value.top=x.top || y.top;
+  for(auto &a:x.atoms)for(auto &b:y.atoms) {
+    if(a.kind==Atom::Int && b.kind==Atom::Int) {
+      auto *left=ConstantInt::get(m.getContext(),a.integer),*right=ConstantInt::get(m.getContext(),b.integer);
+      Constant *fold=ConstantFoldBinaryOpOperands(opcode,left,right,m.getDataLayout());
+      if(auto *c=dyn_cast_or_null<ConstantInt>(fold))value.merge(integer(c->getValue()));
+      else if(fold && (isa<PoisonValue>(fold)||isa<UndefValue>(fold)))value.merge(integer(APInt(a.integer.getBitWidth(),0)));
+      else value.top=true;
+    } else {
+      value.top=true;
+      if(a.kind==Atom::Root)value.atoms.insert(a);
+      if(b.kind==Atom::Root)value.atoms.insert(b);
+    }
+  }
+  return value;
+}
 bool Analysis::composite(Instruction &i) {
   const auto &dl = M.getDataLayout();
+  if(auto *call=dyn_cast<IntrinsicInst>(&i)) {
+    auto name=call->getCalledFunction()->getName();
+    auto base=Intrinsic::getBaseName(call->getIntrinsicID()).drop_front(5);
+    bool extrema=base=="smax"||base=="smin"||base=="umax"||base=="umin";
+    bool overflow=base=="uadd.with.overflow"||base=="usub.with.overflow"||base=="sadd.with.overflow"||base=="ssub.with.overflow";
+    if((extrema || overflow) && call->getArgOperand(0)->getType()->isIntegerTy()) {
+      auto x=get(call->getArgOperand(0)),y=get(call->getArgOperand(1));
+      if(extrema) {x.merge(y);setField(&i,{},x);return true;}
+      bool sub=base.contains("sub"),sign=base.starts_with("s");
+      auto sum=laneBinary(sub?Instruction::Sub:Instruction::Add,x,y,M);AV left=sub?x:sum,right=sub?y:x;
+      auto predicate=CmpInst::ICMP_ULT;
+      if(sign) {
+        left=laneBinary(Instruction::And,laneBinary(Instruction::Xor,x,sum,M),laneBinary(Instruction::Xor,sub?x:y,sub?y:sum,M),M);
+        right=integer(APInt(call->getArgOperand(0)->getType()->getIntegerBitWidth(),0));predicate=CmpInst::ICMP_SLT;
+      }
+      AV flag;
+      if(left.top || right.top) {flag.merge(integer(APInt(1,0)));flag.merge(integer(APInt(1,1)));}
+      for(auto &a:left.atoms)for(auto &b:right.atoms)if(a.kind==Atom::Int && b.kind==Atom::Int)
+        flag.merge(integer(APInt(1,ICmpInst::compare(a.integer,b.integer,predicate))));
+      setField(&i,{0},sum);setField(&i,{1},flag);return true;
+    }
+    if(base=="ctpop" || base=="ctlz" || base=="cttz") {
+      auto helper="__bennett_rt_"+base.str()+"_i"+std::to_string(i.getType()->getScalarSizeInBits());
+      if(auto *f=M.getFunction(helper))bind(*call,f);
+      else {AV top;top.top=true;setField(&i,{},top);}
+      return true;
+    }
+    if(name.starts_with("llvm.vp.merge.") || name.starts_with("llvm.vp.select.")) {
+      unsigned n=cast<VectorType>(i.getType())->getElementCount().getKnownMinValue();
+      for(unsigned k=0;k<n;++k) {
+        AV value=field(call->getArgOperand(1),{k});value.merge(field(call->getArgOperand(2),{k}));
+        if(name.starts_with("llvm.vp.select."))value.merge(integer(APInt(dl.getTypeSizeInBits(cast<VectorType>(i.getType())->getElementType()).getKnownMinValue(),0)));
+        setField(&i,{k},value);
+      }
+      return true;
+    }
+    bool vp=name.starts_with("llvm.vp.reduce."),reduce=name.starts_with("llvm.vector.reduce.");
+    if(vp || reduce) {
+      auto op=name.drop_front(vp?15:19).split('.').first;
+      unsigned opcode=op=="add"?Instruction::Add:op=="mul"?Instruction::Mul:op=="and"?Instruction::And:op=="or"?Instruction::Or:op=="xor"?Instruction::Xor:0;
+      if(opcode) {
+        auto *vector=call->getArgOperand(vp?1:0);unsigned n=cast<VectorType>(vector->getType())->getElementCount().getKnownMinValue();
+        AV acc=vp?get(call->getArgOperand(0)):field(vector,{0});
+        for(unsigned k=vp?0:1;k<n;++k) {
+          auto next=laneBinary(opcode,acc,field(vector,{k}),M);
+          if(vp)next.merge(acc);acc=next;
+        }
+        setField(&i,{},acc);return true;
+      }
+    }
+  }
+  if(i.getType()->isVectorTy() && !isa<BitCastInst>(i) && (isa<BinaryOperator>(i)||isa<CmpInst>(i)||isa<CastInst>(i))) {
+    for(auto &leaf:leaves(i.getType(),dl)) {
+      auto x=field(i.getOperand(0),leaf.path);AV value;
+      if(auto *c=dyn_cast<CastInst>(&i))value=convert(x,cast<VectorType>(c->getOperand(0)->getType())->getElementType(),leaf.type,c->getOpcode());
+      else if(auto *cmp=dyn_cast<ICmpInst>(&i)) {
+        auto y=field(i.getOperand(1),leaf.path);
+        if(x.top || y.top) {value.merge(integer(APInt(1,0)));value.merge(integer(APInt(1,1)));}
+        for(auto &a:x.atoms)for(auto &b:y.atoms)
+          if(a.kind==Atom::Int && b.kind==Atom::Int)value.merge(integer(APInt(1,ICmpInst::compare(a.integer,b.integer,cmp->getPredicate()))));
+      } else if(isa<FCmpInst>(i)) {value.merge(integer(APInt(1,0)));value.merge(integer(APInt(1,1)));}
+      else value=laneBinary(i.getOpcode(),x,field(i.getOperand(1),leaf.path),M);
+      setField(&i,leaf.path,value);
+    }
+    return true;
+  }
   if (auto *c = dyn_cast<BitCastInst>(&i)) {
     for (auto &leaf:leaves(c->getType(),dl))
       setField(c,leaf.path,bitcast(c->getOperand(0),c->getType(),leaf.path));

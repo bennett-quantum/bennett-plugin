@@ -229,6 +229,70 @@ void normaliseScalar(Function &f) {
       bool packed=dl.getTypeAllocSize(element).getKnownMinValue()!=bits/8;
       return b.CreateGEP(packed?b.getInt8Ty():element,base,b.getInt64(packed?k*(bits/8):k),name);
     };
+    if(auto *call=dyn_cast<IntrinsicInst>(i)) {
+      auto name=call->getCalledFunction()->getName();
+      bool selector=name.starts_with("llvm.vp.merge.") || name.starts_with("llvm.vp.select.");
+      bool vpReduce=name.starts_with("llvm.vp.reduce.");
+      bool reduce=name.starts_with("llvm.vector.reduce.");
+      IRBuilder<NoFolder> b(i);auto r=i->getName().str();
+      if(selector) {
+        auto cond=lanesOf(call->getArgOperand(0)),yes=lanesOf(call->getArgOperand(1)),no=lanesOf(call->getArgOperand(2));
+        if(cond.empty() || yes.empty() || no.empty())continue;
+        SmallVector<Value *> result;auto *evl=call->getArgOperand(3);
+        for(unsigned k=0;k<cond.size();++k) {
+          auto suffix=std::to_string(k)+"."+r;
+          auto *active=b.CreateICmpULT(ConstantInt::get(evl->getType(),k),evl,"nz.active"+suffix);
+          auto *choice=b.CreateSelect(cond[k],yes[k],no[k],"nz.choice"+suffix);
+          auto *inactive=name.starts_with("llvm.vp.merge.")?no[k]:Constant::getNullValue(yes[k]->getType());
+          result.push_back(b.CreateSelect(active,choice,inactive,"nz.l"+suffix));
+        }
+        laneValues[i]=result;deadVectors.push_back(i);continue;
+      }
+      if(reduce || vpReduce) {
+        auto op=name.drop_front(vpReduce?15:19).split('.').first;
+        unsigned opcode=op=="add"?Instruction::Add:op=="mul"?Instruction::Mul:op=="and"?Instruction::And:op=="or"?Instruction::Or:op=="xor"?Instruction::Xor:0;
+        if(!opcode)continue;
+        auto lanes=lanesOf(call->getArgOperand(vpReduce?1:0));if(lanes.empty())continue;
+        Value *acc=vpReduce?call->getArgOperand(0):lanes[0];auto mask=vpReduce?lanesOf(call->getArgOperand(2)):SmallVector<Value *>();
+        if(vpReduce && mask.empty())continue;
+        i->setName("");
+        for(unsigned k=vpReduce?0:1;k<lanes.size();++k) {
+          auto suffix=std::to_string(k)+"."+r;
+          if(vpReduce) {
+            auto *evl=call->getArgOperand(3);
+            auto *active=b.CreateICmpULT(ConstantInt::get(evl->getType(),k),evl,"nz.active"+suffix);
+            auto *enabled=b.CreateAnd(active,mask[k],"nz.mask"+suffix);
+            auto *fold=b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],"nz.fold"+suffix);
+            acc=b.CreateSelect(enabled,fold,acc,k+1==lanes.size()?r:"nz.acc"+suffix);
+          } else acc=b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],k+1==lanes.size()?r:"nz.f"+suffix);
+        }
+        i->replaceAllUsesWith(acc);i->eraseFromParent();continue;
+      }
+    }
+    if(i->getType()->isVectorTy() && (isa<BinaryOperator>(i)||isa<CmpInst>(i)||isa<CastInst>(i)||isa<SelectInst>(i))) {
+      if(isa<BitCastInst>(i)) {} // Geometry handled by the bit-string rule below.
+      else {
+        SmallVector<SmallVector<Value *>> inputs;bool ready=true;
+        unsigned n=cast<VectorType>(i->getType())->getElementCount().getKnownMinValue();
+        for(Value *operand:i->operands()) {
+          SmallVector<Value *> lanes;
+          if(operand->getType()->isVectorTy())lanes=lanesOf(operand);
+          else lanes.assign(n,operand);
+          ready&=lanes.size()==n;inputs.push_back(lanes);
+        }
+        if(!ready)continue;
+        IRBuilder<NoFolder> b(i);SmallVector<Value *> result;
+        for(unsigned k=0;k<n;++k) {
+          auto name="nz.l"+std::to_string(k)+"."+i->getName().str();Value *v=nullptr;
+          if(auto *op=dyn_cast<BinaryOperator>(i))v=b.CreateBinOp((Instruction::BinaryOps)op->getOpcode(),inputs[0][k],inputs[1][k],name);
+          else if(auto *cmp=dyn_cast<CmpInst>(i))v=b.CreateCmp(cmp->getPredicate(),inputs[0][k],inputs[1][k],name);
+          else if(auto *c=dyn_cast<CastInst>(i))v=b.CreateCast((Instruction::CastOps)c->getOpcode(),inputs[0][k],cast<VectorType>(i->getType())->getElementType(),name);
+          else v=b.CreateSelect(inputs[0][k],inputs[1][k],inputs[2][k],name);
+          result.push_back(v);
+        }
+        laneValues[i]=result;deadVectors.push_back(i);continue;
+      }
+    }
     if(auto *l=dyn_cast<LoadInst>(i);l && l->getType()->isVectorTy()) {
       auto *t=cast<VectorType>(l->getType());IRBuilder<NoFolder> b(l);SmallVector<Value *> values;
       for(unsigned k=0;k<t->getElementCount().getKnownMinValue();++k) {
@@ -349,14 +413,41 @@ void normaliseScalar(Function &f) {
     } else unimplemented("§12 N26 memory intrinsic family",2,m);
     m->eraseFromParent();
   }
+  SmallVector<IntrinsicInst *> integerIntrinsics;
+  for(Instruction &i:instructions(f))if(auto *c=dyn_cast<IntrinsicInst>(&i))integerIntrinsics.push_back(c);
+  for(auto *c:integerIntrinsics) {
+    auto name=Intrinsic::getBaseName(c->getIntrinsicID()).drop_front(5);
+    bool extrema=name=="smax"||name=="smin"||name=="umax"||name=="umin";
+    bool overflow=name=="uadd.with.overflow"||name=="usub.with.overflow"||name=="sadd.with.overflow"||name=="ssub.with.overflow";
+    if(!extrema && !overflow)continue;
+    auto *a=c->getArgOperand(0),*d=c->getArgOperand(1);
+    if(!a->getType()->isIntegerTy())continue;
+    IRBuilder<NoFolder> b(c);auto r=c->getName().str();c->setName("");Value *result;
+    if(extrema) {
+      auto predicate=name=="smax"?CmpInst::ICMP_SGT:name=="smin"?CmpInst::ICMP_SLT:name=="umax"?CmpInst::ICMP_UGT:CmpInst::ICMP_ULT;
+      auto *cmp=b.CreateICmp(predicate,a,d,"nz.c."+r);result=b.CreateSelect(cmp,a,d,r);
+    } else {
+      bool sub=name.contains("sub"),sign=name.starts_with("s");
+      auto *sum=sub?b.CreateSub(a,d,"nz.s."+r):b.CreateAdd(a,d,"nz.s."+r);Value *flag;
+      if(sign) {
+        auto *x=b.CreateXor(a,sum,"nz.x."+r);
+        auto *y=b.CreateXor(sub?a:d,sub?d:sum,"nz.y."+r);
+        auto *w=b.CreateAnd(x,y,"nz.w."+r);
+        flag=b.CreateICmpSLT(w,Constant::getNullValue(a->getType()),"nz.c."+r);
+      } else flag=b.CreateICmpULT(sub?a:sum,sub?d:a,"nz.c."+r);
+      auto *first=b.CreateInsertValue(Constant::getNullValue(c->getType()),sum,0,"nz.a."+r);
+      result=b.CreateInsertValue(first,flag,1,r);
+    }
+    c->replaceAllUsesWith(result);c->eraseFromParent();
+  }
   // N27 scalar count helpers (wide limb-slot ABI remains a separate rule).
   SmallVector<IntrinsicInst *> counts;
   for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
     auto n=c->getCalledFunction()->getName();
-    if((n.starts_with("llvm.ctlz.") || n.starts_with("llvm.cttz.")) && c->getType()->isIntegerTy() && c->getType()->getIntegerBitWidth()<=128) counts.push_back(c);
+    if((n.starts_with("llvm.ctlz.") || n.starts_with("llvm.cttz.") || n.starts_with("llvm.ctpop.")) && c->getType()->isIntegerTy() && c->getType()->getIntegerBitWidth()<=128) counts.push_back(c);
   }
   for(auto *c:counts) {
-    auto n=c->getCalledFunction()->getName();auto op=n.starts_with("llvm.ctlz.")?"ctlz":"cttz";
+    auto n=c->getCalledFunction()->getName();auto op=n.starts_with("llvm.ctlz.")?"ctlz":n.starts_with("llvm.cttz.")?"cttz":"ctpop";
     auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_"+std::string(op)+"_i"+std::to_string(c->getType()->getIntegerBitWidth()),c->getFunctionType());
     IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *replacement=b.CreateCall(helper,args);replacement->takeName(c);c->replaceAllUsesWith(replacement);c->eraseFromParent();
   }
