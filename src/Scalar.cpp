@@ -527,7 +527,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
   if (device == "CONSOLE") {
     deviceGlobal("console_buf"); deviceGlobal("console_L"); deviceGlobal("console_n");
-    heapLimit = deviceSize;
+    heapLimit = std::max(heapLimit, deviceSize);
   }
   // The entry dependency decision precedes private allocation (§16.2). A
   // pointer supplied by OUT or read from this invocation's model buffer does
@@ -667,7 +667,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
       wrapperRows.push_back(c + " = lift.const.i64 " + std::to_string(w));
       wrapperRegs.push_back(loc + ":reg[64]");
       wrapperRows.push_back(loc + " = lift.alloc " + c);
-      invoke.push_back(loc); buffer = loc; bufferSize = w; heapLimit += w;
+      invoke.push_back(loc); buffer = loc; bufferSize = w; heapLimit = std::max(heapLimit, uint64_t(w));
     } else {
       if (w != param)
         fail("shape", "ARG carrier width mismatch");

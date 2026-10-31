@@ -57,7 +57,7 @@ unsigned top(unsigned arg) {
  decls=re.search(r'```llvm markers-ir\n(.*?)```',dialect_text(),re.S)[1]
  used=set(re.findall(r'@(__bennett_\w+)',body));body+='\n'+'\n'.join(l for l in decls.splitlines() if re.search(r'@([^ (]+)',l)[1] in used)
  published=d/'published';published.mkdir();(published/'input.ll').write_text(body)
- z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(published/'out'),'-disable-output',published/'input.ll'])
+ z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(published/'out'),'-disable-output',published/'input.ll'])
  pub={'exit':z.returncode,'diagnostic':z.stderr};report['published_oracle_inc8']=pub
  if z.returncode==0:
   obj=published/'out/top/launch.bennett';check=run([REF,'check',obj]);execution=run([REF,'run-program',obj,'top','--args','5,5','--budget','10000,0,7,1']);pub['check']=check.returncode==0;pub['check_output']=check.stdout+check.stderr;pub['run']=json.loads(execution.stdout) if execution.returncode==0 else execution.stderr;pub['reference_exact']=(published/'out/top/oracle-0/ref.bennett').read_bytes()==fixture

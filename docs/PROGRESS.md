@@ -19,7 +19,22 @@ bindings/null console (§8.3), multiple output slices (§8.6), and heterogeneous
 multi-region layout linking (§16.3) remain implementation obligations. Determining
 §17.4: “marker calls lower to the region calls and `qreg.*` instructions of §18.3
 with the handle register environment of §6.5”. No capability is out of scope.
-Budget tables and checked executable certificates/records are the next groups.
+Group 2: staged JSON table input now resolves component-wise region-key/symbol
+precedence, unmatched-entry maxima, a once-only identity overlay, and explicit
+record precedence. Four independent table launch cases pass per major. Frozen
+capacities are computed before any shape, including explicit static records.
+The inc8 fixture now supplies its published linkmap defaults explicitly, so
+freezing all effective defaults does not accidentally enlarge its golden layout.
+OUT/CONSOLE allocation capacity is a maximum, not an addition to budget capacity.
+No-table build/certificate metadata bytes retain their schema and values.
+
+**Published budget-stage remains red**, both majors: entry-state replay /
+shadow-stack memory at `store i8 %x, ptr %p`. New bp-piq tracks the exact M1
+obligation: §9.2 step 3 requires the provisional reference object “with baseline
+`sstack` and other baseline wrapper inputs”; the staged shadow-stack H16→H32
+hashes and 316-row vector are not reproduced. This is missing plugin mechanics,
+not a spec blocker or a new M2 deferral. Group 2 is therefore partial acceptance.
+Checked executable certificates/records are the next group.
 
 ---
 

@@ -79,13 +79,112 @@ uint64_t integer(AV v, const Value *at) {
     unimplemented("§8.4 scalar descriptor finite dispatch", 1, at);
   return v.atoms.begin()->integer.getLimitedValue();
 }
+const char *budgetNames[] = {"steps", "heap", "stack", "depth", "sstack"};
+json::Object tuple(const std::vector<uint64_t> &v) {
+  json::Object o;
+  for (unsigned i = 0; i < 5; ++i) o[budgetNames[i]] = std::to_string(v[i]);
+  return o;
+}
+struct BudgetTable {
+  std::vector<uint64_t> defaults, capacities;
+  json::Value document = json::Object{};
+  bool enabled;
+  uint64_t number(const json::Value &v) {
+    auto s = v.getAsString(); uint64_t n;
+    if (!s || s->empty() || (s->size() > 1 && (*s)[0] == '0') || s->getAsInteger(10,n))
+      fail("input", "§9.2 budget components require unsigned decimal strings");
+    return n;
+  }
+  BudgetTable(std::vector<uint64_t> d, StringRef path) : defaults(d), capacities(d), enabled(!path.empty()) {
+    if (!enabled) return;
+    auto bytes = read(path); document = parse(bytes);
+    auto *o = document.getAsObject();
+    if (!o || o->getString("version") != "0.2" || !o->getArray("entries") ||
+        jcs(document) != StringRef(bytes).rtrim())
+      fail("input", "§9.2 budget table must be version 0.2 JCS");
+    for (auto &v : *o) if (v.first != "version" && v.first != "defaults" && v.first != "entries")
+      fail("input", "§9.2 unknown budget-table field");
+    if (auto *defs = o->getObject("defaults")) {
+      for (auto &v : *defs) {
+        unsigned i = 0; for (; i < 5; ++i) if (v.first == budgetNames[i]) break;
+        if (i == 5) fail("input", "§9.2 unknown default component");
+        defaults[i] = number(v.second);
+      }
+    } else if (o->get("defaults")) fail("input", "§9.2 defaults must be an object");
+    capacities = defaults;
+    for (auto &v : *o->getArray("entries")) {
+      auto *entry = v.getAsObject(); unsigned selectors = 0;
+      if (!entry) fail("input", "§9.2 entry must be an object");
+      for (auto &field : *entry) {
+        if (field.first == "symbol" || field.first == "region_key" || field.first == "identity") {
+          ++selectors; auto str = field.second.getAsString();
+          if (!str || (field.first != "symbol" && !std::regex_match(str->str(), std::regex("[0-9a-f]{64}"))))
+            fail("input", "§9.2 invalid selector");
+        } else {
+          unsigned i = 0; for (; i < 5; ++i) if (field.first == budgetNames[i]) break;
+          if (i == 5) fail("input", "§9.2 unknown entry component");
+          capacities[i] = std::max(capacities[i], number(field.second));
+        }
+      }
+      if (selectors != 1) fail("input", "§9.2 entry requires exactly one selector");
+    }
+  }
+  bool glob(StringRef pattern, StringRef name) {
+    std::string re = "^";
+    for (char c : pattern) {
+      if (c == '*') re += ".*";
+      else if (c == '?') re += ".";
+      else { if (StringRef(".[]{}()^$|+\\").contains(c)) re += '\\'; re += c; }
+    }
+    return std::regex_match(name.str(), std::regex(re + "$"));
+  }
+  std::vector<uint64_t> baseline(Function &f) {
+    auto result = defaults;
+    if (!enabled) return result;
+    auto key = regionKey(&f);
+    for (unsigned i = 0; i < 5; ++i) {
+      bool found = false;
+      for (auto selector : {"region_key", "symbol"}) {
+        for (auto &v : *document.getAsObject()->getArray("entries")) {
+          auto *e = v.getAsObject(); auto sel = e->getString(selector);
+          if (!sel || !e->get(budgetNames[i])) continue;
+          if ((StringRef(selector) == "region_key" && *sel == key) ||
+              (StringRef(selector) == "symbol" && glob(*sel, f.getName()))) {
+            result[i] = number(*e->get(budgetNames[i])); found = true; break;
+          }
+        }
+        if (found) break;
+      }
+    }
+    return result;
+  }
+  void overlay(std::vector<uint64_t> &budget, StringRef selection) {
+    if (!enabled) return;
+    for (unsigned i = 0; i < 5; ++i)
+      for (auto &v : *document.getAsObject()->getArray("entries")) {
+        auto *e = v.getAsObject();
+        if (e->getString("identity") == selection && e->get(budgetNames[i])) {
+          budget[i] = number(*e->get(budgetNames[i])); break;
+        }
+      }
+  }
+};
+std::string oracleIdentity(StringRef object) {
+  auto text = object.split("section symbols\n").second.split('\n').first;
+  auto syms = parse(text);
+  for (auto &v : *syms.getAsObject())
+    if (v.second.getAsObject()->getString("name") == "ref")
+      return v.second.getAsObject()->getString("interface_hash")->str();
+  fail("output", "missing reference identity");
+}
 struct Entry {
   Module &m;
   Analysis &a;
   Function &f;
   std::string out;
   unsigned stack;
-  std::vector<uint64_t> defaults;
+  BudgetTable &table;
+  json::Array resolvedShapes;
   std::map<const Value *, std::string> names;
   std::map<const BasicBlock *, std::string> blocks;
   std::set<const Value *> descriptorObjects;
@@ -251,13 +350,14 @@ struct Entry {
                                   : std::to_string(qwidth(output, &c)));
     // Null selects the resolved default. Explicit records use the published
     // four i64 fields + fault handle; all-ones means table/default lookup.
-    std::vector<uint64_t> budget = defaults;
+    auto baseline = table.baseline(*callee);
+    std::vector<uint64_t> budget = baseline, explicitFields(5, UINT64_MAX);
     if (!isa<ConstantPointerNull>(c.getArgOperand(1))) {
       auto *bp = c.getArgOperand(1);
       for (unsigned i = 0; i < 4; ++i) {
         auto n = integer(a.readAt(c, bp, 8 * i, u64), &c);
-        if (n != UINT64_MAX)
-          budget[i] = n;
+        explicitFields[i] = n;
+        if (n != UINT64_MAX) budget[i] = n;
       }
     }
     std::string refName = "ref";
@@ -266,8 +366,17 @@ struct Entry {
     auto *cf = cast<Function>(vm[callee]);
     normaliseScalar(*cf);
     auto path = out + "/oracle-" + std::to_string(references.size());
-    lowerScalar(*clone, *cf, current, path, budget[2], budget[1]);
+    auto capacities = table.capacities;
+    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1]);
     auto candidate = read(path + "/ref.bennett");
+    auto selection = oracleIdentity(candidate);
+    table.overlay(budget, selection);
+    for (unsigned i = 0; i < 5; ++i)
+      if (explicitFields[i] != UINT64_MAX) budget[i] = explicitFields[i];
+    if (table.enabled) resolvedShapes.push_back(json::Object{
+      {"region_key", regionKey(callee)}, {"symbol", callee->getName()}, {"shape", current},
+      {"selection_identity", selection}, {"identity", oracleIdentity(candidate)},
+      {"baseline", tuple(baseline)}, {"resolved", tuple(budget)}});
     auto it = std::find(references.begin(), references.end(), candidate);
     unsigned ri = it - references.begin();
     if (it == references.end()) references.push_back(candidate);
@@ -690,12 +799,13 @@ std::string launchObject(Entry &e, json::Object &record,
       object += "\nsection " + std::string(name) + "\n" + sections[name] + "\n";
   json::Array budgets;
   for (auto &b : e.budgets) {
-    b["selection_identity"] = oracleHash;
-    b["identity"] = oracleHash;
+    auto name = b.getString("region").value_or("ref").str();
+    b["selection_identity"] = referenceHashes.at(name);
+    b["identity"] = referenceHashes.at(name);
     budgets.push_back(std::move(b));
   }
   record["budgets"] = std::move(budgets);
-  record["budget_table_sha256"] = hash(jcs(*record.get("budgets")));
+  record["budget_table_sha256"] = record.get("budget_table") ? hash(jcs(*record.get("budget_table"))) : hash(jcs(*record.get("budgets")));
   record["layout"] = sections.count("layout") ? parse(sections["layout"])
                                               : json::Value(json::Object{});
   record["build_flags"] =
@@ -855,7 +965,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 
 } // namespace
 void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
-                     StringRef budgetDefault) {
+                     StringRef budgetDefault, StringRef budgetFile) {
   SmallVector<StringRef> components;
   budgetDefault.split(components, ',');
   std::vector<uint64_t> defaults;
@@ -867,8 +977,21 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   }
   if (defaults.size() != 5)
     fail("input", "§9.2 budget default needs five components");
-  if (auto ec = sys::fs::create_directories(out))
-    fail("output", ec.message());
+  BudgetTable table(defaults, budgetFile);
+  {
+    auto *u64 = Type::getInt64Ty(m.getContext());
+    for (Function &f : m) for (Instruction &i : instructions(f))
+      if (auto *c = dyn_cast<CallBase>(&i); c && c->getCalledFunction() &&
+          c->getCalledFunction()->getName() == "__bennett_oracle" &&
+          !isa<ConstantPointerNull>(c->getArgOperand(1)))
+        for (unsigned j = 0; j < 4; ++j) {
+          auto v = a.readAt(*c, c->getArgOperand(1), 8*j, u64);
+          if (!v.top) for (auto &atom : v.atoms)
+            if (atom.kind == Atom::Int && !atom.integer.isAllOnes())
+              table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
+        }
+  }
+  if (auto ec = sys::fs::create_directories(out)) fail("output", ec.message());
   ValueToValueMapTy vm;
   auto device = CloneModule(m, vm);
   std::vector<Function *> entries;
@@ -880,13 +1003,21 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     std::string dir = out.str() + "/" + f->getName().str();
     if (auto ec = sys::fs::create_directories(dir))
       fail("output", ec.message());
-    Entry e{m, a, *f, dir, stack, defaults};
+    Entry e{m, a, *f, dir, stack, table};
     e.lower();
     json::Object record{{"dialect", "0.2.10"},
                         {"isa", "0.8"},
                         {"llvm_version", LLVM_VERSION_STRING},
                         {"pipeline", "bennett"},
                         {"shape", e.shape}};
+    if (table.enabled) {
+      json::Object resolved{{"version", "0.2"}, {"defaults", tuple(table.defaults)},
+        {"capacities", tuple(table.capacities)}, {"shapes", std::move(e.resolvedShapes)},
+        {"input", parse(jcs(table.document))}};
+      auto resolvedText = jcs(json::Value(std::move(resolved)));
+      record["resolved_table_sha256"] = hash(resolvedText);
+      record["budget_table"] = parse(resolvedText);
+    }
     json::Object cert{
         {"versions", json::Object{{"isa", "0.8"}, {"cert", "0.8"}}},
         {"regions", json::Object{}},

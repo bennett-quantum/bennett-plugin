@@ -1,3 +1,10 @@
+Group 2 now implements staged budget-table selectors, unmatched/raw-entry and
+explicit-field frozen maxima, once-only identity overlays and build-record table
+hashes. Four independent table launches pass per major. Published budget-stage
+still fails shadow-stack memory on both majors (bp-piq); no full budget acceptance
+claim. New bp-o7f records the published certificate checker/positive-golden gap
+and the still-required plugin certificate implementation. No new deferrals.
+
 Seventh pass in progress from 32427ed. Group 1 adds production binding
 OUT/MEM_IN/CLOCK/BLOCK/CONSOLE, same-layout multiple reference symbols and direct
 handle/scalar phi block parameters. New tests/production_shapes.py: 7/7 independent

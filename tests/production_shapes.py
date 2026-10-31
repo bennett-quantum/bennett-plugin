@@ -47,7 +47,7 @@ declare void @__bennett_oracle(ptr, ptr, ptr)
   if dev:fields += [(32+np*32,'i32',str(dev[0])),(36+np*32,'i32','0'),(40+np*32,'ptr','%disk' if block else '%t' if output else 'null'),(48+np*32,'i64',str(dev[1]))]
   for i,(offset,ty,v) in enumerate(fields):stores += [f' %p{i} = getelementptr i8, ptr %desc, i64 {offset}',f' store {ty} {v}, ptr %p{i}']
   src=src.replace(aggregate,'\n'.join(stores));(dest/'input.ll').write_text(src)
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=1000,0,128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=1000,{int(output)},128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']
   z=run(cmd);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
   if z.returncode:continue
   obj=out/'top/launch.bennett';ref=out/'top/oracle-0/ref.bennett'

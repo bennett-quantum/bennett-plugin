@@ -7172,6 +7172,1308 @@
         ]
       }
     },
-    "status": "partial; exact remaining acceptance obligations tracked by bp-2zv; no new deferral"
+    "status": "partial; exact remaining acceptance obligations tracked by bp-2zv; no new deferral",
+    "group2": {
+      "18": {
+        "major": 18,
+        "cases": [
+          {
+            "name": "baseline",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/baseline/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/baseline/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "1",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "099e07b5dd4ee92a0aba2394727daaabf0c4e1c46d7b4f5b6113bd21c1dd5d13",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "4",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "4",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "18.1.3",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "099e07b5dd4ee92a0aba2394727daaabf0c4e1c46d7b4f5b6113bd21c1dd5d13",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":4},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":4}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"0\",\"reg\":7,\"value\":0},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"11\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "identity-once",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/identity-once/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/identity-once/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "1",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "32f331d9130262af919c21bf29477bbb09a6ba9fc10de284d0eabba58e8dfddf",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "18.1.3",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "32f331d9130262af919c21bf29477bbb09a6ba9fc10de284d0eabba58e8dfddf",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"1\",\"reg\":7,\"value\":1},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"19\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "key-priority",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/key-priority/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/key-priority/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "2",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    },
+                    {
+                      "depth": "2",
+                      "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                      "steps": "2"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "2"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "2"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "a75477ba41660fb5a6addb62edc94772210ac344eb90f492320f36f6a87b2e90",
+              "budgets": [
+                {
+                  "depth": "2",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "2",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "18.1.3",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "a75477ba41660fb5a6addb62edc94772210ac344eb90f492320f36f6a87b2e90",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"1\",\"reg\":7,\"value\":1},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"19\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "explicit-precedence",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/explicit-precedence/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/18/explicit-precedence/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "2",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    },
+                    {
+                      "depth": "2",
+                      "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                      "steps": "2"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "868cd2157612b93bca21accce2373e07c13da360df9419faa2ca6fbea2f5553d",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "868cd2157612b93bca21accce2373e07c13da360df9419faa2ca6fbea2f5553d",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "6f9e9080e4547307ac2d51fb0b4f4772c8fc3d59862329098669cc55046a3d4f",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "1cbc90df900df78aacfc9349c81715343c4d0b4e1db26f9fbfdbd2a8c978ef18",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "18.1.3",
+              "object_hash": "970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "6f9e9080e4547307ac2d51fb0b4f4772c8fc3d59862329098669cc55046a3d4f",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          }
+        ]
+      },
+      "23": {
+        "major": 23,
+        "cases": [
+          {
+            "name": "baseline",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/baseline/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/baseline/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "1",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "099e07b5dd4ee92a0aba2394727daaabf0c4e1c46d7b4f5b6113bd21c1dd5d13",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "4",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "4",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "23.1.5",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "099e07b5dd4ee92a0aba2394727daaabf0c4e1c46d7b4f5b6113bd21c1dd5d13",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":4},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":4}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"0\",\"reg\":7,\"value\":0},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"11\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "identity-once",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/identity-once/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/identity-once/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "1",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "32f331d9130262af919c21bf29477bbb09a6ba9fc10de284d0eabba58e8dfddf",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "23.1.5",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "32f331d9130262af919c21bf29477bbb09a6ba9fc10de284d0eabba58e8dfddf",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"1\",\"reg\":7,\"value\":1},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"19\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "key-priority",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/key-priority/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/key-priority/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "2",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    },
+                    {
+                      "depth": "2",
+                      "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                      "steps": "2"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "2"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "2"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                    "resolved": {
+                      "depth": "2",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "a75477ba41660fb5a6addb62edc94772210ac344eb90f492320f36f6a87b2e90",
+              "budgets": [
+                {
+                  "depth": "2",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "2",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "25ed1e2162800f7189485a8e976559573b75b4a1c89f3ed5c6d8ee496c31b3db",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "23.1.5",
+              "object_hash": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "a75477ba41660fb5a6addb62edc94772210ac344eb90f492320f36f6a87b2e90",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[{\"bits\":\"0\",\"reg\":4,\"value\":0},{\"bits\":\"0\",\"reg\":5,\"value\":0},{\"bits\":\"0\",\"reg\":6,\"value\":0},{\"bits\":\"1\",\"reg\":7,\"value\":1},{\"bits\":\"0\",\"reg\":8,\"value\":0},{\"bits\":\"0\",\"reg\":9,\"value\":0},{\"bits\":\"0\",\"reg\":10,\"value\":0},{\"bits\":\"0\",\"reg\":11,\"value\":0}],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[{\"type\":\"i32\",\"value\":\"19\"}],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":69,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          },
+          {
+            "name": "explicit-precedence",
+            "exit": 0,
+            "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/explicit-precedence/out/top/oracle-0/ref.bennett\nbennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/production-budgets/23/explicit-precedence/out/top/oracle-1/ref.bennett\n",
+            "build": {
+              "arith_sha256": null,
+              "asm_table_sha256": null,
+              "budget_table": {
+                "capacities": {
+                  "depth": "2",
+                  "heap": "8",
+                  "sstack": "0",
+                  "stack": "32",
+                  "steps": "5"
+                },
+                "defaults": {
+                  "depth": "1",
+                  "heap": "0",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5"
+                },
+                "input": {
+                  "defaults": {
+                    "depth": "1",
+                    "heap": "0",
+                    "sstack": "0",
+                    "stack": "7",
+                    "steps": "5"
+                  },
+                  "entries": [
+                    {
+                      "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                      "steps": "5"
+                    },
+                    {
+                      "steps": "4",
+                      "symbol": "inc?"
+                    },
+                    {
+                      "steps": "3",
+                      "symbol": "*"
+                    },
+                    {
+                      "heap": "8",
+                      "identity": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "stack": "32"
+                    },
+                    {
+                      "depth": "2",
+                      "region_key": "67e9c6171ff0688d57b3f72a225cba391210e3f5037fa349e96c0d50ab29c90c",
+                      "steps": "2"
+                    }
+                  ],
+                  "version": "0.2"
+                },
+                "shapes": [
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "868cd2157612b93bca21accce2373e07c13da360df9419faa2ca6fbea2f5553d",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  },
+                  {
+                    "baseline": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "4"
+                    },
+                    "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "region_key": "868cd2157612b93bca21accce2373e07c13da360df9419faa2ca6fbea2f5553d",
+                    "resolved": {
+                      "depth": "1",
+                      "heap": "0",
+                      "sstack": "0",
+                      "stack": "7",
+                      "steps": "5"
+                    },
+                    "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                    "shape": "IN(8,zext);tgt=8",
+                    "symbol": "inc8"
+                  }
+                ],
+                "version": "0.2"
+              },
+              "budget_table_sha256": "6f9e9080e4547307ac2d51fb0b4f4772c8fc3d59862329098669cc55046a3d4f",
+              "budgets": [
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk0"
+                },
+                {
+                  "depth": "1",
+                  "heap": "0",
+                  "identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "selection_identity": "a0058b5c3f2e047208b68bc7d5fda91ff950abcece2d444d7dcdc72ee03c4fc5",
+                  "sstack": "0",
+                  "stack": "7",
+                  "steps": "5",
+                  "token": "tk1"
+                }
+              ],
+              "build_flags": {
+                "launch_target": "environment:BENNETT_TARGET",
+                "scalar_stack": 32
+              },
+              "cpuid": {},
+              "dialect": "0.2.10",
+              "entry": "top",
+              "interface_hash": "1cbc90df900df78aacfc9349c81715343c4d0b4e1db26f9fbfdbd2a8c978ef18",
+              "isa": "0.8",
+              "layout": {
+                "A_tab": 3,
+                "H": 13,
+                "S_cells": 5,
+                "globals": {},
+                "heap_base": 4096,
+                "heap_limit_max": 8,
+                "interface_regions": {
+                  "ref": {}
+                },
+                "null_size": 4096,
+                "ptr_width": 64
+              },
+              "llvm_version": "23.1.5",
+              "object_hash": "970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242",
+              "pipeline": "bennett",
+              "resolved_table_sha256": "6f9e9080e4547307ac2d51fb0b4f4772c8fc3d59862329098669cc55046a3d4f",
+              "runtimes_sha256": null,
+              "shape": "IN(8,zext);tgt=8",
+              "snapshot_sha256": null
+            },
+            "check": true,
+            "sha256": "970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242",
+            "execution": {
+              "output": "{\"budgets\":[{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5},{\"depth\":2,\"heap\":0,\"stack\":32,\"steps\":5}],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"a1bb2fe3eecbc38697716ca8e1bdeabc5d906fa356074a36565077d4b720e76a\",\"memory_equals_entry\":true,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":9,\"tape\":[]}\n",
+              "ok": true
+            },
+            "ok": true
+          }
+        ]
+      }
+    },
+    "published_budget_stage": {
+      "bead": "bp-piq",
+      "acceptance": false,
+      "runs": {
+        "18": {
+          "exit": 1,
+          "diagnostic": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 %x, ptr %p, align 1\n"
+        },
+        "23": {
+          "exit": 1,
+          "diagnostic": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 %x, ptr %p, align 1\n"
+        }
+      }
+    }
   }
 }

@@ -20,5 +20,6 @@ for major in 18 23; do
   python3 "$root/tests/descriptors.py" --major "$major"
   python3 "$root/tests/production.py" --major "$major"
   python3 "$root/tests/production_shapes.py" --major "$major"
+  python3 "$root/tests/production_budgets.py" --major "$major"
 done
 python3 "$root/tests/corpus_gate.py"
