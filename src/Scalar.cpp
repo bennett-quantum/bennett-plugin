@@ -216,6 +216,39 @@ struct Scalar {
           }
           continue;
         }
+        if(auto *br=dyn_cast<IndirectBrInst>(&i)) {
+          auto address=value(br->getAddress());
+          // §14.9: B(F)+k, with k counting non-entry address-taken blocks in
+          // layout order. Comparison layout must provide the backing object.
+          auto *object=m.getGlobalVariable("__bennett_rt_blk."+f.getName().str(),true);
+          if(!object || !globals.count(object)) unimplemented("§14.9 blockaddress comparison layout",2,br);
+          uint64_t base=4096;
+          for(GlobalVariable &g:m.globals()) if(globals.count(&g)) {
+            base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));
+            if(&g==object) break;
+            base+=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
+          }
+          std::vector<std::pair<uint64_t,BasicBlock *>> candidates;
+          uint64_t ordinal=0;
+          for(BasicBlock &b:f) if(&b!=&f.getEntryBlock() && b.hasAddressTaken()) {
+            bool listed=false;
+            for(unsigned k=0;k<br->getNumDestinations();++k) listed|=br->getDestination(k)==&b;
+            if(listed) candidates.push_back({base+ordinal,&b});
+            ++ordinal;
+          }
+          // Addresses are sorted by layout; the short-domain linear tree is
+          // the <=3 leaf case of §14.2. Larger domains need its balanced tree.
+          if(candidates.size()>3) unimplemented("§14.9 balanced indirectbr tree",2,br);
+          for(unsigned k=0;k<candidates.size();++k) {
+            if(k) lines.push_back(blockName(&bb)+".s"+std::to_string(k)+"():");
+            auto c=constant(APInt(width(br->getAddress()->getType()),candidates[k].first));
+            auto t=temp(1,"lift.icmp.eq "+address+" "+c);
+            auto next=k+1<candidates.size()?blockName(&bb)+".s"+std::to_string(k+1):blockName(&bb)+".d";
+            lines.push_back("qbranch "+t+" "+target(candidates[k].second)+" "+next);
+          }
+          lines.push_back(blockName(&bb)+".d():");lines.push_back("fault 4");
+          continue;
+        }
         if (auto *sw = dyn_cast<SwitchInst>(&i)) {
           std::string cond = value(sw->getCondition()),
                       fallback = target(sw->getDefaultDest());

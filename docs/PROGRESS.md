@@ -36,6 +36,17 @@ and runtime now come from one immutable commit, with a pin-specific baseline cac
 - N33 own-format libm carrier corrections are part of the pin; arithmetic/helper
   closure materialisation remains explicit M2 work, not claimed implemented here.
 
+## Additional scalar map delivery
+
+`indirectbr-two-blocks` was red as a required scalar object, then green on both
+majors: complete untrimmed fixture bytes, all symbol hashes, `check`, and the
+three published vectors (4096→7/9 steps, 4097→9/12, 4098→fault4/10).
+§14.9 block ordinals use layout order and the comparison-layout backing global;
+short domains use §14.2's linear leaf tree. Balanced large domains and general
+comparison-link supplied layouts remain explicit M2 mechanics, not a rejection.
+The complete supported-object count becomes 12, with eight lift fixtures still
+explicitly unavailable. This does not complete brief 1b item 4.
+
 ## Before/after evidence
 
 Stable 07f942c sources were rebuilt in `.tmp/before-build`; both majors reproduced
