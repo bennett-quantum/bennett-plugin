@@ -32,7 +32,7 @@ checks={'flags':len(keys)==5 and keys[0]==keys[1],'freeze':len(keys)==5 and keys
 # An absent transform is a failure; equality of two raw source keys is no witness.
 spec=dialect_text()
 pairs={tag:dict(re.findall(r'```llvm normalise-'+tag+r'=([^\n ]+)[^\n]*\n(.*?)```',spec,re.S)) for tag in ['in','out']}
-fixtures=['n-flags','n-shift','n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane',
+fixtures=['n-bitcast-lanes','n-bitcast-scalar','n-vector-i24','n-flags','n-shift','n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane',
           'n-trap','n-memintrinsics','n-atomic','n-atomic-wrap',
           *(['n-atomic-usub'] if a.major==23 else [])]
 if a.all_fixtures:

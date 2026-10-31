@@ -3,6 +3,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/NoFolder.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Scalar/LowerWidenableCondition.h"
 #include "llvm/Config/llvm-config.h"
@@ -217,7 +218,73 @@ void normaliseScalar(Function &f) {
   };
   SmallVector<Instruction *> laneWork, deadVectors;
   for(Instruction &i:instructions(f)) laneWork.push_back(&i);
+  unsigned vectorStoreOrdinal=0;
   for(Instruction *i:laneWork) {
+    auto &dl=f.getParent()->getDataLayout();
+    // N21 storage uses packed representation bits, not scalar allocation
+    // stride (notably i24 with ABI alignment 4). No vector is reconstructed.
+    auto pointer=[&](IRBuilder<NoFolder> &b,Value *base,Type *element,unsigned k,StringRef name)->Value * {
+      unsigned bits=dl.getTypeSizeInBits(element).getKnownMinValue();
+      if(bits%8)unimplemented("§12 N21 subbyte vector memory",2,i);
+      bool packed=dl.getTypeAllocSize(element).getKnownMinValue()!=bits/8;
+      return b.CreateGEP(packed?b.getInt8Ty():element,base,b.getInt64(packed?k*(bits/8):k),name);
+    };
+    if(auto *l=dyn_cast<LoadInst>(i);l && l->getType()->isVectorTy()) {
+      auto *t=cast<VectorType>(l->getType());IRBuilder<NoFolder> b(l);SmallVector<Value *> values;
+      for(unsigned k=0;k<t->getElementCount().getKnownMinValue();++k) {
+        auto suffix=std::to_string(k)+"."+l->getName().str();
+        auto *p=pointer(b,l->getPointerOperand(),t->getElementType(),k,"nz.p"+suffix);
+        auto *v=b.CreateLoad(t->getElementType(),p,"nz.l"+suffix);
+        v->setAlignment(commonAlignment(l->getAlign(),k*dl.getTypeSizeInBits(t->getElementType()).getKnownMinValue()/8));values.push_back(v);
+      }
+      laneValues[l]=values;deadVectors.push_back(l);continue;
+    }
+    if(auto *st=dyn_cast<StoreInst>(i);st && st->getValueOperand()->getType()->isVectorTy()) {
+      auto values=lanesOf(st->getValueOperand());if(values.empty())continue;
+      auto *t=cast<VectorType>(st->getValueOperand()->getType());IRBuilder<NoFolder> b(st);
+      auto ordinal=vectorStoreOrdinal++;
+      for(unsigned k=0;k<values.size();++k) {
+        auto suffix=std::to_string(k)+"."+f.getName().str()+"."+std::to_string(ordinal);
+        auto *p=pointer(b,st->getPointerOperand(),t->getElementType(),k,"nz.p"+suffix);
+        b.CreateStore(values[k],p)->setAlignment(commonAlignment(st->getAlign(),k*dl.getTypeSizeInBits(t->getElementType()).getKnownMinValue()/8));
+      }
+      st->eraseFromParent();continue;
+    }
+    if(auto *bc=dyn_cast<BitCastInst>(i);bc && (bc->getType()->isVectorTy()||bc->getOperand(0)->getType()->isVectorTy())) {
+      auto *src=bc->getOperand(0);SmallVector<Value *> input;
+      if(src->getType()->isVectorTy())input=lanesOf(src);else input.push_back(src);
+      if(input.empty())continue;
+      auto *destVector=dyn_cast<VectorType>(bc->getType());
+      Type *element=destVector?destVector->getElementType():bc->getType();
+      unsigned count=destVector?destVector->getElementCount().getKnownMinValue():1;
+      unsigned sw=dl.getTypeSizeInBits(input[0]->getType()).getKnownMinValue(),dw=dl.getTypeSizeInBits(element).getKnownMinValue();
+      unsigned total=sw*input.size();
+      if(total>128)continue; // N22 limb expansion remains explicit audit work.
+      IRBuilder<NoFolder> b(bc);auto name=bc->getName().str();SmallVector<Value *> values;
+      if(input.size()==count && sw==dw) {
+        for(unsigned k=0;k<count;++k)values.push_back(b.CreateBitCast(input[k],element,"nz.l"+std::to_string(k)+"."+name));
+      } else {
+        auto *packedType=IntegerType::get(f.getContext(),total);Value *packed=nullptr;
+        for(unsigned k=0;k<input.size();++k) {
+          auto suffix=std::to_string(k)+"."+name;Value *bits=input[k];
+          if(!bits->getType()->isIntegerTy())bits=bits->getType()->isPointerTy()?b.CreatePtrToInt(bits,b.getIntNTy(sw)):b.CreateBitCast(bits,b.getIntNTy(sw));
+          if(sw!=total)bits=b.CreateZExt(bits,packedType,"nz.pack"+suffix);
+          unsigned shift=dl.isLittleEndian()?k*sw:total-(k+1)*sw;
+          if(shift)bits=b.CreateShl(bits,ConstantInt::get(packedType,shift),"nz.ps"+suffix);
+          packed=packed?b.CreateOr(packed,bits,"nz.or"+suffix):bits;
+        }
+        for(unsigned k=0;k<count;++k) {
+          auto suffix=std::to_string(k)+"."+name;unsigned shift=dl.isLittleEndian()?k*dw:total-(k+1)*dw;Value *bits=packed;
+          if(shift)bits=b.CreateLShr(bits,ConstantInt::get(packedType,shift),"nz.bs"+suffix);
+          if(dw!=total)bits=b.CreateTrunc(bits,b.getIntNTy(dw),"nz.l"+suffix);
+          if(!element->isIntegerTy())bits=element->isPointerTy()?b.CreateIntToPtr(bits,element):b.CreateBitCast(bits,element);
+          values.push_back(bits);
+        }
+      }
+      if(destVector) {laneValues[bc]=values;deadVectors.push_back(bc);}
+      else {bc->replaceAllUsesWith(values[0]);bc->eraseFromParent();}
+      continue;
+    }
     auto *extract=dyn_cast<ExtractElementInst>(i);
     auto *insert=dyn_cast<InsertElementInst>(i);
     if(!extract && !insert) continue;
