@@ -21,9 +21,45 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 #include <numeric>
+#include <chrono>
+#include "llvm/Support/CommandLine.h"
 #include <tuple>
 using namespace llvm;
 namespace bennett {
+namespace {
+cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
+cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000));
+struct AnalysisBudget {
+  std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
+  const Instruction *at=nullptr;
+  const char *rule="PT11 seeds";
+  uint64_t ticks=0;
+  [[noreturn]] void exhausted() {
+    std::string message="§5.2 "+std::string(rule)+" budget exhausted at AV(";
+    raw_string_ostream out(message);
+    if(at) {
+      const Value *element=at;
+      if(auto *store=dyn_cast<StoreInst>(at))element=store->getPointerOperand();
+      if(auto *ret=dyn_cast<ReturnInst>(at);ret && ret->getReturnValue())element=ret->getReturnValue();
+      element->printAsOperand(out,false);out<<") in @"<<at->getFunction()->getName();
+    }
+    else out<<"initial seeds)";
+    unimplemented(out.str(),1,at);
+  }
+  void check(bool force=false) {
+    if((force || (++ticks%1024)==0) &&
+       std::chrono::steady_clock::now()-start>=std::chrono::milliseconds(AnalysisMilliseconds)) exhausted();
+  }
+};
+thread_local AnalysisBudget *activeBudget=nullptr;
+void budgetTick() {if(activeBudget)activeBudget->check();}
+struct BudgetScope {
+  AnalysisBudget budget;
+  AnalysisBudget *previous=activeBudget;
+  BudgetScope() {activeBudget=&budget;}
+  ~BudgetScope() {activeBudget=previous;}
+};
+}
 static AV atom(Atom::Kind k, const Value *o = nullptr, int64_t off = 0,
                int64_t stride = 0) {
   AV a;
@@ -36,18 +72,23 @@ static AV integer(APInt n) {
   return a;
 }
 bool Atom::operator<(const Atom &b) const {
-  auto x = std::make_tuple(kind, object, offset, stride, integer.getBitWidth(), numerical);
-  auto y = std::make_tuple(b.kind, b.object, b.offset, b.stride,
-                           b.integer.getBitWidth(), b.numerical);
-  return x < y || (x == y && integer.ult(b.integer));
+  if(kind!=b.kind)return kind<b.kind;
+  if(object!=b.object)return std::less<const Value *>{}(object,b.object);
+  if(offset!=b.offset)return offset<b.offset;
+  if(stride!=b.stride)return stride<b.stride;
+  if(integer.getBitWidth()!=b.integer.getBitWidth())return integer.getBitWidth()<b.integer.getBitWidth();
+  if(numerical!=b.numerical)return numerical<b.numerical;
+  return integer.ult(b.integer);
 }
 bool AV::merge(const AV &v) {
+  budgetTick();
   bool change = false;
   if (v.top && !top) {
     top = true;
     change = true;
   }
   if(&v==this)return change;
+  bool insertedInteger=false;
   for (auto a : v.atoms) {
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
@@ -64,10 +105,12 @@ bool AV::merge(const AV &v) {
         }
       }
     }
-    change |= atoms.insert(a).second;
+    bool inserted=atoms.insert(a).second;
+    change |= inserted;
+    insertedInteger |= inserted && a.kind==Atom::Int;
   }
   unsigned n = 0;
-  if (atoms.size() > 4096)
+  if (insertedInteger && !top && atoms.size() > 4096)
     for (auto &a : atoms)
       n += a.kind == Atom::Int;
   if (n > 4096) {
@@ -443,18 +486,54 @@ static bool overlaps(const Atom &p, const Slot &s, uint64_t size) {
   if(distance<0) distance+=stride;
   return distance < s.bytes || distance+size>stride;
 }
+void Analysis::indexSlot(size_t n) {
+  auto &s=slots[n];
+  if(!s.stride && !s.filled) {
+    exactSlots[s.object][s.offset].push_back(n);
+    maxSlotBytes[s.object]=std::max(maxSlotBytes[s.object],s.bytes);
+  } else otherSlots[s.object].push_back(n);
+}
+std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
+  std::vector<size_t> result;
+  auto test=[&](size_t n) {budgetTick();if(overlaps(a,slots[n],bytes))result.push_back(n);};
+  if(auto it=otherSlots.find(a.object);it!=otherSlots.end())for(auto n:it->second)test(n);
+  if(auto it=exactSlots.find(a.object);it!=exactSlots.end()) {
+    auto &byOffset=it->second;
+    if(a.stride)for(auto &entry:byOffset)for(auto n:entry.second)test(n);
+    else {
+      __int128 lo=(__int128)a.offset-maxSlotBytes[a.object]+1,hi=(__int128)a.offset+bytes;
+      auto begin=byOffset.lower_bound((int64_t)std::max(lo,(__int128)INT64_MIN));
+      for(auto p=begin;p!=byOffset.end() && (__int128)p->first<hi;++p)for(auto n:p->second)test(n);
+    }
+  }
+  return result;
+}
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto &a : p.atoms)
     if (a.kind == Atom::Ptr) {
-      for (auto &s : slots)
-        if (s.object == a.object && s.offset == a.offset &&
-            s.stride == a.stride && s.bytes == size && s.filled == filled && s.numerical==a.numerical) {
-          changed |= s.value.merge(v);
-          goto next;
+      // Initial zero images with the same start are nested intervals. Their
+      // exact union is the largest extent, not a new slot for every loop round.
+      if(filled && !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int && v.atoms.begin()->integer.isZero()) {
+        bool found=false;
+        for(size_t n:otherSlots[a.object]) {
+          auto &s=slots[n];
+          if(s.filled && s.offset==a.offset && s.stride==a.stride && s.numerical==a.numerical && !s.value.top && s.value.atoms.size()==1 && s.value.atoms.begin()->kind==Atom::Int && s.value.atoms.begin()->integer.isZero()) {
+            if(size>s.bytes) {
+              slotIndex.erase(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical});
+              s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);changed=true;
+            }
+            found=true;break;
+          }
         }
-      slots.push_back({a.object, a.offset, a.stride, size, v, filled, a.numerical});
-      changed = true;
-    next:;
+        if(found)continue;
+      }
+      SlotKey key{a.object,a.offset,a.stride,size,filled,a.numerical};
+      auto [it,inserted]=slotIndex.emplace(key,slots.size());
+      if(inserted) {
+        slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
+        indexSlot(it->second);
+        changed=true;
+      } else changed|=slots[it->second].value.merge(v);
     }
 }
 AV Analysis::read(Value *base, uint64_t offset, Type *t) {
@@ -535,8 +614,8 @@ AV Analysis::load(const AV &p, Type *t) {
         continue;
       }
       bool partial = false;
-      for (auto &s : slots)
-        if (overlaps(a, s, size)) {
+      for (size_t n:overlappingSlots(a,size)) {
+          auto &s=slots[n];
           if (s.filled && a.stride == 0 && s.stride == 0 &&
               a.offset >= s.offset &&
               (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
@@ -1075,6 +1154,31 @@ bool Analysis::composite(Instruction &i) {
 // acceleration, not a precision-changing widening.
 static bool longAdditiveCycle(Value *value, Value *source,
                               std::function<AV(Value *)> facts) {
+  // PT3 copy edges can hide an additive recurrence behind arbitrarily many
+  // phis/selects (e.g. hashtable count -> exit phi -> header phi). Following
+  // those edges is exact: every traversal adds the same constant modulo W.
+  if(source->getType()->isIntegerTy()) {
+    unsigned width=source->getType()->getIntegerBitWidth();
+    std::set<Value *> path;
+    std::function<bool(Value *,APInt)> walk=[&](Value *v,APInt delta) {
+      if(v==source)return !delta.isZero() && width-delta.countr_zero()>12;
+      if(v->getType()!=source->getType() || !path.insert(v).second)return false;
+      bool found=false;
+      if(auto *p=dyn_cast<PHINode>(v)) {
+        for(Value *in:p->incoming_values())if(walk(in,delta)) {found=true;break;}
+      } else if(auto *s=dyn_cast<SelectInst>(v))found=walk(s->getTrueValue(),delta)||walk(s->getFalseValue(),delta);
+      else if(isa<FreezeInst>(v))found=walk(cast<Instruction>(v)->getOperand(0),delta);
+      else if(auto *b=dyn_cast<BinaryOperator>(v)) {
+        if(auto *c=dyn_cast<ConstantInt>(b->getOperand(1))) {
+          if(b->getOpcode()==Instruction::Add)found=walk(b->getOperand(0),delta+c->getValue());
+          if(b->getOpcode()==Instruction::Sub)found=walk(b->getOperand(0),delta-c->getValue());
+        } else if(b->getOpcode()==Instruction::Add)
+          if(auto *c=dyn_cast<ConstantInt>(b->getOperand(0)))found=walk(b->getOperand(1),delta+c->getValue());
+      }
+      path.erase(v);return found;
+    };
+    if(walk(value,APInt(width,0)))return true;
+  }
   auto *b = dyn_cast<BinaryOperator>(value);
   if (!b || !b->getType()->isIntegerTy())
     return false;
@@ -1095,6 +1199,29 @@ static bool longAdditiveCycle(Value *value, Value *source,
   return false;
 }
 void Analysis::step(Instruction &i) {
+  if(activeBudget) {
+    activeBudget->at=&i;
+    activeBudget->rule=isa<LoadInst>(i)?"PT6":isa<StoreInst>(i)?"PT7":isa<GetElementPtrInst>(i)?"PT2":isa<CallBase>(i)?"PT8/PT9/PT12":isa<PHINode>(i)||isa<SelectInst>(i)?"PT3":i.getType()->isAggregateType()?"PT10":"PT4/PT5";
+    activeBudget->check(true);
+  }
+  // Pure scalar transfers depend only on their operand AVs. Re-evaluating a
+  // stable finite Cartesian product in every module round is quadratic work
+  // with no new facts. Stores depend only on their written value and address;
+  // loads and calls deliberately remain live.
+  bool scalar=i.getType()->isIntegerTy() || i.getType()->isPointerTy() || isa<StoreInst>(i);
+  bool pure=isa<StoreInst>(i)||isa<BinaryOperator>(i)||isa<ICmpInst>(i)||isa<CastInst>(i)||isa<GetElementPtrInst>(i)||isa<SelectInst>(i)||isa<PHINode>(i)||isa<FreezeInst>(i);
+  for(Value *v:i.operands())scalar &= v->getType()->isIntegerTy() || v->getType()->isPointerTy() || (isa<StoreInst>(i) && (v->getType()->isAggregateType() || v->getType()->isVectorTy()));
+  if(scalar && pure) {
+    std::vector<AV> inputs;for(Value *v:i.operands())
+      for(auto &leaf:leaves(v->getType(),M.getDataLayout()))inputs.push_back(field(v,leaf.path));
+    auto &old=pureInputs[&i];
+    auto equal=[](const AV &a,const AV &b) {
+      return a.top==b.top && a.atoms.size()==b.atoms.size() &&
+        std::equal(a.atoms.begin(),a.atoms.end(),b.atoms.begin(),[](auto &x,auto &y){return !(x<y) && !(y<x);});
+    };
+    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),equal))return;
+    old=std::move(inputs);
+  }
   // S2 evaluates precisely the same N9/N32/N33 graph on private instructions.
   // Operands retain source identities; host IR and its attributes stay untouched.
   bool fp=false;
@@ -1427,7 +1554,17 @@ void Analysis::step(Instruction &i) {
       }
   } else if (isa<BinaryOperator>(i) || isa<ICmpInst>(i)) {
     AV x = get(i.getOperand(0)), y = get(i.getOperand(1));
-    if ((x.top || y.top) && i.getOpcode() == Instruction::And) {
+    bool dense=!x.top && !y.top && (i.getOpcode()==Instruction::And || i.getOpcode()==Instruction::Or || i.getOpcode()==Instruction::Xor);
+    for(auto &v:x.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
+    for(auto &v:y.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
+    if(dense) {
+      bool bits[4096]={};std::vector<unsigned> left,right;
+      for(auto &v:x.atoms)left.push_back(v.integer.getZExtValue());
+      for(auto &v:y.atoms)right.push_back(v.integer.getZExtValue());
+      for(unsigned l:left) {budgetTick();for(unsigned r:right)
+        bits[i.getOpcode()==Instruction::And?(l&r):i.getOpcode()==Instruction::Or?(l|r):(l^r)]=true;}
+      for(unsigned n=0;n<4096;++n)if(bits[n])a.merge(integer(APInt(i.getType()->getIntegerBitWidth(),n)));
+    } else if ((x.top || y.top) && i.getOpcode() == Instruction::And) {
       auto *mask = dyn_cast<ConstantInt>(i.getOperand(1));
       if (!mask)
         mask = dyn_cast<ConstantInt>(i.getOperand(0));
@@ -1546,6 +1683,7 @@ void Analysis::step(Instruction &i) {
   changed |= values[&i].merge(a);
 }
 void Analysis::run() {
+  BudgetScope scope;
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
@@ -1628,6 +1766,9 @@ void Analysis::run() {
   for (GlobalVariable &g : M.globals())
     if (g.hasInitializer())
       seed(g.getInitializer(), &g, 0, g.getValueType());
+  for(size_t n=0;n<slots.size();++n) {
+    auto &s=slots[n];slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);indexSlot(n);
+  }
   std::set<Function *> host,entries;
   for(Function &f:M)if(!f.isDeclaration() && !f.hasLocalLinkage())host.insert(&f);
   if(Entry)entries.insert(Entry);
@@ -1677,12 +1818,19 @@ void Analysis::run() {
   do {
     changed = false;
     seeds();
+    const Instruction *lastChanged=nullptr;const char *lastRule=nullptr;
     for (Function &f : M)
-      for (Instruction &i : instructions(f))
-        step(i);
-    if (++rounds > 16384)
-      unimplemented("§5 fixpoint resource exhaustion", 1);
+      for (Instruction &i : instructions(f)) {
+        bool prior=changed;changed=false;step(i);
+        if(changed) {lastChanged=&i;lastRule=scope.budget.rule;}
+        changed|=prior;
+      }
+    if (++rounds >= MaxAnalysisRounds && changed) {
+      scope.budget.at=lastChanged;scope.budget.rule=lastRule?lastRule:"PT11 seeds";
+      scope.budget.exhausted();
+    }
   } while (changed);
+  analysisRounds=rounds;
   // Candidate entry roots that never reach a handle operand are removed (§6.6).
   std::set<const Value *> live;
   for (Function &f : M)
@@ -1984,6 +2132,7 @@ json::Object Analysis::report() {
   return json::Object{{"dialect", "0.2.10"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
+                      {"analysis_rounds", analysisRounds},
                       {"functions", std::move(funcs)},
                       {"regions", std::move(regions)},
                       {"values", std::move(vals)}};

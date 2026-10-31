@@ -85,10 +85,12 @@ def main():
     checks, scalars = {}, {}
     for m in MAJORS:
         c = {}
-        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
+        for name in ('recognition', 'analysis-edges', 'analysis-performance', 'reference-images', 'materialisation', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
+            if name=='analysis-performance':
+                c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
             if name=='softfloat':
                 c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
                 c[name]['published_production']=[r for r in j['results'] if r['name'].startswith('published-production')]
@@ -168,6 +170,7 @@ def main():
                  'non_agreeing': [{k: r[k] for k in ('case', 'major', 'pipeline', 'classification')}
                                   for r in gate['cells'] if r['classification'] != 'agree']},
         'checks': checks, 'scalars': scalars,
+        'rung2_analysis': json.loads((R/'docs/rung2-analysis.json').read_text()),
         'object_pairs': {'count': len(rows), 'byte_identical': True,
                          'published_matches': sum(bool(r['published_golden']) for r in rows),
                          'production_cross_major_pairs': cross['pairs'], 'preserved_previous_objects': len(baseline), 'rows': rows},

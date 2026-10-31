@@ -3,6 +3,32 @@
 import argparse,json,subprocess
 from contracts import ROOT as R
 CASES={
+# An additive PT5 cycle remains additive through PT3's unconditional copies.
+'additive-copy-cycle':('''define internal i64 @cycle(i1 %c) {
+entry: br label %loop
+loop:
+ %n = phi i64 [ 0, %entry ], [ %copy, %loop ]
+ %plus = add i64 %n, 1
+ %copy = select i1 %c, i64 %plus, i64 %n
+ br label %loop
+}''',[]),
+'cancelled-copy-cycle':('''define internal i64 @cycle() {
+entry: br label %loop
+loop:
+ %n = phi i64 [ 7, %entry ], [ %copy, %loop ]
+ %plus = add i64 %n, 1
+ %minus = sub i64 %plus, 1
+ %copy = freeze i64 %minus
+ br label %loop
+}''',[('cycle','%n',{'INT(7)'})]),
+'small-copy-cycle':('''define internal i4 @cycle() {
+entry: br label %loop
+loop:
+ %n = phi i4 [ 0, %entry ], [ %copy, %loop ]
+ %plus = add i4 %n, 4
+ %copy = freeze i4 %plus
+ br label %loop
+}''',[('cycle','%n',{'INT(0)','INT(4)','INT(8)','INT(12)'})]),
 'runtime-memmove':('''@src = internal global i8 7
 @dst = internal global i8 9
 declare void @__bennett_rt_memmove(ptr,ptr,i64)
@@ -129,6 +155,7 @@ def main():
   x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-disable-output',str(src)],capture_output=True,text=True)
   ok=x.returncode==0;data=json.loads(report.read_text()) if ok else {}
   for fn,val,atoms in wants:ok=ok and any(v['function']==fn and v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data.get('values',[]))
+  if name=='additive-copy-cycle':ok=ok and data.get('analysis_rounds',100)<10 and any(v['value']=='%n' and v['top'] for v in data.get('values',[]))
   if name=='host-tiers':ok=ok and all(f['tiers']==['H'] for f in data.get('functions',[]))
   results.append({'case':name,'ok':ok,'diagnostic':x.stderr.strip() if x.returncode else ''})
  result={'major':a.major,'cases':len(results),'passed':sum(r['ok'] for r in results),'results':results};(R/f'.tmp/analysis-edges-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return any(not r['ok'] for r in results)

@@ -6,6 +6,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <tuple>
 namespace bennett {
 [[noreturn]] void fail(llvm::StringRef code, llvm::StringRef section,
                        const llvm::Value *at = nullptr);
@@ -49,7 +50,16 @@ class Analysis {
   bool virtualFP = false;
   std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> fpTransfers;
   std::map<const llvm::Value *, AV> values;
+  std::map<const llvm::Instruction *, std::vector<AV>> pureInputs;
   std::vector<Slot> slots;
+  using SlotKey = std::tuple<const llvm::Value *, int64_t, int64_t, uint64_t, bool, bool>;
+  std::map<SlotKey, size_t> slotIndex;
+  unsigned analysisRounds = 0;
+  std::map<const llvm::Value *, std::map<int64_t, std::vector<size_t>>> exactSlots;
+  std::map<const llvm::Value *, std::vector<size_t>> otherSlots;
+  std::map<const llvm::Value *, uint64_t> maxSlotBytes;
+  void indexSlot(size_t);
+  std::vector<size_t> overlappingSlots(const Atom &, uint64_t);
   std::map<std::pair<const llvm::Instruction *, const llvm::Value *>, AV>
       indexBounds;
   using Path = std::vector<unsigned>;

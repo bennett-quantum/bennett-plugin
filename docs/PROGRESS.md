@@ -6,7 +6,8 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). **M2 descriptor dispatch, the published replay/lift inventory and staged shadow-stack budgets are complete (bp-kv5, bp-311 and bp-piq closed);** The reference audit now has independent V1–V16 validation and three more materialised key witnesses; bp-3w4 remains open and bp-tye is closed. Next work is `bd ready`. Obligations live only in bd (`bd list`).
+(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 closed after its full gate; bp-1us next**. Both runtime-linked analyses reach S1–S5;
+linked production next stops at §17.4 `malloc` (bp-tav). Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
@@ -17,14 +18,11 @@ Build and gate (headless, rule 11), repo root:
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
-Counts (LLVM 18 and 23, each): legality gate 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge
-(cells 920/924 on 18, 788/792 on 23); recognition 73/73 on 18, 74/74 on 23; analysis_edges 17/17; reference_images 10/10; independent validation 46/46;
-materialisation and region_keys 17/17 on 18, 18/18 on 23; full keys 21/49 and 22/50 (28 unequal witnesses accounted in bd); 22 scalar objects byte-exact with 70 run vectors; 232/232 object
-pairs byte-identical across majors, 45 equal to published fixtures; all 232 prior hashes preserved.
-Descriptor dispatch: 23 cases / 55 vectors per major. Budget staging: H16→H32 byte-exact,
-316/316 step-budget prefixes and the published 316-step vector per major. Full object sizes, hashes and goldens are in
-`docs/verification.json` (latest pass only). Sole deferral:
-fp-rot-fastmath-reassoc (bp-7ni).
+Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**
+(924/924 cells on 18, 792/792 on 23); analysis_edges 20/20 and analysis_performance 3/3.
+All 288 prior object hashes preserved; 288 equal object pairs, 45 published matches.
+Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
+Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
 ## Passes
 
@@ -131,3 +129,9 @@ N27 arithmetic, twenty intrinsic runtime families and wide-slot ABI: 472/547 fam
 N26 memmove/memcpy/memset closure, inline/atomic/pattern lowering and logical faults: 33/34 native/ISA/key families; LLVM23 N3 range-list attributes removed before residual validation.
 Real arith LLVM23 L numerical vectors pass; exact production/CC/publication obligations remain only in bd. Initial gate stopped incomplete at the 600-second full-width CC probe; HANDOFF untouched.
 Final complete gate exit 0, 66/66/0/0/0 each, zero deferrals; 288 equal object pairs, 45 published matches, all 264 prior hashes preserved; latest receipt in docs/verification.json.
+
+### Pass 18 - 2026-10-31 - bp-au6 closed
+Exact additive closure through PT3 copies, finite-product caching, indexed slots and nested-zero-image unions remove the S2 blowup; K=4096 unchanged.
+Recorded hashtable: >300s→5.79s LLVM18, >300s→5.64s LLVM23; 64 rounds each, iteration/time budgets diagnose rule and AV element.
+Both published-runtime/pinned-arith links plus lto<O3> reach S1–S5 (11.23s/13.13s); next production rule is §17.4 malloc, filed bp-tav.
+Final full gate exit 0, 66/66/0/0/0 each; 288 equal pairs, 45 published matches, all 288 prior hashes preserved; one earlier gate stopped incomplete for vector-store caching.

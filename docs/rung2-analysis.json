@@ -1,0 +1,182 @@
+{
+  "bead": "bp-au6",
+  "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
+  "isa": "0.8",
+  "before_plugin_commit": "c4ffcd3be30bf7ef9a354a4771aeaa237cd636ed",
+  "before": {
+    "18": {
+      "analysis_seconds": 300.01,
+      "timed_out": true,
+      "stderr": ""
+    },
+    "23": {
+      "analysis_seconds": 300.01,
+      "timed_out": true,
+      "stderr": ""
+    }
+  },
+  "unlinked_after": {
+    "18": {
+      "major": 18,
+      "cases": 3,
+      "passed": 3,
+      "seconds": 5.7920131090068026,
+      "rounds": 64,
+      "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%251) in @ht_demo_grow (milestone 1) at   %251 = icmp eq i64 %250, %0\n"
+    },
+    "23": {
+      "major": 23,
+      "cases": 3,
+      "passed": 3,
+      "seconds": 5.640469766003662,
+      "rounds": 64,
+      "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%258) in @ht_demo_grow (milestone 1) at   %258 = icmp eq i64 %257, %0\n"
+    }
+  },
+  "linked_after": {
+    "18": {
+      "major": 18,
+      "plugin_sha256": "ce9276f2f43b01ac12df2e92871b0516ccc0eb38067efd33d2290a41167d981f",
+      "input_sha256": "8f5ae2537e76ebf0c8c8b9358ff0b380a9cd9c36925eeabd9a40f3a4b5555972",
+      "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+      "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+      "stages": [
+        {
+          "stage": "link",
+          "argv": [
+            "/usr/lib/llvm-18/bin/llvm-link",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-18.ll",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+            "--only-needed",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/linked.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.026850291993469,
+          "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+        },
+        {
+          "stage": "lto",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-passes=lto<O3>",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/linked.bc",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.0682554800005164,
+          "diagnostic": ""
+        },
+        {
+          "stage": "analysis",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "-disable-output",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc",
+            "-bennett-analysis-only",
+            "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/analysis.json"
+          ],
+          "exit": 0,
+          "seconds": 11.227368930994999,
+          "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        },
+        {
+          "stage": "production",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "-disable-output",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/postlink.bc",
+            "-bennett-budget-default=10000000,1048576,65536,256,65536",
+            "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-18/out"
+          ],
+          "exit": 1,
+          "seconds": 11.825916449000943,
+          "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   %3 = tail call noalias dereferenceable_or_null(32) ptr @malloc(i64 noundef 32) #11\n"
+        }
+      ]
+    },
+    "23": {
+      "major": 23,
+      "plugin_sha256": "604078a8cb0824c1dd1bef12b1b2ca5953c7babb3393f5cae61da02b7f5f8409",
+      "input_sha256": "d9af32ad33d63b9133bb2b4245cdc9c30491d3f284ecedcb37e272f3cff63ade",
+      "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+      "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+      "stages": [
+        {
+          "stage": "link",
+          "argv": [
+            "/usr/lib/llvm-23/bin/llvm-link",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-23.ll",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+            "--only-needed",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/linked.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.024585007995483465,
+          "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-plugin/../bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+        },
+        {
+          "stage": "lto",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-passes=lto<O3>",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/linked.bc",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.06947890199080575,
+          "diagnostic": ""
+        },
+        {
+          "stage": "analysis",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "-disable-output",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc",
+            "-bennett-analysis-only",
+            "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/analysis.json"
+          ],
+          "exit": 0,
+          "seconds": 13.133003135008039,
+          "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        },
+        {
+          "stage": "production",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "-disable-output",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/postlink.bc",
+            "-bennett-budget-default=10000000,1048576,65536,256,65536",
+            "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/au6/linked-23/out"
+          ],
+          "exit": 1,
+          "seconds": 12.136404666001908,
+          "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   %3 = tail call noalias dereferenceable_or_null(32) ptr @malloc(i64 noundef 32) #12\n"
+        }
+      ]
+    }
+  },
+  "next_production_bead": "bp-tav",
+  "claims": "S2 fixpoint completion only. Both linked production invocations stop at \u00a717.4 malloc; no executor or reversal claim."
+}
