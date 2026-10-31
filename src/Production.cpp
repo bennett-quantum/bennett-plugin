@@ -1,5 +1,6 @@
 #include "Bennett.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Config/llvm-config.h"
@@ -191,6 +192,7 @@ struct Entry {
   std::map<const Value *, std::string> names;
   std::map<const BasicBlock *, std::string> blocks;
   std::set<const Value *> descriptorObjects;
+  bool memoryDescriptors = false;
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
@@ -250,6 +252,11 @@ struct Entry {
                      decimal(c->getValue()));
       return n;
     }
+    if (auto *fn = resolve(v); fn && v->getType()->isPointerTy()) {
+      auto n=fresh("ptr");auto address=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),functionAddress(fn)));
+      rows.push_back(n+" = inttoptr "+address);return n;
+    }
+    if (auto *g=dyn_cast<ConstantExpr>(v);g && g->getOpcode()==Instruction::GetElementPtr)return gep(cast<GEPOperator>(g));
     if (isa<ConstantPointerNull>(v)) {
       auto n = fresh("ptr"); auto z = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
       rows.push_back(n + " = inttoptr " + z); return n;
@@ -282,6 +289,7 @@ struct Entry {
     return "i" + std::to_string(width(v->getType()));
   }
   std::string handle(AV v, const Value *at) {
+    if (generalDescriptor) { auto *r=root(v,at); return files.count(r) ? files.at(r).q : names.at(r); }
     auto *r = root(v, at);
     if (!names.count(r))
       unimplemented("§6.5 handle not in live register environment", 1, at);
@@ -296,7 +304,7 @@ struct Entry {
   // a flow-insensitive union as the runtime field value.
   Value *fieldValue(CallBase &c, uint64_t off, Type *t) {
     auto base = a.get(c.getArgOperand(2));
-    if (base.top || base.atoms.size() != 1) unimplemented("§8.1 runtime descriptor address", 1, &c);
+    if (base.top || base.atoms.size() != 1) return nullptr;
     auto p = *base.atoms.begin();
     for (auto it = c.getIterator(); it != c.getParent()->begin();) {
       auto &i = *--it;
@@ -309,7 +317,7 @@ struct Entry {
                           d.offset + int64_t(bytes) > int64_t(p.offset + off))) {
             if (!d.stride && dst.atoms.size() == 1 && d.offset == int64_t(p.offset + off) && st->getValueOperand()->getType() == t)
               return st->getValueOperand();
-            unimplemented("§8.1 runtime overlapping descriptor store", 1, st);
+            return nullptr;
           }
         }
       } else if (auto *call = dyn_cast<CallBase>(&i)) {
@@ -317,7 +325,53 @@ struct Entry {
         if (!g || (!g->getName().starts_with("__bennett_") && !g->getName().starts_with("llvm.lifetime."))) break;
       }
     }
-    unimplemented("§8.1 runtime descriptor memory load", 1, &c);
+    return nullptr;
+  }
+  // The fast path above is an optimisation only. All other reads use the
+  // actual caller memory at the marker, including predecessor stores/phis.
+  std::string fieldOperand(CallBase &c, uint64_t off, Type *t) {
+    if (!memoryDescriptors)
+      if (auto *v = fieldValue(c, off, t)) return operand(v);
+    auto p = operand(c.getArgOperand(2));
+    auto pw = m.getDataLayout().getPointerSizeInBits();
+    auto bits = fresh("i"+std::to_string(pw));
+    rows.push_back(bits+" = ptrtoint.i"+std::to_string(pw)+" "+p);
+    auto k = operand(ConstantInt::get(IntegerType::get(m.getContext(),pw),off));
+    auto sum = fresh("i"+std::to_string(pw)), address = fresh("ptr");
+    rows.push_back(sum+" = add "+bits+" "+k);
+    rows.push_back(address+" = inttoptr "+sum);
+    auto w = t->isPointerTy() ? pw : width(t);
+    auto value = fresh("i"+std::to_string(w));
+    rows.push_back(value+" = load.i"+std::to_string(w)+" "+address);
+    return value;
+  }
+  std::string gep(GEPOperator *g) {
+    auto &dl = m.getDataLayout();
+    unsigned p = dl.getPointerTypeSizeInBits(g->getType()), i = dl.getIndexTypeSizeInBits(g->getType());
+    auto base = fresh("i"+std::to_string(p));
+    rows.push_back(base+" = ptrtoint.i"+std::to_string(p)+" "+operand(g->getPointerOperand()));
+    auto op = [&](unsigned w, std::string text) { auto n=fresh("i"+std::to_string(w)); rows.push_back(n+" = "+text); return n; };
+    auto acc = i<p ? op(i,"trunc.i"+std::to_string(i)+" "+base) : base;
+#if LLVM_VERSION_MAJOR >= 23
+    SmallMapVector<Value *, APInt, 4> vars;
+#else
+    MapVector<Value *, APInt> vars;
+#endif
+    APInt offset(i,0);
+    if (!g->collectOffset(dl,i,vars,offset)) unimplemented("§16.4 CC GEP",2,&f);
+    for (auto &v : vars) {
+      auto idx=operand(v.first);auto w=width(v.first->getType());
+      if(w!=i)idx=op(i,std::string(w<i ? "sext.i" : "trunc.i")+std::to_string(i)+" "+idx);
+      if(v.second!=1)idx=op(i,"mul "+idx+" "+operand(ConstantInt::get(m.getContext(),v.second)));
+      acc=op(i,"add "+acc+" "+idx);
+    }
+    if(!offset.isZero())acc=op(i,"add "+acc+" "+operand(ConstantInt::get(m.getContext(),offset)));
+    if(i<p) {
+      auto lo=op(p,"zext.i"+std::to_string(p)+" "+acc);
+      auto hi=op(p,"and "+base+" "+operand(ConstantInt::get(m.getContext(),APInt::getHighBitsSet(p,p-i))));
+      acc=op(p,"or "+hi+" "+lo);
+    }
+    auto result=fresh("ptr");rows.push_back(result+" = inttoptr "+acc);return result;
   }
   bool compilingInplace = false;
   std::string inplaceTarget, inplaceFault;
@@ -325,7 +379,146 @@ struct Entry {
   std::map<std::string,std::pair<uint64_t,uint64_t>> verifiedPairs;
   std::map<uint64_t, AV> selectedFields;
   unsigned dispatchBlock = 0;
+  Function *selectedCallee = nullptr;
+  bool generalDescriptor = false;
+  uint64_t functionAddress(Function *fn) {
+    // Standalone comparison link, matching the module-order convention used
+    // for data by the scalar linker. The production driver owns §19.5 layout.
+    uint64_t address=4096;
+    for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
+    address=alignTo(address,uint64_t(4096));
+    for(auto &g:m) { if(&g==fn)return address; address+=16; }
+    llvm_unreachable("function missing from comparison link");
+  }
+  AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
+  bool singletonInt(AV v) { return !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int; }
+  // The same unsigned, balanced compare tree serves candidate addresses,
+  // fields, register identities and finite allocation widths (§14.2).
+  void compareTree(std::string value, unsigned w, const std::vector<uint64_t> &keys,
+                   const std::function<void(uint64_t)> &body, const std::string &bad) {
+    std::function<void(unsigned,unsigned)> tree=[&](unsigned lo,unsigned hi) {
+      if(lo==hi){rows.push_back("br ^"+bad+"()");return;}
+      unsigned mid=(lo+hi)/2;auto key=keys[mid];
+      auto k=operand(ConstantInt::get(IntegerType::get(m.getContext(),w),key)),eq=fresh("i1");
+      auto leaf="dispatch"+std::to_string(dispatchBlock++),rest=leaf+"rest";
+      rows.push_back(eq+" = icmp.eq "+value+" "+k);
+      rows.push_back("br "+eq+" ^"+leaf+"() ^"+rest+"()");rows.push_back("^"+leaf+"():");body(key);
+      rows.push_back("^"+rest+"():");
+      if(hi-lo==1){rows.push_back("br ^"+bad+"()");return;}
+      auto lt=fresh("i1"),left=rest+"left",right=rest+"right";
+      rows.push_back(lt+" = icmp.ult "+value+" "+k);rows.push_back("br "+lt+" ^"+left+"() ^"+right+"()");
+      rows.push_back("^"+left+"():");tree(lo,mid);rows.push_back("^"+right+"():");tree(mid+1,hi);
+    };tree(0,keys.size());
+  }
   void descriptor(CallBase &c) {
+    auto &ctx=m.getContext();auto *u32=Type::getInt32Ty(ctx),*u64=Type::getInt64Ty(ctx);auto *ptr=PointerType::get(ctx,0);
+    auto candidates=a.candidates(c.getArgOperand(0));
+    auto *hl=m.getDataLayout().getStructLayout(StructType::get(ctx,{u32,u32,u32,u32,ptr,ptr}));
+    auto *bl=m.getDataLayout().getStructLayout(StructType::get(ctx,{u32,u32,ptr,u64,u64}));
+    bool general=memoryDescriptors || candidates.size()!=1;
+    // Keep the established straight-line encoding exactly when no new shape
+    // field requires dispatch. ARG value bits remain runtime arguments.
+    for(auto *fn:candidates) {
+      for(unsigned off:{8u,unsigned(hl->getElementOffset(4)),unsigned(hl->getElementOffset(5))}) {
+        auto v=a.readAt(c,c.getArgOperand(2),off,off==8?static_cast<Type *>(u32):ptr);
+        general |= v.top || v.atoms.size()!=1;
+      }
+      for(unsigned i=0;i<fn->arg_size();++i) {
+        auto off=hl->getSizeInBytes()+i*bl->getSizeInBytes();auto k=a.readAt(c,c.getArgOperand(2),off,u32);
+        auto q=a.readAt(c,c.getArgOperand(2),off+bl->getElementOffset(2),ptr);
+        general |= q.top || q.atoms.size()!=1;
+        if(!singletonInt(k) || integer(k,&c)!=2) {
+          auto size=a.readAt(c,c.getArgOperand(2),off+bl->getElementOffset(4),u64);general |= size.top || size.atoms.size()!=1;
+        }
+      }
+      auto nd=a.readAt(c,c.getArgOperand(2),8,u32);
+      if(singletonInt(nd))for(unsigned j=0;j<integer(nd,&c);++j) {
+        auto off=hl->getSizeInBytes()+fn->arg_size()*bl->getSizeInBytes()+j*24;
+        for(unsigned d:{0u,8u,16u}){auto v=a.readAt(c,c.getArgOperand(2),off+d,d==0?static_cast<Type *>(u32):d==8?static_cast<Type *>(ptr):u64);general |= v.top || v.atoms.size()!=1;}
+      }
+    }
+    if(!general){descriptorLegacy(c);return;}
+    generalDescriptor=true;
+    auto id=std::to_string(dispatchBlock++),done="dispatch"+id+"done",bad="dispatch"+id+"bad";
+    auto field=[&](uint64_t off,Type *t){return a.readAt(c,c.getArgOperand(2),off,t);};
+    auto pw=m.getDataLayout().getPointerSizeInBits();
+    auto choose=[&](uint64_t off,Type *t,std::vector<AV> choices,const std::function<void(AV)> &body) {
+      auto actual=field(off,t);std::map<uint64_t,AV> keyed;
+      for(auto v:choices)for(auto x:v.atoms) {
+        if(!actual.top && !actual.atoms.count(x))continue;
+        uint64_t key=x.kind==Atom::Root ? (files.count(x.object)?files.at(x.object).identity:0) : x.integer.getLimitedValue();keyed[key]=v;
+      }
+      if(keyed.empty()){rows.push_back("br ^"+bad+"()");return;}
+      auto leaf=[&](uint64_t key){selectedFields[off]=keyed.at(key);body(keyed.at(key));selectedFields.erase(off);};
+      if(!actual.top && actual.atoms.size()==1 && keyed.size()==1){leaf(keyed.begin()->first);return;}
+      std::vector<uint64_t> keys;for(auto &x:keyed)keys.push_back(x.first);
+      auto value=fieldOperand(c,off,t);
+      if(t->isPointerTy() && !memoryDescriptors) {
+        if(auto *v=fieldValue(c,off,t); v && !tagged(a.get(v))) {auto n=fresh("i"+std::to_string(pw));rows.push_back(n+" = ptrtoint.i"+std::to_string(pw)+" "+value);value=n;}
+      }
+      compareTree(value,t->isPointerTy()?pw:width(t),keys,leaf,bad);
+    };
+    auto ints=[&](std::vector<uint64_t> ns,unsigned w){std::vector<AV> vs;for(auto n:ns)vs.push_back(intValue(n,w));return vs;};
+    auto finite=[&](uint64_t off,Type *t,std::vector<uint64_t> fallback) {
+      auto v=field(off,t);if(!v.top){fallback.clear();for(auto &x:v.atoms)if(x.kind==Atom::Int)fallback.push_back(x.integer.getLimitedValue());}return ints(fallback,width(t));
+    };
+    auto handles=[&](uint64_t off,bool null,const std::function<bool(unsigned)> &valid) {
+      auto v=field(off,ptr);std::vector<AV> vs;
+      if(null)vs.push_back(intValue(0,pw));
+      for(auto &x:v.atoms)if(x.kind==Atom::Root && valid(qwidth(AV{{x},false},&c)))vs.push_back(AV{{x},false});
+      return vs;
+    };
+    auto compile=[&](Function *fn) {
+      selectedCallee=fn;
+      choose(0,u32,ints({2},32),[&](AV){choose(4,u32,ints({fn->arg_size()},32),[&](AV){choose(12,u32,ints({0},32),[&](AV){
+      choose(8,u32,ints({0,1,2,3,4},32),[&](AV nd){
+      choose(hl->getElementOffset(4),ptr,handles(hl->getElementOffset(4),true,[](unsigned){return true;}),[&](AV){
+      choose(hl->getElementOffset(5),ptr,handles(hl->getElementOffset(5),false,[](unsigned w){return w==4;}),[&](AV){
+        std::function<void(unsigned)> devices;
+        devices=[&](unsigned j) {
+          if(j==integer(nd,&c)){descriptorLeaf(c);rows.push_back("br ^"+done+"()");return;}
+          auto off=hl->getSizeInBytes()+fn->arg_size()*bl->getSizeInBytes()+j*24;
+          choose(off,u32,ints({1,2,3,4},32),[&](AV model){
+            auto code=integer(model,&c);bool duplicate=false;
+            for(unsigned k=0;k<j;++k)duplicate |= integer(selectedFields.at(off-(j-k)*24),&c)==code;
+            if(duplicate){rows.push_back("br ^"+bad+"()");return;}
+            choose(off+4,u32,ints({0},32),[&](AV){
+              if(code==3){choose(off+16,u64,finite(off+16,u64,{}),[&](AV){devices(j+1);});return;}
+              choose(off+8,ptr,handles(off+8,code==4,[&](unsigned w){auto unit=code==2?4096u:8u;return w%unit==0 && (code==4 || isPowerOf2_64(w/unit));}),[&](AV){
+                // value is reserved outside CLOCK and does not affect a shape.
+                selectedFields[off+16]=intValue(0);devices(j+1);selectedFields.erase(off+16);
+              });
+            });
+          });
+        };
+        std::function<void(unsigned)> params;
+        params=[&](unsigned i) {
+          if(i==fn->arg_size()){devices(0);return;}
+          auto *t=fn->getArg(i)->getType();auto off=hl->getSizeInBytes()+i*bl->getSizeInBytes();
+          choose(off,u32,ints(t->isPointerTy()?std::vector<uint64_t>{1,2,3,4}:std::vector<uint64_t>{1,2},32),[&](AV kind){
+            auto code=integer(kind,&c);
+            choose(off+4,u32,ints(code==1?std::vector<uint64_t>{0,1}:std::vector<uint64_t>{0},32),[&](AV){
+              if(code==2){params(i+1);return;}
+              choose(off+bl->getElementOffset(2),ptr,handles(off+bl->getElementOffset(2),false,[&](unsigned w){return code==1?w<=(t->isPointerTy()?pw:width(t)):w%8==0 && w>0 && (code!=3 || isPowerOf2_64(w/8));}),[&](AV q){
+                if(code==1){params(i+1);return;}
+                auto n=qwidth(q,&c)/8;
+                choose(off+bl->getElementOffset(4),u64,ints({n},64),[&](AV){params(i+1);});
+              });
+            });
+          });
+        };params(0);
+      });});});});});});
+      selectedCallee=nullptr;
+    };
+    if(candidates.size()==1 && resolve(c.getArgOperand(0)))compile(*candidates.begin());
+    else {
+      std::map<uint64_t,Function *> ordered;for(auto *fn:candidates)if(!fn->isDeclaration())ordered[functionAddress(fn)]=fn;
+      auto address=fresh("i"+std::to_string(pw));rows.push_back(address+" = ptrtoint.i"+std::to_string(pw)+" "+operand(c.getArgOperand(0)));
+      std::vector<uint64_t> keys;for(auto &v:ordered)keys.push_back(v.first);compareTree(address,pw,keys,[&](uint64_t k){compile(ordered.at(k));},bad);
+    }
+    rows.push_back("^"+bad+"():");rows.push_back("trap");rows.push_back("^"+done+"():");generalDescriptor=false;
+  }
+  void descriptorLegacy(CallBase &c) {
     auto &ctx = m.getContext();
     auto *u32 = Type::getInt32Ty(ctx), *u64 = Type::getInt64Ty(ctx);
     auto *ptr = PointerType::get(ctx, 0);
@@ -359,7 +552,7 @@ struct Entry {
     std::function<void(unsigned)> select = [&](unsigned index) {
       if (index == fields.size()) { descriptorLeaf(c); rows.push_back("br ^" + done + "()"); return; }
       auto off = fields[index].first;
-      auto value = operand(fieldValue(c,off,u32));
+      auto value = fieldOperand(c,off,u32);
       auto &keys = fields[index].second;
       std::function<void(unsigned,unsigned)> tree = [&](unsigned lo,unsigned hi) {
         if (lo == hi) { rows.push_back("br ^" + bad + "()"); return; }
@@ -399,9 +592,7 @@ struct Entry {
       fail("T-IFACE", "§8.1 descriptor header", &c);
     auto ndev = integer(field(8, u32), &c);
     auto candidates = a.candidates(c.getArgOperand(0));
-    if (candidates.size() != 1)
-      unimplemented("§7.2 production region dispatch", 1, &c);
-    auto *callee = *candidates.begin();
+    auto *callee = selectedCallee ? selectedCallee : *candidates.begin();
     if (integer(field(4, u32), &c) != callee->arg_size())
       fail("T-IFACE", "§8.2 descriptor arity", &c);
     auto target = field(hl->getElementOffset(4), ptr),
@@ -444,7 +635,7 @@ struct Entry {
             auto d = fresh("i" + std::to_string(w));
             rows.push_back(d + (w < from ? " = trunc.i" : " = zext.i") + std::to_string(w) + " " + x); return d;
           };
-          auto part = [&](AV v, uint64_t offset) { return singleton(v) ? operand(ConstantInt::get(u64,integer(v,&c))) : operand(fieldValue(c,offset,u64)); };
+          auto part = [&](AV v, uint64_t offset) { return singleton(v) ? operand(ConstantInt::get(u64,integer(v,&c))) : fieldOperand(c,offset,u64); };
           n = cast(part(low,off+bl->getElementOffset(3)),64);
           if (w > 64) {
             auto hi = cast(part(high,off+bl->getElementOffset(4)),64);
@@ -738,6 +929,18 @@ struct Entry {
           if (!isa<ConstantPointerNull>(c->getArgOperand(ip?2:1)))
             descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(ip?2:1)));
         }
+    // Preserve elision for straight-line record-only descriptors. Once an
+    // address escapes that proof, lower the storage and all its ordinary uses.
+    for (Instruction &i : instructions(f)) {
+      if (auto *c = dyn_cast<CallBase>(&i); c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle") {
+        auto base=a.get(c->getArgOperand(2));
+        if(base.top || base.atoms.size()!=1 || !isa<AllocaInst>(getUnderlyingObject(c->getArgOperand(2))))memoryDescriptors=true;
+        for(auto &x:base.atoms) for(auto &j:instructions(f))
+          if(auto *st=dyn_cast<StoreInst>(&j); st && st->getParent()!=c->getParent())
+            for(auto &d:a.get(st->getPointerOperand()).atoms)if(d.object==x.object)memoryDescriptors=true;
+      }
+      if (auto *ld=dyn_cast<LoadInst>(&i); ld && descriptorObjects.count(getUnderlyingObject(ld->getPointerOperand())))memoryDescriptors=true;
+    }
     std::set<const Value *> visited;
     std::function<void(const Value *)> validate = [&](const Value *v) {
       if (!visited.insert(v).second)
@@ -758,15 +961,17 @@ struct Entry {
         unimplemented("§8.1 escaping descriptor storage", 1, u);
       }
     };
-    for (auto *v : descriptorObjects)
-      validate(v);
+    if (!memoryDescriptors) for (auto *v : descriptorObjects) validate(v);
     // Acyclic entry-local files have one physical instance per allocation
     // site. General N(s), recursive environments and surviving-entry files
     // require the interprocedural bound/table implementation, never slot reuse.
     std::set<const Value *> memoryRoots;
     for (Instruction &i : instructions(f)) if (auto *st = dyn_cast<StoreInst>(&i))
-      if (!descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
+      if (memoryDescriptors || !descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
         for (auto &x : a.get(st->getValueOperand()).atoms) if (x.kind == Atom::Root) memoryRoots.insert(x.object);
+    for(Instruction &i:instructions(f)) if(isa<SelectInst>(i) || isa<PHINode>(i)) {
+      auto v=a.get(&i); if(v.roots())for(auto &x:v.atoms)if(x.kind==Atom::Root)memoryRoots.insert(x.object);
+    }
     bool enlarged=true;
     while(enlarged) {
       enlarged=false;
@@ -844,7 +1049,7 @@ struct Entry {
               getUnderlyingObject(s->getPointerOperand()));
         if (auto *al = dyn_cast<AllocaInst>(&i))
           record = descriptorObjects.count(al);
-        if (record || isa<PHINode>(i))
+        if ((!memoryDescriptors && record) || isa<PHINode>(i))
           continue;
         if (auto *c = dyn_cast<CallBase>(&i)) {
           auto *g = c->getCalledFunction();
@@ -852,7 +1057,7 @@ struct Entry {
             unimplemented("§17.4 indirect CC call", 1, c);
           auto n = g->getName();
           if (n.starts_with("llvm.lifetime.") ||
-              (n.starts_with("llvm.memset.") &&
+              (!memoryDescriptors && n.starts_with("llvm.memset.") &&
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
@@ -882,6 +1087,8 @@ struct Entry {
             gate(*c);
           else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
+        } else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
+          names[g] = gep(cast<GEPOperator>(g));
         } else if (auto *al = dyn_cast<AllocaInst>(&i)) {
           auto n = m.getDataLayout().getTypeAllocSize(al->getAllocatedType()).getFixedValue();
           auto *count = dyn_cast<ConstantInt>(al->getArraySize());
@@ -922,7 +1129,7 @@ struct Entry {
           auto p = operand(sel->getCondition()),
                x = operand(sel->getTrueValue()),
                y = operand(sel->getFalseValue()),
-               d = fresh("i" + std::to_string(width(sel->getType())));
+               d = fresh(type(sel));
           names[sel] = d;
           rows.push_back(d + " = select " + p + " " + x + " " + y);
         } else if (auto *cmp = dyn_cast<ICmpInst>(&i)) {
