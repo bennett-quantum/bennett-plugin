@@ -4,6 +4,7 @@
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/FileSystem.h"
@@ -195,6 +196,35 @@ struct Entry {
   json::Array coverage;
   std::map<std::string, std::pair<std::string, std::string>> actions;
   unsigned next = 0, ordinal = 0;
+  struct PhysicalSlot { std::string q, tag; unsigned identity; };
+  std::vector<const Value *> fileOrder;
+  std::map<const Value *, PhysicalSlot> files;
+  std::vector<std::string> localMemory;
+  bool tagged(AV v) {
+    for (auto &x : v.atoms) if (x.kind == Atom::Root && files.count(x.object)) return true;
+    return false;
+  }
+  void withHandle(Value *v, const std::function<void(std::string)> &body, bool retire = false) {
+    auto provenance = a.get(v);
+    if (!tagged(provenance)) { body(operand(v)); return; }
+    auto id = std::to_string(dispatchBlock++), done = "handle" + id + "done";
+    auto value = operand(v);
+    for (auto &x : provenance.atoms) if (x.kind == Atom::Root && files.count(x.object)) {
+      auto &slot = files.at(x.object);
+      auto eq = fresh("i1"), live = fresh("i1"), ok = fresh("i1"), liveTag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
+      rows.push_back(liveTag + " = load.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag);
+      auto zero = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
+      auto leaf = "handle" + std::to_string(dispatchBlock++), next = leaf + "next";
+      rows.push_back(eq + " = icmp.eq " + value + " " + liveTag);
+      rows.push_back(live + " = icmp.ne " + liveTag + " " + zero);
+      rows.push_back(ok + " = and " + eq + " " + live);
+      rows.push_back("br " + ok + " ^" + leaf + "() ^" + next + "()");
+      rows.push_back("^" + leaf + "():"); body(slot.q);
+      if (retire) rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag + " " + zero);
+      rows.push_back("br ^" + done + "()"); rows.push_back("^" + next + "():");
+    }
+    rows.push_back("trap"); rows.push_back("^" + done + "():");
+  }
   unsigned width(Type *t) {
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
       return t->getIntegerBitWidth();
@@ -214,6 +244,10 @@ struct Entry {
                      decimal(c->getValue()));
       return n;
     }
+    if (isa<ConstantPointerNull>(v)) {
+      auto n = fresh("ptr"); auto z = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
+      rows.push_back(n + " = inttoptr " + z); return n;
+    }
     unimplemented("§17.4 CC operand / §6.5 handle environment", 1, v);
   }
   const Value *root(AV v, const Value *at) {
@@ -226,6 +260,7 @@ struct Entry {
     if (v.top || v.atoms.empty()) unimplemented("§6.5 handle width dispatch", 1, at);
     for (auto &atom : v.atoms) {
       auto *c = atom.kind == Atom::Root ? dyn_cast<CallBase>(atom.object) : nullptr;
+      if (!c && atom.kind == Atom::Int && atom.integer.isZero()) continue;
       if (!c) unimplemented("§6.6 scalar boundary handles", 1, at);
       auto w = integer(a.get(c->getArgOperand(1)), at);
       if (width && width != w) unimplemented("§6.5 mixed-width handle dispatch", 1, at);
@@ -234,6 +269,8 @@ struct Entry {
     return width;
   }
   std::string type(Value *v) {
+    if (tagged(a.get(v))) return "i" + std::to_string(m.getDataLayout().getPointerSizeInBits());
+    if (v->getType()->isPointerTy() && !a.get(v).roots()) return "ptr";
     if (v->getType()->isPointerTy() && a.get(v).roots())
       return "qreg[" + std::to_string(qwidth(a.get(v), v)) + "]";
     return "i" + std::to_string(width(v->getType()));
@@ -242,6 +279,11 @@ struct Entry {
     auto *r = root(v, at);
     if (!names.count(r))
       unimplemented("§6.5 handle not in live register environment", 1, at);
+    if (files.count(r)) {
+      std::string q;
+      withHandle(const_cast<Value *>(r), [&](std::string n) { q = n; });
+      return q;
+    }
     return names[r];
   }
   // Call-local reaching definitions are a virtual descriptor load. Never use
@@ -518,6 +560,11 @@ struct Entry {
     return n;
   }
   void gate(CallBase &c) {
+    auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
+    auto *v = c.getArgOperand(measurement ? 0 : 1);
+    withHandle(v, [&](std::string q) { gateOn(c,q); });
+  }
+  void gateOn(CallBase &c, std::string src) {
     auto n = c.getCalledFunction()->getName();
     bool measurement = n == "__bennett_measure";
     auto q = a.get(c.getArgOperand(measurement ? 0 : 1));
@@ -525,7 +572,6 @@ struct Entry {
     auto i = integer(a.get(c.getArgOperand(measurement ? 1 : 2)), &c);
     if (i >= w)
       fail("T-INDEX", "§18.3 gate/measurement index", &c);
-    auto src = operand(c.getArgOperand(measurement ? 0 : 1));
     if (measurement) {
       auto name =
           action("d:wire[1] mut", "s:wire[" + std::to_string(w) + "] in", "1",
@@ -587,6 +633,39 @@ struct Entry {
     };
     for (auto *v : descriptorObjects)
       validate(v);
+    // Acyclic entry-local files have one physical instance per allocation
+    // site. General N(s), recursive environments and surviving-entry files
+    // require the interprocedural bound/table implementation, never slot reuse.
+    std::set<const Value *> memoryRoots;
+    for (Instruction &i : instructions(f)) if (auto *st = dyn_cast<StoreInst>(&i))
+      if (!descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
+        for (auto &x : a.get(st->getValueOperand()).atoms) if (x.kind == Atom::Root) memoryRoots.insert(x.object);
+    if (!memoryRoots.empty()) {
+      for (Instruction &i : instructions(f)) {
+        if (auto *st = dyn_cast<StoreInst>(&i); st && a.get(st->getValueOperand()).roots() &&
+            !isa<AllocaInst>(getUnderlyingObject(st->getPointerOperand())))
+          unimplemented("§6.5 persistent static-file tag allocator",1,st);
+        if (auto *r = dyn_cast<ReturnInst>(&i); r && r->getReturnValue() && a.get(r->getReturnValue()).roots())
+          unimplemented("§6.5 static-file result environment",1,r);
+      }
+      std::set<const BasicBlock *> visiting, visited;
+      std::function<bool(const BasicBlock *)> cycle = [&](const BasicBlock *b) {
+        if (visiting.count(b)) return true;
+        if (!visited.insert(b).second) return false;
+        visiting.insert(b);
+        for (auto *to : successors(b)) if (cycle(to)) return true;
+        visiting.erase(b); return false;
+      };
+      if (cycle(&f.getEntryBlock())) unimplemented("§6.5 cyclic static-file instance bound",1,&f);
+      for (Instruction &i : instructions(f)) if (memoryRoots.count(&i)) {
+        auto *r = &i;
+        auto *call = dyn_cast<CallBase>(r);
+        if (!call || call->getFunction() != &f) unimplemented("§6.5 interprocedural static-file environment",1,r);
+        auto w = qwidth(a.get(r),r);
+        files[r] = {fresh("qreg[" + std::to_string(w) + "]"), fresh("ptr"), unsigned(fileOrder.size()+1)};
+        fileOrder.push_back(r);
+      }
+    }
     for (Argument &p : f.args()) {
       auto n = "a" + std::to_string(p.getArgNo()),
            t = "i" + std::to_string(width(p.getType()));
@@ -614,6 +693,12 @@ struct Entry {
       for (PHINode &p : bb.phis()) bindings.push_back(names[&p] + ":" + type(&p));
       rows.push_back("^" + blocks[&bb] + "(" + join(bindings) + "):");
       ordinal = 0;
+      if (&bb == &f.getEntryBlock()) for (auto *site : fileOrder) {
+        auto zero = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
+        auto size = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),m.getDataLayout().getPointerSize()));
+        auto p = files.at(site).tag; rows.push_back(p + " = alloc " + size); localMemory.push_back(p);
+        rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + p + " " + zero);
+      }
       for (Instruction &i : bb) {
         bool record = false;
         if (auto *g = dyn_cast<GetElementPtrInst>(&i))
@@ -640,20 +725,47 @@ struct Entry {
                  w = integer(a.get(c->getArgOperand(1)), c);
             if (cls)
               unimplemented("§3.4 configured register class", 1, c);
-            auto q = fresh("qreg[" + std::to_string(w) + "]");
-            names[c] = q;
+            auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
+            if (files.count(c)) {
+              // No site is executed twice in this acyclic entry-local file.
+              // Distinct nonzero identities are stable across stores and loads;
+              // free retires the live tag before any later use can match it.
+              auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
+              rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
+              names[c] = tag;
+              rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
+            } else names[c] = q;
             rows.push_back(q + " = qreg.new any " + std::to_string(w));
           } else if (n == "__bennett_qfree")
-            rows.push_back("qreg.free " +
-                           operand(c->getArgOperand(0)));
+            withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
           else if (n == "__bennett_oracle")
             descriptor(*c);
           else if (n == "__bennett_gate" || n == "__bennett_measure")
             gate(*c);
           else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
+        } else if (auto *al = dyn_cast<AllocaInst>(&i)) {
+          auto n = m.getDataLayout().getTypeAllocSize(al->getAllocatedType()).getFixedValue();
+          auto *count = dyn_cast<ConstantInt>(al->getArraySize());
+          if (!count) unimplemented("§17.3 dynamic CC stack extent",1,al);
+          auto bytes = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),n*count->getZExtValue()));
+          auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p);
+        } else if (auto *st = dyn_cast<StoreInst>(&i)) {
+          auto value = operand(st->getValueOperand()), p = operand(st->getPointerOperand());
+          auto w = st->getValueOperand()->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(st->getValueOperand()->getType());
+          if (st->getValueOperand()->getType()->isPointerTy() && !tagged(a.get(st->getValueOperand()))) {
+            auto d = fresh("i" + std::to_string(w)); rows.push_back(d + " = ptrtoint.i" + std::to_string(w) + " " + value); value = d;
+          }
+          rows.push_back("store.i" + std::to_string(w) + " " + p + " " + value);
+        } else if (auto *ld = dyn_cast<LoadInst>(&i)) {
+          auto p = operand(ld->getPointerOperand());
+          auto w = ld->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(ld->getType());
+          auto value = fresh("i" + std::to_string(w)); rows.push_back(value + " = load.i" + std::to_string(w) + " " + p);
+          if (ld->getType()->isPointerTy() && !tagged(a.get(ld))) { auto d = fresh("ptr"); rows.push_back(d + " = inttoptr " + value); value=d; }
+          names[ld] = value;
         } else if (auto *r = dyn_cast<ReturnInst>(&i)) {
           auto v = r->getReturnValue() ? operand(r->getReturnValue()) : "";
+          for (auto &p : localMemory) rows.push_back("free " + p);
           rows.push_back("ret" + (v.empty() ? "" : " " + v));
         } else if (auto *br = dyn_cast<BranchInst>(&i)) {
           if (br->isUnconditional())
@@ -724,6 +836,15 @@ std::string launchObject(Entry &e, json::Object &record,
             .rtrim()
             .str();
     pos = next;
+  }
+  if (!sections.count("layout") && !e.localMemory.empty()) {
+    uint64_t heap = e.table.capacities[1]; unsigned h = 0, tab = 0, sc = 0;
+    while ((uint64_t(1)<<h) < 4096 + heap) ++h;
+    while ((uint64_t(1)<<tab) < e.localMemory.size()) ++tab;
+    while ((uint64_t(1)<<sc) < e.stack) ++sc;
+    sections["layout"] = jcs(json::Value(json::Object{{"A_tab",tab},{"H",h},{"S_cells",sc},
+      {"globals",json::Object{}},{"heap_base",4096},{"heap_limit_max",int64_t(heap)},
+      {"interface_regions",json::Object{}},{"null_size",4096},{"ptr_width",e.m.getDataLayout().getPointerSizeInBits()}}));
   }
   auto symbols = sections.count("symbols") ? parse(sections["symbols"])
                                            : json::Value(json::Object{});

@@ -1,3 +1,14 @@
+# Eighth pass sub-item 2 — partial implementation
+
+Acyclic entry-local handle files use physical qregs, pointer-width tags in real
+CC memory, full live-tag comparisons, and retirement on free. Two new objects
+check and execute on LLVM 18/23: stored/reloaded handle gates and free, plus a
+retired-handle trap. CC local allocations are released on return. General
+instance bounds and cyclic/recursive/persistent file and call/result environments
+remain **bp-rbl**, required by §6.5 and §17.4; the helper-handle probe still fails
+at the internal pointer carrier. No paired published objects; cross-major
+comparison is distinct evidence. No new deferral.
+
 # Eighth pass — bp-dw4 (in progress) — 2026-10-31
 
 Sub-item 1 adds runtime compare-tree selection for integer parameter kinds and

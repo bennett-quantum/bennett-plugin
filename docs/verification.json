@@ -10288,6 +10288,78 @@
         }
       }
     },
-    "red_harness_correction": "Initial strengthened harness had missing gate declarations and replacement-order syntax errors; these are not implementation red evidence. The original seventh_pass finite-kind red was reproduced before editing and the corrected three probes pass on both majors."
+    "red_harness_correction": "Initial strengthened harness had missing gate declarations and replacement-order syntax errors; these are not implementation red evidence. The original seventh_pass finite-kind red was reproduced before editing and the corrected three probes pass on both majors.",
+    "handles": {
+      "18": {
+        "major": 18,
+        "cases": [
+          {
+            "name": "memory-handle",
+            "exit": 0,
+            "diagnostic": "",
+            "check": true,
+            "check_output": "{\"object_hash\":\"d703537906cb579836d50387594dacd5949c4b3fde2774b11e4537beb25e46f4\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"28eaf33847f149d3df68cdb73fb19e8e69099f08ed6ecafa00c03353f70ecde5\",\"interface_hash\":\"28eaf33847f149d3df68cdb73fb19e8e69099f08ed6ecafa00c03353f70ecde5\"}},\"unresolved_imports\":[]}\n",
+            "objects": [
+              {
+                "path": ".tmp/production-environments/18/memory-handle/out/top/launch.bennett",
+                "sha256": "d703537906cb579836d50387594dacd5949c4b3fde2774b11e4537beb25e46f4"
+              }
+            ],
+            "run_output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"f2d0735ff333bbb045ddf27c1eb6e7f34bb4d6ed65dee3c293093c29b814939e\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"371a20056e160cbd4f88939da412bb1c91c2ce4f1110721650f71b101e0880b5\",\"memory_equals_entry\":false,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":39,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "retired-handle",
+            "exit": 0,
+            "diagnostic": "",
+            "check": true,
+            "check_output": "{\"object_hash\":\"fc1c995457b322bd8d765c7730de36ad261a1a878c3ed2194e3d24f84a95d0c6\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"e53e7c6c9f1b723f7b4c3dbb6eb64e95b20f90ed0af455d0908a7d1dbd73fd59\",\"interface_hash\":\"e53e7c6c9f1b723f7b4c3dbb6eb64e95b20f90ed0af455d0908a7d1dbd73fd59\"}},\"unresolved_imports\":[]}\n",
+            "objects": [
+              {
+                "path": ".tmp/production-environments/18/retired-handle/out/top/launch.bennett",
+                "sha256": "fc1c995457b322bd8d765c7730de36ad261a1a878c3ed2194e3d24f84a95d0c6"
+              }
+            ],
+            "run_output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"f2d0735ff333bbb045ddf27c1eb6e7f34bb4d6ed65dee3c293093c29b814939e\",\"equals_entry\":false,\"fault\":4,\"faults\":[{\"code\":4,\"name\":\"FAULT_UB_TRAP\"}],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"9175399f2b4c55a65dd4ebafcbfec9cb3e8cb1109d9cc1e58b55a35a68a5cb25\",\"memory_equals_entry\":false,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"FAILED\",\"steps\":27,\"tape\":[]}\n",
+            "run": true
+          }
+        ]
+      },
+      "23": {
+        "major": 23,
+        "cases": [
+          {
+            "name": "memory-handle",
+            "exit": 0,
+            "diagnostic": "",
+            "check": true,
+            "check_output": "{\"object_hash\":\"d703537906cb579836d50387594dacd5949c4b3fde2774b11e4537beb25e46f4\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"28eaf33847f149d3df68cdb73fb19e8e69099f08ed6ecafa00c03353f70ecde5\",\"interface_hash\":\"28eaf33847f149d3df68cdb73fb19e8e69099f08ed6ecafa00c03353f70ecde5\"}},\"unresolved_imports\":[]}\n",
+            "objects": [
+              {
+                "path": ".tmp/production-environments/23/memory-handle/out/top/launch.bennett",
+                "sha256": "d703537906cb579836d50387594dacd5949c4b3fde2774b11e4537beb25e46f4"
+              }
+            ],
+            "run_output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"f2d0735ff333bbb045ddf27c1eb6e7f34bb4d6ed65dee3c293093c29b814939e\",\"equals_entry\":false,\"fault\":null,\"faults\":[],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"371a20056e160cbd4f88939da412bb1c91c2ce4f1110721650f71b101e0880b5\",\"memory_equals_entry\":false,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"COMPLETED\",\"steps\":39,\"tape\":[]}\n",
+            "run": true
+          },
+          {
+            "name": "retired-handle",
+            "exit": 0,
+            "diagnostic": "",
+            "check": true,
+            "check_output": "{\"object_hash\":\"fc1c995457b322bd8d765c7730de36ad261a1a878c3ed2194e3d24f84a95d0c6\",\"status\":\"ok\",\"symbols\":{\"M0\":{\"closure_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\",\"interface_hash\":\"b1e373268950d294373f3f8e1c8fe6076ac0161237e4d4902c7021d296da4042\"},\"M1\":{\"closure_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\",\"interface_hash\":\"2ce78f83c0953e4dedfeaa06e3580bf58eb199f47f4b39610e9b429d4bc69e6d\"},\"top\":{\"closure_hash\":\"e53e7c6c9f1b723f7b4c3dbb6eb64e95b20f90ed0af455d0908a7d1dbd73fd59\",\"interface_hash\":\"e53e7c6c9f1b723f7b4c3dbb6eb64e95b20f90ed0af455d0908a7d1dbd73fd59\"}},\"unresolved_imports\":[]}\n",
+            "objects": [
+              {
+                "path": ".tmp/production-environments/23/retired-handle/out/top/launch.bennett",
+                "sha256": "fc1c995457b322bd8d765c7730de36ad261a1a878c3ed2194e3d24f84a95d0c6"
+              }
+            ],
+            "run_output": "{\"budgets\":[],\"clock\":0,\"console\":\"\",\"console_hex\":\"\",\"effect_tape_length\":0,\"entry\":\"top\",\"entry_memory_digest\":\"f2d0735ff333bbb045ddf27c1eb6e7f34bb4d6ed65dee3c293093c29b814939e\",\"equals_entry\":false,\"fault\":4,\"faults\":[{\"code\":4,\"name\":\"FAULT_UB_TRAP\"}],\"first_difference\":\"instances of (0, \\\"v0\\\"): None differs from Some(Qreg(1))\",\"host_requests\":[],\"measurements\":[],\"memory_digest\":\"9175399f2b4c55a65dd4ebafcbfec9cb3e8cb1109d9cc1e58b55a35a68a5cb25\",\"memory_equals_entry\":false,\"results\":[],\"reversed\":false,\"run_state\":\"CLOSED\",\"status\":\"FAILED\",\"steps\":27,\"tape\":[]}\n",
+            "run": true
+          }
+        ]
+      }
+    }
   }
 }

@@ -1,3 +1,7 @@
+Sub-item 2 partial: entry-local acyclic static files/tags check/run on both
+majors; retired handle traps. General N(s), persistent tags, helper call/result
+and recursive environments remain bp-rbl. Do not close bp-dw4.
+
 # Eighth pass in progress
 
 bp-dw4 remains open. Sub-item 1: runtime integer kind/mode/header compare trees
