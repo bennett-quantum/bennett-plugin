@@ -251,7 +251,15 @@ std::string regionKey(Function *f) {
   };
   for(auto *g:materialised)for(auto &i:instructions(g))for(Value *v:i.operands())retain(v);
   for(Function &g:*clone)if(!g.isDeclaration() && !included.count(&g))g.deleteBody();
+  for(auto &alias:clone->aliases())if(!used.count(&alias))alias.dropAllReferences();
+  for(auto it=clone->alias_begin();it!=clone->alias_end();) {
+    auto &alias=*it++;if(!used.count(&alias)) {alias.removeDeadConstantUsers();if(alias.use_empty())alias.eraseFromParent();}
+  }
   for(auto &g:clone->globals())if(!used.count(&g))g.dropAllReferences();
+  // CloneModule's constant-expression cache can retain dead GEP users even
+  // after every unrelated function/initializer has been dropped. They are
+  // not closure references; discard them before deciding whether data is live.
+  for(auto &g:clone->globals())if(!used.count(&g))g.removeDeadConstantUsers();
   for(auto it=clone->global_begin();it!=clone->global_end();) {
     auto &g=*it++;
     if(!used.count(&g)) {if(!g.use_empty())fail("output","unretained region data still referenced",&g);g.eraseFromParent();}

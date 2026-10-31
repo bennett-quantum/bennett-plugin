@@ -100,6 +100,11 @@ thunk="""define internal i8 @forward(i8 %x) { %r = tail call i8 @leaf(i8 %x)
 """
 closure_checks['direct_thunk_closure']=closure_key(plain)==closure_key(plain.replace('call i8 @leaf','call i8 @forward')+thunk)
 closure_checks['unrelated_definition_excluded']=closure_key(plain)==closure_key(plain+'define internal i8 @unrelated() { ret i8 42 }')
+dead_data="""@mtab = internal global [4 x ptr] zeroinitializer
+@unused = internal global ptr getelementptr ([4 x ptr], ptr @mtab, i64 0, i64 1)
+define internal ptr @unrelated() { ret ptr getelementptr ([4 x ptr], ptr @mtab, i64 0, i64 2) }
+"""
+closure_checks['dead_constant_data_excluded']=closure_key(plain)==closure_key(plain+dead_data)
 if not a.all_fixtures: checks.update(closure_checks)
 result={'major':a.major,'checks':checks,'cases':len(checks),'passed':sum(checks.values()),'diagnostic':x.stderr,'published_closures':details,'closure_checks':closure_checks}
 (R/f'.tmp/{"region-key-audit" if a.all_fixtures else "region-keys"}-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
