@@ -1,3 +1,165 @@
+# Eighth pass final evidence — bp-dw4 — 2026-10-31
+
+**bp-dw4 remains OPEN; M1 is incomplete.** Base c9b1b7d. Five ordered sub-item
+commits; no push, sibling modifications, spec repin, or new deferrals. Accepted
+contracts remain dialect 0.2.10 @ 023f5a7 and ISA 0.8. No work expanded into
+bp-piq, bp-o7f or the remaining lifts.
+
+| Sub-item | Landed | Red→green and final validation (each major) | Commit |
+|---|---|---|---|
+| 1 dispatch (partial) | Integer kind/mode/header compare trees; runtime ARG value/size carriers | Original finite-kind red reproduced; 3 checked objects / 9 executions, observed choices and invalid-kind traps | a8a2d81 |
+| 2 environments (partial) | Acyclic entry-local physical files, memory tags, full live-tag comparison and retirement | Memory-handle red; 2 checked objects/runs, including retired-tag trap | 5d8d1f9 |
+| 3 devices/outputs | Combined models/null console; common projection variants; scratch/copy/uncompute and final fault | Combined-device/multi-OUT red; observed outputs, return+console, 256-bit OUT and common-failure zeros | 8e49ae0; final refinements below |
+| 4 layouts | Unified aligned globals/images/region maps; pointer relocation; data/lproc/oracle/CC rehash | Heterogeneous-layout red; named/unnamed/pointer globals and differing MEM_IN extents check/run | 8e8118e; final refinements below |
+| 5 INOUT (partial) | Sole-INOUT pure scalar expansion, independent exhaustive inverse check and B_min; every-use budget checks | INOUT red; 256 inputs per pair direction, observed result; wrong inverse, insufficient first and cached-pair budgets rejected | final commit containing this record |
+
+Before and completed after full headless pre-push gates both **exit 0**:
+
+| Major | Before run/agree/deferred/blocked/diverge | After | Cells agree/run |
+|---|---|---|---|
+| LLVM 18 | 66/65/1/0/0 | 66/65/1/0/0 | 920/924 |
+| LLVM 23 | 66/65/1/0/0 | 66/65/1/0/0 | 788/792 |
+
+Sole deferral remains fp-rot-fastmath-reassoc / bp-7ni. All 34 individually
+recorded prior object files and all 51 seventh-pass object pairs are unchanged.
+The final suite has 3 dispatch cases (9 executions) and 14 environment cases
+(11 checked/executed objects plus 3 expected compile rejections) per major.
+The scalar INOUT checker records two 256-input pair directions, each checking
+g(x) and ginv(g(x)), B_min=(5,0,7,1). It uses BENNETT_ISA_REF or the installed
+bennett-isa-ref, records its binary digest and emits inplace-evidence.json.
+This evidence is not a checked executable certificate. Existing native protocol
+mocks and bp-o7f limitations remain. Red harness syntax corrections are described
+in verification.json; malformed harness inputs are not counted as compiler reds.
+
+An intermediate gate completed with exit 0 but a separate byte audit caught
+cross-major function ordering; deterministic ordering and a gate byte check fix it.
+Two other intermediate after-gate runs were intentionally interrupted for known
+implementation fixes; neither is claimed as a completed gate. Final logs:
+.tmp/eighth-before.log and .tmp/eighth-after.log. Tests and object hashes below
+come from the completed final run, not those interrupted attempts.
+
+## Exact remaining sub-items (required M1 mechanics)
+
+- **Sub-item 1 / bp-kv5:** Singleton region candidates/widths/memory sizes/device fields and same-block virtual descriptor reads remain in Entry. Pointer-valued candidates/descriptor selections, general runtime memory loads, finite allocation/descriptor widths and device model/value/size selectors are missing. Determining sentence: Dialect 0.2.10 §8.4: The plugin compiles one reference object (§16.2) per shape that the value sets allow, taking every unbounded kind or mode field over its finite domain (5 kinds, 2 modes, 4 models). At run time the caller’s tier reads the descriptor and selects the compiled shape with the compare tree of §14.2.
+
+- **Sub-item 2 / bp-rbl:** Only entry-local acyclic one-instance files are implemented. General N(s), cyclic/recursive and persistent/global/heap file lifetimes, pointer casts, ordinary helper arguments/results and interprocedural file/table propagation remain. Determining sentence: Dialect 0.2.10 §6.5: For each slot the plugin keeps one CC qreg variable, threaded like a direct handle through every CC variant that may use it; qalloc at s picks a free instance index at run time. A fresh-tag allocator gives every allocation a new identity, stored in memory. §17.4 requires the handle register environment of §6.5.
+
+- **Sub-item 5 / bp-65x:** Inverse checking supports sole INOUT and pure single-lproc bodies only. Preserved IN/MEM_IN/ARG bindings, parameter/device/candidate tuples, general heap/nested-call budget minima, configurable exhaustive width and sampled producer/library bounds, and runtime budget prechecks remain. Determining sentence: Dialect 0.2.10 §8.7: User pairs with IN, MEM_IN or arbitrary ARGs allocate clean n(x)-wire t and 4-wire f at the CC boundary; preserved parameter bindings are identical in both calls. Above that width it MUST record a sampled evidence claim; B_sample never substitutes for B_bound.
+
+Fresh final LLVM18/23 probes reproduce all three remaining families: cross-block
+descriptor loads, internal helper handle carriers, and parameterized INOUT.
+These are missing plugin implementations, not missing ISA capabilities and not
+scope exclusions. bp-dw4 depends on all three filed beads. bp-95o continues to
+track absent paired published CC bytes; cross-major equality is distinct evidence.
+
+## Complete byte-for-byte table
+
+**97/97 full object pairs byte-identical across LLVM 18/23**; 27 full-byte published matches. New resolved layouts have no paired published object unless explicitly marked. Partial reference files emitted before expected compile rejections are included. Full per-major paths, sizes, hashes and checks/runs are in verification.json eighth_pass.
+
+| Object | Published full bytes | 18 vs 23 | SHA-256 (both) |
+|---|---|---|---|
+| `scalar/oracle-empty-output` | exact oracle-empty-output | equal | `b5755ea206e8c3607294260c17a2f01de8ac93325d89103e5856bfcc319770c3` |
+| `scalar/oracle-empty-fault` | exact oracle-empty-fault | equal | `9921c79836b9be667edaa6aa162127237ac99c5256c3973b03479cae2bd3f559` |
+| `scalar/oracle-discard-return` | exact oracle-discard-return | equal | `0217762689e4944d8d959a516b95c335d6ea688e8ccad2fd7f87f7ccaab70eb8` |
+| `scalar/atomic-nand` | exact atomic-nand | equal | `b7dca42645f46355312ed0d359f1ec72b7de899ee79b5914a5ea46f0f395af28` |
+| `scalar/pointer-as270` | exact pointer-as270 | equal | `2c731bbcbf282cfd0119bc42feb53efcf624cdf1fa60942c0a9199222a8fa6bc` |
+| `scalar/gep-index-obj` | exact gep-index-obj | equal | `364640c0f4a947a93dc7d85db13ce68eba270ed435a1e6ee950e9b2a35542bcb` |
+| `scalar/gep-index-const` | exact gep-index-const | equal | `7e465780032222ca1d36c3a37295ad4ca9a86ee3f571db69c65f760688fb30e2` |
+| `scalar/binding-out-byte` | exact binding-out-byte | equal | `94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581` |
+| `scalar/binding-clock-read` | exact binding-clock-read | equal | `ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e` |
+| `scalar/binding-block-byte` | exact binding-block-byte | equal | `a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c` |
+| `scalar/binding-console-byte` | exact binding-console-byte | equal | `c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf` |
+| `scalar/indirectbr-two-blocks` | exact indirectbr-two-blocks | equal | `92802f732ce75ad94733a3c67e97fec44a4d2cc26099c3338379218bb01b9718` |
+| `scalar/inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `scalar/add2` | exact add2 | equal | `a9660ece18422bc64557cb19f02d980339b44fa77b572e81dbc543716606f5d1` |
+| `scalar/switch5` | exact switch5 | equal | `1adefd004c93443ff7814b939dc85dd609104ada65d54e5b98398f1448208280` |
+| `scalar/fp-aggregate` | exact fp-aggregate | equal | `1b06c23f4f195a7f8b6c2cc556c8f50495ddd7c395b55c1754dc54c980b7ce5a` |
+| `scalar/c-O3-inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `descriptor-reference/inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `descriptor-production/smoke/launch.bennett` | absent (bp-95o) | equal | `54be8166989d5b58916aacdc041f25c6563f69de369a61868a57c1d47b686075` |
+| `descriptor-production/smoke/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/0/launch.bennett` | absent (bp-95o) | equal | `d5ae5d065001cf94ab65611f58f68f89b06fc9a61aa66d29be4447229e8eeb25` |
+| `production/0/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/7/launch.bennett` | absent (bp-95o) | equal | `c28286b6553e8898e0a46da18fa6fb026b53bb6a73f35b98f546b635a3421cbf` |
+| `production/7/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/255/launch.bennett` | absent (bp-95o) | equal | `e982723ef9cc4dd66e82a61c1b24f62c6290dbdbc4d62a695f94f4356321f1ae` |
+| `production/255/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/published/launch.bennett` | absent (bp-95o) | equal | `fcb11ca7194f835598ba8d2cae2133eacc628634baca2f2fc205915e7f042eb6` |
+| `production/published/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/abi/launch.bennett` | absent (bp-95o) | equal | `848f2628b2b5d9c5f64428b3e4cd0f25537622ee799691a467294f8b1d5149a3` |
+| `production-shapes/binding-out-byte/launch.bennett` | absent (bp-95o) | equal | `7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d` |
+| `production-shapes/binding-out-byte/oracle-0/ref.bennett` | exact binding-out-byte | equal | `94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581` |
+| `production-shapes/binding-clock-read/launch.bennett` | absent (bp-95o) | equal | `be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45` |
+| `production-shapes/binding-clock-read/oracle-0/ref.bennett` | exact binding-clock-read | equal | `ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e` |
+| `production-shapes/binding-block-byte/launch.bennett` | absent (bp-95o) | equal | `493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c` |
+| `production-shapes/binding-block-byte/oracle-0/ref.bennett` | exact binding-block-byte | equal | `a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c` |
+| `production-shapes/binding-console-byte/launch.bennett` | absent (bp-95o) | equal | `3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963` |
+| `production-shapes/binding-console-byte/oracle-0/ref.bennett` | exact binding-console-byte | equal | `c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf` |
+| `production-shapes/mem-in/launch.bennett` | absent (bp-95o) | equal | `9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7` |
+| `production-shapes/mem-in/oracle-0/ref.bennett` | absent (bp-95o) | equal | `9915a0b7cc0b73a87bb5a60ef9496f393df92be7bbda0a8d56d85ce2d4c09801` |
+| `production-shapes/two-regions/launch.bennett` | absent (bp-95o) | equal | `fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8` |
+| `production-shapes/two-regions/oracle-0/ref.bennett` | absent (bp-95o) | equal | `177dc4fb7351433086dbe19fffe4438e5ff909a3a0868cd56ebac9c30080bacf` |
+| `production-shapes/two-regions/oracle-1/ref.bennett` | absent (bp-95o) | equal | `bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee` |
+| `production-shapes/handle-phi/launch.bennett` | absent (bp-95o) | equal | `0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1` |
+| `production-budgets/baseline/launch.bennett` | absent (bp-95o) | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/baseline/oracle-0/ref.bennett` | absent (bp-95o) | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/identity-once/launch.bennett` | absent (bp-95o) | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/identity-once/oracle-0/ref.bennett` | absent (bp-95o) | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/key-priority/launch.bennett` | absent (bp-95o) | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/key-priority/oracle-0/ref.bennett` | absent (bp-95o) | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/explicit-precedence/launch.bennett` | absent (bp-95o) | equal | `970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242` |
+| `production-budgets/explicit-precedence/oracle-0/ref.bennett` | absent (bp-95o) | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-dispatch/finite-kind/out/top/launch.bennett` | absent (bp-95o) | equal | `7706247f043ee9473b685793bf02f902873ccba8e08a70d9fcbb31deac7c99a1` |
+| `production-dispatch/finite-kind/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `20a90aa1bc248210f82e6836c6442eab176659fcf7d9ece112edac5b80f8efa3` |
+| `production-dispatch/finite-kind/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `177dc4fb7351433086dbe19fffe4438e5ff909a3a0868cd56ebac9c30080bacf` |
+| `production-dispatch/finite-kind/out/top/oracle-2/ref.bennett` | absent (bp-95o) | equal | `2e3424c5a8a2ac8dc8fd9387382623f13895e4b61a20f2481f209398599e058e` |
+| `production-dispatch/finite-kind/out/top/oracle-3/ref.bennett` | absent (bp-95o) | equal | `bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee` |
+| `production-dispatch/runtime-arg/out/top/launch.bennett` | absent (bp-95o) | equal | `759cb3b43245fb76b736bd87585eac26f849fd61ae6c28fbd50b34acf52a3d49` |
+| `production-dispatch/runtime-arg/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `20a90aa1bc248210f82e6836c6442eab176659fcf7d9ece112edac5b80f8efa3` |
+| `production-dispatch/runtime-arg/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `2e3424c5a8a2ac8dc8fd9387382623f13895e4b61a20f2481f209398599e058e` |
+| `production-dispatch/runtime-kind/out/top/launch.bennett` | absent (bp-95o) | equal | `275128e17902ee722b68dadd38c644f8de08bd7cf169c010e553f811cce62e5d` |
+| `production-dispatch/runtime-kind/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `20a90aa1bc248210f82e6836c6442eab176659fcf7d9ece112edac5b80f8efa3` |
+| `production-dispatch/runtime-kind/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `177dc4fb7351433086dbe19fffe4438e5ff909a3a0868cd56ebac9c30080bacf` |
+| `production-dispatch/runtime-kind/out/top/oracle-2/ref.bennett` | absent (bp-95o) | equal | `2e3424c5a8a2ac8dc8fd9387382623f13895e4b61a20f2481f209398599e058e` |
+| `production-dispatch/runtime-kind/out/top/oracle-3/ref.bennett` | absent (bp-95o) | equal | `bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee` |
+| `production-environments/combined-devices/out/top/launch.bennett` | absent (bp-95o) | equal | `235fc0e814958b3642e61d306304f656ab425dd3f4877110c9423364a016399d` |
+| `production-environments/combined-devices/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `70c95cc6dfac0047488280bb970c0983bf7ee23b18c625635c1288b756b40d8c` |
+| `production-environments/heterogeneous-layouts/out/top/launch.bennett` | absent (bp-95o) | equal | `2c8643a887177d11b45445d05630fcd3d35f5be747f0dfa5d3a9b86835737455` |
+| `production-environments/heterogeneous-layouts/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `b8b93715b1c8867b5a909751a98083ab4c047848fc165af964cb9e8290f0a9be` |
+| `production-environments/heterogeneous-layouts/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `ca8767b99f842d1b0886a1a4ef351ca285f5e794a4a62db5f0b2b266b77577f6` |
+| `production-environments/inplace-inout/out/top/launch.bennett` | absent (bp-95o) | equal | `645e84bc332c0c0f378a4e003ab5f1a2e2accdecf035a5790b58548e17078662` |
+| `production-environments/inplace-inout/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `3a96b70447a95461c2f57e3355690e0359d91b76694f9c1dd31695b3463eaa6c` |
+| `production-environments/inplace-inout/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `c31ba2c0bf0e4c0c24ee446851388b7277929bd9b9e37f0fda39baf61a5bb4a7` |
+| `production-environments/inplace-not-inverse/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `3a96b70447a95461c2f57e3355690e0359d91b76694f9c1dd31695b3463eaa6c` |
+| `production-environments/inplace-second-small-budget/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `3a96b70447a95461c2f57e3355690e0359d91b76694f9c1dd31695b3463eaa6c` |
+| `production-environments/inplace-second-small-budget/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `c31ba2c0bf0e4c0c24ee446851388b7277929bd9b9e37f0fda39baf61a5bb4a7` |
+| `production-environments/inplace-small-budget/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `3a96b70447a95461c2f57e3355690e0359d91b76694f9c1dd31695b3463eaa6c` |
+| `production-environments/inplace-small-budget/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `c31ba2c0bf0e4c0c24ee446851388b7277929bd9b9e37f0fda39baf61a5bb4a7` |
+| `production-environments/memory-handle/out/top/launch.bennett` | absent (bp-95o) | equal | `d703537906cb579836d50387594dacd5949c4b3fde2774b11e4537beb25e46f4` |
+| `production-environments/memory-layouts/out/top/launch.bennett` | absent (bp-95o) | equal | `1c115129ba9021fd05793e7e1385391b8d7e298f3ce4159e3fb74e61ef825256` |
+| `production-environments/memory-layouts/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `8e769dd062adc3ee88b3d00e4e9d1c3613a1f59fbeafa4ecf81ef2516f802122` |
+| `production-environments/memory-layouts/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `a468a7c63f9701870ae61226d3b9eaf7d6822df663b86e2322483d62254f8cbf` |
+| `production-environments/multiple-outputs/out/top/launch.bennett` | absent (bp-95o) | equal | `7514c665a0bbbe3ec9746b0a6421227d518976f71ad9c9cedc981cc6753c46a0` |
+| `production-environments/multiple-outputs/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `6a8622b95a2e7cd0df35abdfcd185388378473fe5ea6a4ec59912009b17ccc20` |
+| `production-environments/multiple-outputs/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `081ec9dca3fb9a27ed0dfc3a7366d875f52b9661ebd42319ad2953f0649ebe0f` |
+| `production-environments/pointer-layouts/out/top/launch.bennett` | absent (bp-95o) | equal | `c07801c41ed3291225c169da7b368deaf980ac014baf82baa50319c987f9d57e` |
+| `production-environments/pointer-layouts/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `c2256e6b4cb3c866f508356a7ba6008b363090b7dac55896f2b9f72af3c18780` |
+| `production-environments/pointer-layouts/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `f45d3b2a16c078ac2f156932d1d035441dc5ec289f0dce2ff7511510c9227530` |
+| `production-environments/retired-handle/out/top/launch.bennett` | absent (bp-95o) | equal | `fc1c995457b322bd8d765c7730de36ad261a1a878c3ed2194e3d24f84a95d0c6` |
+| `production-environments/return-console/out/top/launch.bennett` | absent (bp-95o) | equal | `3fa57ef762f56ae3ddee0d484d44a829cc97c9750035a7eed9a80c223843cfd4` |
+| `production-environments/return-console/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `62820c15c570eca2e95f744a8dd31861a04a12f7a83a514979958d06dccc75e2` |
+| `production-environments/return-console/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `b780ade2bade3038a2fa29d7a77b3a43a643547d0bd6b3e8d4e6eaff6eed097a` |
+| `production-environments/unnamed-layouts/out/top/launch.bennett` | absent (bp-95o) | equal | `2c8643a887177d11b45445d05630fcd3d35f5be747f0dfa5d3a9b86835737455` |
+| `production-environments/unnamed-layouts/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `b8b93715b1c8867b5a909751a98083ab4c047848fc165af964cb9e8290f0a9be` |
+| `production-environments/unnamed-layouts/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `ca8767b99f842d1b0886a1a4ef351ca285f5e794a4a62db5f0b2b266b77577f6` |
+| `production-environments/wide-output/out/top/launch.bennett` | absent (bp-95o) | equal | `ece78bb1691d126e67b4340c6007b624e24614bd731c37fb65c0785b7c11dfc1` |
+| `production-environments/wide-output/out/top/oracle-0/ref.bennett` | absent (bp-95o) | equal | `a1842515aee6375b435751038bf1bda78b18e6a2ad25d465dcc6f1913d097635` |
+| `production-environments/wide-output/out/top/oracle-1/ref.bennett` | absent (bp-95o) | equal | `67e904f61fca699595efd2e56b68afa877e56fb4283c2cb87e7c87f6bbcb82f6` |
+
+---
+
+# Historical implementation notes
+
 # Eighth pass sub-item 4 — heterogeneous production layouts
 
 Production linking now retains source global identities, unions aligned global

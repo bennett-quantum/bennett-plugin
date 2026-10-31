@@ -79,6 +79,7 @@ public:
   llvm::json::Object report();
 };
 void lowerProduction(llvm::Module &, Analysis &, llvm::StringRef, unsigned, llvm::StringRef, llvm::StringRef);
+std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
 void normaliseScalar(llvm::Function &);
 void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,

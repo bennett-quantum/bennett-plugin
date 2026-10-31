@@ -10,6 +10,8 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Support/Program.h"
+#include <cstdlib>
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <regex>
 using namespace llvm;
@@ -205,13 +207,16 @@ struct Entry {
     for (auto &x : v.atoms) if (x.kind == Atom::Root && files.count(x.object)) return true;
     return false;
   }
-  void withHandle(Value *v, const std::function<void(std::string)> &body, bool retire = false) {
+  void withHandle(Value *v, const std::function<void(std::string)> &body, bool retire = false, std::string result = "", const Value *returned = nullptr) {
     auto provenance = a.get(v);
     if (!tagged(provenance)) { body(operand(v)); return; }
     auto id = std::to_string(dispatchBlock++), done = "handle" + id + "done";
     auto value = operand(v);
-    for (auto &x : provenance.atoms) if (x.kind == Atom::Root && files.count(x.object)) {
-      auto &slot = files.at(x.object);
+    for (auto *site : fileOrder) {
+      bool candidate=false;
+      for(auto &x:provenance.atoms) if(x.kind==Atom::Root && x.object==site)candidate=true;
+      if(!candidate)continue;
+      auto &slot = files.at(site);
       auto eq = fresh("i1"), live = fresh("i1"), ok = fresh("i1"), liveTag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
       rows.push_back(liveTag + " = load.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag);
       auto zero = operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
@@ -222,9 +227,9 @@ struct Entry {
       rows.push_back("br " + ok + " ^" + leaf + "() ^" + next + "()");
       rows.push_back("^" + leaf + "():"); body(slot.q);
       if (retire) rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag + " " + zero);
-      rows.push_back("br ^" + done + "()"); rows.push_back("^" + next + "():");
+      rows.push_back("br ^" + done + "(" + (result.empty() ? "" : names.at(returned)) + ")"); rows.push_back("^" + next + "():");
     }
-    rows.push_back("trap"); rows.push_back("^" + done + "():");
+    rows.push_back("trap"); rows.push_back("^" + done + "(" + (result.empty() ? "" : result+":i1") + "):");
   }
   unsigned width(Type *t) {
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
@@ -314,6 +319,10 @@ struct Entry {
     }
     unimplemented("§8.1 runtime descriptor memory load", 1, &c);
   }
+  bool compilingInplace = false;
+  std::string inplaceTarget, inplaceFault;
+  json::Array inplaceEvidence;
+  std::map<std::string,std::pair<uint64_t,uint64_t>> verifiedPairs;
   std::map<uint64_t, AV> selectedFields;
   unsigned dispatchBlock = 0;
   void descriptor(CallBase &c) {
@@ -397,7 +406,7 @@ struct Entry {
       fail("T-IFACE", "§8.2 descriptor arity", &c);
     auto target = field(hl->getElementOffset(4), ptr),
          fault = field(hl->getElementOffset(5), ptr);
-    if (qwidth(fault, &c) != 4)
+    if (!compilingInplace && qwidth(fault, &c) != 4)
       fail("T-SIZE", "§8.2 fault width", &c);
     bool discard = !target.top && target.atoms.size() == 1 &&
                    target.atoms.begin()->kind == Atom::Int &&
@@ -549,7 +558,7 @@ struct Entry {
                                    {"depth", std::to_string(budget[3])},
                                    {"sstack", std::to_string(budget[4])}});
     if (refName != "ref") budgets.back()["region"] = refName;
-    std::string tgt, faultRegister = handle(fault,&c);
+    std::string tgt, faultRegister = compilingInplace ? inplaceFault : handle(fault,&c);
     if (multi) {
       auto &slice = slices[projection];
       if (projection) {
@@ -559,7 +568,7 @@ struct Entry {
       } else { tgt=fresh("qreg["+std::to_string(slice.width)+"]"); rows.push_back(tgt+" = qreg.slice "+handle(slice.output,&c)+" "+std::to_string(slice.lo)+" "+std::to_string(slice.width)); }
     } else if (discard) {
       tgt = fresh("qreg[1]"); rows.push_back(tgt + " = qreg.new any 1");
-    } else tgt = handle(output, &c);
+    } else tgt = compilingInplace ? inplaceTarget : handle(output, &c);
     auto call = "oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt + " " + faultRegister + " (" + join(mems) + ") (" + join(args) + ")";
     rows.push_back(call);
     if (multi && projection) {
@@ -571,6 +580,98 @@ struct Entry {
       rows.push_back("qreg.free "+faultRegister);rows.push_back("qreg.free "+tgt);
     } else if (discard) rows.push_back("qreg.free " + tgt);
     }
+  }
+  void verifyInverse(unsigned forward, unsigned inverse, unsigned bits, CallBase &at) {
+    auto key=hash(references.at(forward)+references.at(inverse));
+    auto checkBudget=[&](uint64_t stepsMinimum,uint64_t stackMinimum) {
+      for(unsigned i=budgets.size()-2;i<budgets.size();++i) {
+        auto &b=budgets[i];uint64_t steps,cells,depth;
+        b.getString("steps")->getAsInteger(10,steps);b.getString("stack")->getAsInteger(10,cells);b.getString("depth")->getAsInteger(10,depth);
+        if(steps<stepsMinimum || cells<stackMinimum || depth<1)fail("BD-E-INPLACE-NOT-INVERSE","§8.7 budget below exhaustive B_min",&at);
+      }
+    };
+    if(verifiedPairs.count(key)) { auto minima=verifiedPairs.at(key);checkBudget(minima.first,minima.second);return; }
+    if(bits>24)unimplemented("§8.7 sampled inverse evidence and sound universal budget bound",1,&at);
+    for(auto i:{forward,inverse}) {
+      auto object=StringRef(references.at(i));auto body=object.split("lproc @L1").second;
+      if(object.contains("lift.alloc") || object.contains("lift.load") || object.contains("lift.store") || body.contains("lift.call"))
+        unimplemented("§8.7 general inverse reference budget verification",1,&at);
+    }
+    const char *configured=std::getenv("BENNETT_ISA_REF");
+    auto tool=sys::findProgramByName(configured ? configured : "bennett-isa-ref");
+    if(!tool)fail("input","§8.7 requires bennett-isa-ref (or BENNETT_ISA_REF)",&at);
+    auto output=out+"/inplace-reference.json";
+    uint64_t maxSteps=0,minStack=0;
+    auto evaluate=[&](unsigned ref,uint64_t x,uint64_t cells) {
+      auto path=out+"/oracle-"+std::to_string(ref)+"/ref.bennett";
+      auto text=std::to_string(x),budget="18446744073709551615,0,"+std::to_string(cells)+",1";
+      SmallVector<StringRef> args{*tool,"run-oracle",path,"ref","--input",text,"--budget",budget};
+      std::optional<StringRef> redirects[]={StringRef(),StringRef(output),StringRef()};
+      sys::fs::remove(output);
+      std::string error;auto status=sys::ExecuteAndWait(*tool,args,std::nullopt,redirects,0,0,&error);
+      if(status)fail("output","§8.7 reference interpreter failed: "+error,&at);
+      return parse(read(output));
+    };
+    for(auto ref:{forward,inverse}) {
+      auto layout=parse(objectSectionsForInverse(references.at(ref)));
+      uint64_t capacity=uint64_t(1)<<*layout.getAsObject()->getInteger("S_cells");
+      // One direct lproc has one fixed frame shape on every input (§3.7).
+      // With no memory or nested calls, heap minimum is zero and depth one.
+      uint64_t lo=0,hi=capacity;
+      while(lo<hi) {auto mid=(lo+hi)/2;auto v=evaluate(ref,0,mid);if(v.getAsObject()->getInteger("code")==0)hi=mid;else lo=mid+1;}
+      minStack=std::max(minStack,lo);
+    }
+    uint64_t count=uint64_t(1)<<bits;
+    for(uint64_t x=0;x<count;++x) {
+      auto y=evaluate(forward,x,minStack);auto *yo=y.getAsObject();auto payload=yo->getInteger("payload");
+      if(yo->getInteger("code")!=0 || !payload)fail("BD-E-INPLACE-NOT-INVERSE","§8.7 forward fault",&at);
+      auto z=evaluate(inverse,*payload,minStack);auto *zo=z.getAsObject();
+      if(zo->getInteger("code")!=0 || zo->getInteger("payload")!=int64_t(x))fail("BD-E-INPLACE-NOT-INVERSE","§8.7 inverse mismatch",&at);
+      maxSteps=std::max({maxSteps,uint64_t(*yo->getInteger("steps")),uint64_t(*zo->getInteger("steps"))});
+    }
+    checkBudget(maxSteps,minStack);
+    inplaceEvidence.push_back(json::Object{{"kind","exhaustive"},{"bits",bits},{"inputs",int64_t(count)},
+      {"forward",hash(references.at(forward))},{"inverse",hash(references.at(inverse))},
+      {"B_min",json::Object{{"steps",int64_t(maxSteps)},{"heap",0},{"stack",int64_t(minStack)},{"depth",1}}},
+      {"interpreter_sha256",hash(read(*tool))},{"checked_executable_claim",false}});
+    verifiedPairs[key]={maxSteps,minStack};write(out+"/inplace-evidence.json",jcs(json::Value(parse(jcs(json::Value(std::move(inplaceEvidence))))))+"\n");
+    // Keep the evidence array available for another pair in this entry.
+    auto evidence=parse(read(out+"/inplace-evidence.json"));inplaceEvidence=std::move(*evidence.getAsArray());
+    sys::fs::remove(output);
+  }
+  std::string objectSectionsForInverse(StringRef object) {
+    return object.split("section layout\n").second.split('\n').first.str();
+  }
+  void inplace(CallBase &c) {
+    auto &ctx=m.getContext();auto *u32=Type::getInt32Ty(ctx);auto *ptr=PointerType::get(ctx,0);
+    auto *desc=c.getArgOperand(3);
+    auto header=a.readAt(c,desc,0,u32),flags=a.readAt(c,desc,12,u32),np=a.readAt(c,desc,4,u32);
+    if(integer(header,&c)!=2 || integer(flags,&c)!=0)fail("T-IFACE","§8.7 descriptor header",&c);
+    auto target=a.readAt(c,desc,16,ptr);
+    if(target.top || target.atoms.size()!=1 || target.atoms.begin()->kind!=Atom::Int || !target.atoms.begin()->integer.isZero())fail("T-IFACE","§8.7 target must be null",&c);
+    if(integer(np,&c)!=1 || integer(a.readAt(c,desc,8,u32),&c)!=0 || integer(a.readAt(c,desc,32,u32),&c)!=5)
+      unimplemented("§8.7 general INOUT parameter and device bindings",1,&c);
+    auto q=a.readAt(c,desc,40,ptr);auto w=qwidth(q,&c);auto x=handle(q,&c);
+    auto t=fresh("qreg["+std::to_string(w)+"]"),fr=fresh("qreg[4]");
+    rows.push_back(t+" = qreg.new any "+std::to_string(w));rows.push_back(fr+" = qreg.new any 4");
+    auto oracle=m.getOrInsertFunction("__bennett_oracle",FunctionType::get(Type::getVoidTy(ctx),{ptr,ptr,ptr},false));
+    Atom kind;kind.kind=Atom::Int;kind.integer=APInt(32,1);AV in;in.atoms.insert(kind);
+    selectedFields[32]=in;selectedFields[16]=q;
+    compilingInplace=true;inplaceTarget=t;inplaceFault=fr;
+    unsigned refs[2];
+    for(unsigned i=0;i<2;++i) {
+      auto *call=CallInst::Create(oracle,{c.getArgOperand(i),c.getArgOperand(2),desc},"",&c);
+      auto before=budgets.size();descriptorLeaf(*call);
+      auto region=budgets.at(before).getString("region").value_or("ref");
+      refs[i]=region=="ref"?0:std::stoul(region.drop_front(3).str());call->eraseFromParent();
+      if(!i) {
+        auto width=std::to_string(w);auto swap=action("x:wire["+width+"] mut, t:wire["+width+"] mut","",width+","+width,"","qexch x t");
+        rows.push_back("action_call @"+swap+" ("+x+", "+t+") () () ()");
+      }
+    }
+    compilingInplace=false;selectedFields.clear();
+    verifyInverse(refs[0],refs[1],w,c);
+    rows.push_back("qreg.free "+fr);rows.push_back("qreg.free "+t);
   }
   std::string action(std::string mut, std::string in, std::string widths,
                      std::string inWidths, std::string ops) {
@@ -585,7 +686,9 @@ struct Entry {
   void gate(CallBase &c) {
     auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
     auto *v = c.getArgOperand(measurement ? 0 : 1);
-    withHandle(v, [&](std::string q) { gateOn(c,q); });
+    auto result = measurement && tagged(a.get(v)) ? fresh("i1") : "";
+    withHandle(v, [&](std::string q) { gateOn(c,q); }, false, result, &c);
+    if(!result.empty())names[&c]=result;
   }
   void gateOn(CallBase &c, std::string src) {
     auto n = c.getCalledFunction()->getName();
@@ -629,10 +732,11 @@ struct Entry {
     for (Instruction &i : instructions(f))
       if (auto *c = dyn_cast<CallBase>(&i))
         if (c->getCalledFunction() &&
-            c->getCalledFunction()->getName() == "__bennett_oracle") {
-          descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(2)));
-          if (!isa<ConstantPointerNull>(c->getArgOperand(1)))
-            descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(1)));
+            (c->getCalledFunction()->getName() == "__bennett_oracle" || c->getCalledFunction()->getName() == "__bennett_inplace")) {
+          bool ip=c->getCalledFunction()->getName()=="__bennett_inplace";
+          descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(ip?3:2)));
+          if (!isa<ConstantPointerNull>(c->getArgOperand(ip?2:1)))
+            descriptorObjects.insert(getUnderlyingObject(c->getArgOperand(ip?2:1)));
         }
     std::set<const Value *> visited;
     std::function<void(const Value *)> validate = [&](const Value *v) {
@@ -647,7 +751,7 @@ struct Entry {
           continue;
         if (auto *c = dyn_cast<CallBase>(u))
           if (auto *g = c->getCalledFunction();
-              g && (g->getName() == "__bennett_oracle" ||
+              g && (g->getName() == "__bennett_oracle" || g->getName() == "__bennett_inplace" ||
                     g->getName().starts_with("llvm.lifetime.") ||
                     g->getName().starts_with("llvm.memset.")))
             continue;
@@ -663,6 +767,15 @@ struct Entry {
     for (Instruction &i : instructions(f)) if (auto *st = dyn_cast<StoreInst>(&i))
       if (!descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
         for (auto &x : a.get(st->getValueOperand()).atoms) if (x.kind == Atom::Root) memoryRoots.insert(x.object);
+    bool enlarged=true;
+    while(enlarged) {
+      enlarged=false;
+      for(Instruction &i:instructions(f)) {
+        auto v=a.get(&i);bool shares=false;
+        for(auto &x:v.atoms) if(x.kind==Atom::Root && memoryRoots.count(x.object)) shares=true;
+        if(shares) for(auto &x:v.atoms) if(x.kind==Atom::Root) enlarged |= memoryRoots.insert(x.object).second;
+      }
+    }
     if (!memoryRoots.empty()) {
       for (Instruction &i : instructions(f)) {
         if (auto *st = dyn_cast<StoreInst>(&i); st && a.get(st->getValueOperand()).roots() &&
@@ -763,6 +876,8 @@ struct Entry {
             withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
           else if (n == "__bennett_oracle")
             descriptor(*c);
+          else if (n == "__bennett_inplace")
+            inplace(*c);
           else if (n == "__bennett_gate" || n == "__bennett_measure")
             gate(*c);
           else
@@ -860,20 +975,20 @@ std::string linkReferences(Entry &e) {
   std::set<std::string> used;
   for (auto &names:e.referenceGlobals) for (auto &n:names) used.insert(n.second);
   uint64_t base=4096;
-  for (auto &g:e.m.globals()) if (used.count(g.getName().str())) {
-    auto key=g.getName().str(),name="G"+std::to_string(globalSymbols.size()+1);
+  for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
+    auto key=scalarGlobalKey(g),name="G"+std::to_string(globalSymbols.size()+1);
     globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=base;
     sizes[name]=dl.getTypeAllocSize(g.getValueType()).getFixedValue();base+=sizes[name];
   }
   for(auto &key:used) if(!globalSymbols.count(key)) {
     // Model state materialised only in a scalar clone has the published i64
     // default image; its source name still identifies it across wrappers.
-    if(!StringRef(key).starts_with("__bennett_dev_")) unimplemented("§19.5 unnamed unified global",1,&e.f);
+    if(!StringRef(key).starts_with("name:__bennett_dev_")) unimplemented("§19.5 unnamed unified global",1,&e.f);
     auto name="G"+std::to_string(globalSymbols.size()+1);globalSymbols[key]=name;
     base=alignTo(base,uint64_t(8));bases[name]=base;sizes[name]=8;base+=8;
   }
   std::map<const GlobalVariable *,uint64_t> sourceBases;
-  for(auto &g:e.m.globals()) if(globalSymbols.count(g.getName().str()))sourceBases[&g]=bases.at(globalSymbols.at(g.getName().str()));
+  for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
   json::Object globals,interfaces;
   uint64_t heap=alignTo(base,uint64_t(4096)),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
@@ -901,7 +1016,7 @@ std::string linkReferences(Entry &e) {
       if(kind=="data") {
         auto renamed=rename.at(name);auto bytes=StringRef(sec.at("data")).split(name+" ").second.split('\n').first.str();
         auto source=e.referenceGlobals[i].at(name);
-        if(auto *g=e.m.getGlobalVariable(source,true)) bytes=scalarGlobalImage(*g,sourceBases);
+        for(auto &g:e.m.globals()) if(scalarGlobalKey(g)==source) bytes=scalarGlobalImage(g,sourceBases);
         if(data.count(renamed) && data.at(renamed)!=bytes) fail("output","inconsistent shared global image",&e.f);
         data[renamed]=bytes;dataSignatures[renamed]=jcs(*sym->get("signature"));
         globals[renamed]=json::Object{{"base",int64_t(bases.at(renamed))},{"size",int64_t(sizes.at(renamed))},{"image",renamed}};
@@ -933,6 +1048,9 @@ std::string linkReferences(Entry &e) {
     else if(v.first=="interface_regions") for(auto &o:*v.second.getAsObject()) for(auto &r:*o.second.getAsObject()) allLeaves["interface_regions."+o.first.str()+"."+r.first.str()]=jcs(r.second);
     else allLeaves[v.first.str()]=jcs(v.second);
   }
+  // JSON Object iteration differs between LLVM majors. Definition order is
+  // part of the full object bytes even when all interface hashes agree.
+  std::sort(functions.begin(),functions.end(),[](const Symbol &a,const Symbol &b) { return a.name < b.name; });
   std::map<std::string,std::string> hashes;json::Object symbols;
   auto addSymbol=[&](std::string name,std::string kind,json::Value sig,std::string ih) {
     symbols[std::to_string(symbols.size())]=json::Object{{"name",name},{"kind",kind},{"signature",std::move(sig)},{"interface_hash",ih}};
@@ -945,7 +1063,11 @@ std::string linkReferences(Entry &e) {
     std::set<std::string> referenced;size_t last=0;std::regex token(R"(@([A-Za-z_][A-Za-z_0-9]*))");
     for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it) {
       auto n=(*it)[1].str();
-      if(!hashes.count(n)) fail("output","unresolved production symbol "+n,&e.f);
+      if(!hashes.count(n)) {
+        auto *owner=layout.getObject("interface_regions")->getObject(f.name);
+        if(f.kind=="oracle" && owner && owner->get(n)) { canonical+=rest.substr(last,it->position()+it->length()-last);last=it->position()+it->length();continue; }
+        fail("output","unresolved production symbol "+n,&e.f);
+      }
       canonical+=rest.substr(last,it->position()-last)+"@"+hashes.at(n);last=it->position()+it->length();
       if(referenced.insert(n).second)refs+=hashes.at(n)+"\n";
     }
@@ -960,7 +1082,7 @@ std::string linkReferences(Entry &e) {
   }
   std::string object=e.reference.substr(0,e.reference.find("\n\nsection "))+"\n\nsection symbols\n"+jcs(json::Value(std::move(symbols)))+"\n\nsection functions\n";
   for(auto &f:functions)object+=f.body+"\n";
-  object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n";
+  if(!data.empty()) { object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n"; }
   object+="\nsection layout\n"+jcs(json::Value(std::move(layout)))+"\n";return object;
 }
 std::string launchObject(Entry &e, json::Object &record,
@@ -970,7 +1092,11 @@ std::string launchObject(Entry &e, json::Object &record,
   bool unified = false;
   if (e.references.size()>1) {
     auto first=objectSections(ref);
-    for (auto &r:e.references) { auto sec=objectSections(r); if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty()) unified=true; }
+    for (auto &r:e.references) {
+      auto sec=objectSections(r); auto layout=parse(sec.at("layout")); bool mapped=false;
+      for(auto &owner:*layout.getAsObject()->getObject("interface_regions")) if(!owner.second.getAsObject()->empty()) mapped=true;
+      if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty() || mapped) unified=true;
+    }
   }
   if(unified) ref=linkReferences(e);
   size_t pos = ref.find("\n\nsection ");
@@ -1387,10 +1513,10 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     auto *u64 = Type::getInt64Ty(m.getContext());
     for (Function &f : m) for (Instruction &i : instructions(f))
       if (auto *c = dyn_cast<CallBase>(&i); c && c->getCalledFunction() &&
-          c->getCalledFunction()->getName() == "__bennett_oracle" &&
-          !isa<ConstantPointerNull>(c->getArgOperand(1)))
+          (c->getCalledFunction()->getName() == "__bennett_oracle" || c->getCalledFunction()->getName() == "__bennett_inplace") &&
+          !isa<ConstantPointerNull>(c->getArgOperand(c->getCalledFunction()->getName()=="__bennett_inplace"?2:1)))
         for (unsigned j = 0; j < 4; ++j) {
-          auto v = a.readAt(*c, c->getArgOperand(1), 8*j, u64);
+          auto v = a.readAt(*c, c->getArgOperand(c->getCalledFunction()->getName()=="__bennett_inplace"?2:1), 8*j, u64);
           if (!v.top) for (auto &atom : v.atoms)
             if (atom.kind == Atom::Int && !atom.integer.isAllOnes())
               table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
@@ -1478,6 +1604,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     };
     for (auto file : {"host.bc", "device.bc", "launches.json"}) add(file);
     for (auto file : {"launch.bennett", "build.json", "certificate.json", "coverage.json", "all-coverage.json", "blockers.json"}) add(dir + "/" + file);
+    if(sys::fs::exists(out.str()+"/"+dir+"/inplace-evidence.json")) add(dir+"/inplace-evidence.json");
     for (unsigned i = 0;; ++i) {
       auto path = dir + "/oracle-" + std::to_string(i) + "/ref.bennett";
       if (!sys::fs::exists(out.str() + "/" + path)) break;

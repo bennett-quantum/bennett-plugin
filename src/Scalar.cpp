@@ -487,6 +487,11 @@ struct Scalar {
     return b;
   }
 };
+std::string scalarGlobalKey(const GlobalVariable &g) {
+  if(g.hasName())return "name:"+g.getName().str();
+  unsigned ordinal=0;for(auto &v:g.getParent()->globals()) {if(&v==&g)break;++ordinal;}
+  return "index:"+std::to_string(ordinal);
+}
 std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVariable *,uint64_t> &bases) {
   auto &dl=g.getParent()->getDataLayout();
   uint64_t size=dl.getTypeAllocSize(g.getValueType()).getFixedValue();std::vector<uint8_t> bytes(size,0);
@@ -599,7 +604,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
           unimplemented("§8.5 mutable global entry-state replay",2,&i);
     }
   unsigned gn=1;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
-  if (globalNames) for (auto &g : s.globals) (*globalNames)[g.second] = g.first->getName().str();
+  if (globalNames) for (auto &g : s.globals) (*globalNames)[g.second] = scalarGlobalKey(*g.first);
   unsigned ret = s.width(f.getReturnType());
   auto semi = d.find(';');
   std::string bindings = d.substr(0, semi);

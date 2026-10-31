@@ -19,10 +19,11 @@ for major in 18 23; do
   python3 "$root/tests/scalars.py" --major "$major"
   python3 "$root/tests/descriptors.py" --major "$major"
   python3 "$root/tests/production.py" --major "$major"
-  python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console
+  python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console --case inplace-inout --case inplace-not-inverse --case inplace-small-budget --case inplace-second-small-budget --case memory-layouts --case wide-output --case unnamed-layouts
   python3 "$root/tests/production_dispatch.py" --major "$major"
   python3 "$root/tests/production_shapes.py" --major "$major"
   python3 "$root/tests/production_budgets.py" --major "$major"
   python3 "$root/tests/production_records.py" --major "$major"
 done
+python3 "$root/tests/production_cross_major.py"
 python3 "$root/tests/corpus_gate.py"
