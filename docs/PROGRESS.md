@@ -36,6 +36,18 @@ and runtime now come from one immutable commit, with a pin-specific baseline cac
 - N33 own-format libm carrier corrections are part of the pin; arithmetic/helper
   closure materialisation remains explicit M2 work, not claimed implemented here.
 
+## Materialised scalar region keys and N15
+
+Keys now run the implemented scalar normalisation slice on a private cloned
+closure before stripping/printing. Red 1/3 → green 3/3 per major: nsw/plain
+closures have equal keys, freeze/plain closures have equal keys, and original
+H IR retains its flags/freeze. The existing name/global-image smoke checks pass.
+This fixes scalar keys; it does not claim all N0–N35/V1–V16 closure keys complete.
+N15 constant totalisation plus constant lane renaming reproduces the complete
+`n-constant-lane` instruction lists on both majors (materialisation 5/5).
+LLVM23 branch emission uses CondBrInst/UncondBrInst; clean incremental builds
+produce no deprecation warnings and the reference object text is unchanged.
+
 ## Additional scalar map delivery
 
 `indirectbr-two-blocks` was red as a required scalar object, then green on both

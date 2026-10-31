@@ -203,19 +203,16 @@ struct Scalar {
       for (Instruction &i : bb) {
         if (isa<PHINode>(i))
           continue;
-        if (auto *br = dyn_cast<BranchInst>(&i)) {
-          if (br->isUnconditional() ||
-              br->getSuccessor(0) == br->getSuccessor(1)) {
-            moves(&bb, br->getSuccessor(0));
-            lines.push_back("qjump " + blockName(br->getSuccessor(0)));
-          } else {
-            auto cond = value(br->getCondition());
-            auto yes = target(br->getSuccessor(0)),
-                 no = target(br->getSuccessor(1));
-            lines.push_back("qbranch " + cond + " " + yes + " " + no);
-          }
-          continue;
-        }
+        auto branch=[&](Value *condition,BasicBlock *yes,BasicBlock *no) {
+          if(!condition || yes==no) {moves(&bb,yes);lines.push_back("qjump "+blockName(yes));}
+          else {auto cond=value(condition);auto y=target(yes),n=target(no);lines.push_back("qbranch "+cond+" "+y+" "+n);}
+        };
+#if LLVM_VERSION_MAJOR >= 23
+        if(auto *br=dyn_cast<UncondBrInst>(&i)) {branch(nullptr,br->getSuccessor(0),nullptr);continue;}
+        if(auto *br=dyn_cast<CondBrInst>(&i)) {branch(br->getCondition(),br->getSuccessor(0),br->getSuccessor(1));continue;}
+#else
+        if(auto *br=dyn_cast<BranchInst>(&i)) {branch(br->isUnconditional()?nullptr:br->getCondition(),br->getSuccessor(0),br->isUnconditional()?nullptr:br->getSuccessor(1));continue;}
+#endif
         if(auto *br=dyn_cast<IndirectBrInst>(&i)) {
           auto address=value(br->getAddress());
           // §14.9: B(F)+k, with k counting non-entry address-taken blocks in

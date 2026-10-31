@@ -153,6 +153,10 @@ std::string regionKey(Function *f) {
     return seen.count(const_cast<Function *>(dyn_cast<Function>(v))) ||
            globals.count(dyn_cast<GlobalVariable>(v));
   });
+  // §7.3 identity is over the materialised body, with H left untouched.
+  // This is the implemented scalar N-rule slice; full N0–N35/V1–V16 remains
+  // an explicit M1 key-audit obligation for regions outside that slice.
+  for(auto *g:order) normaliseScalar(*cast<Function>(map[g]));
   StripDebugInfo(*clone);
   clone->setModuleIdentifier("");
   clone->setSourceFileName("");

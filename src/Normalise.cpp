@@ -116,5 +116,22 @@ void normaliseScalar(Function &f) {
         op->replaceUsesWithIf(select,[&](Use &u) {return u.getUser()!=select;});
       }
     }
+  // N15 total unsigned constant indices, then constant N21 lane renaming.
+  // N8 already ran; replaceAllUses updates its former users too.
+  SmallVector<Instruction *> lanes;
+  for(Instruction &i:instructions(f)) if(isa<ExtractElementInst>(i) || isa<InsertElementInst>(i)) lanes.push_back(&i);
+  for(Instruction *i:lanes) {
+    auto *extract=dyn_cast<ExtractElementInst>(i);
+    Value *vector=i->getOperand(0);
+    Value *index=i->getOperand(extract?1:2);
+    auto *constant=dyn_cast<ConstantInt>(index);
+    if(!constant) continue;
+    auto count=cast<VectorType>(vector->getType())->getElementCount().getKnownMinValue();
+    Value *replacement=nullptr;
+    if(constant->getValue().uge(count)) replacement=extract?Constant::getNullValue(i->getType()):vector;
+    else if(extract) if(auto *v=dyn_cast<Constant>(vector)) replacement=v->getAggregateElement(constant->getZExtValue());
+    if(replacement) {i->replaceAllUsesWith(replacement);i->eraseFromParent();}
+  }
+
 }
 } // namespace bennett

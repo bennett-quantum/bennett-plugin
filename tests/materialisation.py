@@ -11,7 +11,7 @@ def instructions(text):
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();spec=dialect_text();pairs={tag:dict(re.findall(r'```llvm normalise-'+tag+r'=([^\n ]+)[^\n]*\n(.*?)```',spec,re.S)) for tag in ['in','out']};rows=[]
- for name in ['n-flags','n-shift','n-query','n-atomic-nand']:
+ for name in ['n-flags','n-shift','n-query','n-atomic-nand','n-constant-lane']:
   d=R/f'.tmp/materialisation/{a.major}/{name}';d.mkdir(parents=True,exist_ok=True);src=d/'in.ll';src.write_text(pairs['in'][name]);out=d/'out.ll'
   cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',str(src),'-o',str(out)]
   x=subprocess.run(cmd,capture_output=True,text=True);actual=out.read_text() if x.returncode==0 else '';want=instructions(pairs['out'][name]);got=instructions(actual);ok=x.returncode==0 and got==want
