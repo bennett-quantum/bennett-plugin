@@ -604,8 +604,17 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
   auto *ptr = PointerType::get(ctx, 0);
   auto *i32 = Type::getInt32Ty(ctx), *i64 = Type::getInt64Ty(ctx);
   auto *size = m.getDataLayout().getIntPtrType(ctx);
+  auto linkage = f.getLinkage();
+  auto attrs = f.getAttributes();
+  SmallVector<AttributeSet> paramAttrs;
+  for (unsigned i = 0; i < f.arg_size(); ++i)
+    paramAttrs.push_back(attrs.getParamAttrs(i));
   f.deleteBody();
-  f.setAttributes(AttributeList());
+  f.setLinkage(linkage);
+  // The body now performs I/O through the launch library, but native parameter
+  // and result attributes (signext/zeroext) still describe the caller's ABI.
+  f.setAttributes(
+      AttributeList::get(ctx, AttributeSet(), attrs.getRetAttrs(), paramAttrs));
   auto *entry = BasicBlock::Create(ctx, "launch", &f),
        *bad = BasicBlock::Create(ctx, "launch.failed", &f);
   IRBuilder<> b(entry);

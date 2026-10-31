@@ -62,5 +62,18 @@ unsigned top(unsigned arg) {
  if z.returncode==0:
   obj=published/'out/top/launch.bennett';check=run([REF,'check',obj]);execution=run([REF,'run-program',obj,'top','--args','5,5','--budget','10000,0,7,1']);pub['check']=check.returncode==0;pub['check_output']=check.stdout+check.stderr;pub['run']=json.loads(execution.stdout) if execution.returncode==0 else execution.stderr;pub['reference_exact']=(published/'out/top/oracle-0/ref.bennett').read_bytes()==fixture
   pub['ok']=pub['check'] and pub['reference_exact'] and execution.returncode==0 and pub['run']['status']=='COMPLETED' and pub['run']['run_state']=='CLOSED'
- report['passed']=sum(r.get('ok',False) for r in report['cases']);(R/f'.tmp/production-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return report['passed']!=len(report['cases']) or not pub.get('ok')
+ # Replacing a function body must preserve the native integer calling ABI.
+ abi=d/'abi';abi.mkdir();(abi/'input.ll').write_text('''define signext i8 @abi(i8 signext %arg) {
+ %q = call ptr @__bennett_qalloc(i64 0, i64 1)
+ call void @__bennett_qfree(ptr %q)
+ ret i8 %arg
+}
+declare ptr @__bennett_qalloc(i64, i64)
+declare void @__bennett_qfree(ptr)
+''')
+ z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(abi/'out'),'-disable-output',abi/'input.ll'])
+ abi_result={'exit':z.returncode,'diagnostic':z.stderr};report['native_abi']=abi_result
+ if z.returncode==0:
+  host=run([tool+'opt','-passes=verify','-S',abi/'out/host.bc','-o','-']);abi_result['ok']=host.returncode==0 and 'define signext i8 @abi(i8 signext %arg)' in host.stdout
+ report['passed']=sum(r.get('ok',False) for r in report['cases']);(R/f'.tmp/production-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return report['passed']!=len(report['cases']) or not pub.get('ok') or not abi_result.get('ok')
 if __name__=='__main__':raise SystemExit(main())
