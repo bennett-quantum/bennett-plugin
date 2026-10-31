@@ -1,3 +1,13 @@
+# Eighth pass sub-item 3 — combined devices and multiple outputs
+
+Device lists support combined models and null CONSOLE. Multiple outputs compile
+all projections in every variant and use §8.6 scratch/copy/uncompute for higher
+slices, then slice 0 and caller fault. Existing single-output generation remains
+unchanged. CLOCK plus null CONSOLE and two OUT buffers check on both majors;
+four runs per major verify observed output bits and all-zero payloads on budget
+failure. Return+CONSOLE combinations with nonempty global layouts depend on
+sub-item 4's linker work. Dynamic model/value selection remains sub-item 1.
+
 # Eighth pass sub-item 2 — partial implementation
 
 Acyclic entry-local handle files use physical qregs, pointer-width tags in real

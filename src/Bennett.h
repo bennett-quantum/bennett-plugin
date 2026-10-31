@@ -81,5 +81,5 @@ public:
 void lowerProduction(llvm::Module &, Analysis &, llvm::StringRef, unsigned, llvm::StringRef, llvm::StringRef);
 void normaliseScalar(llvm::Function &);
 void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,
-                 llvm::StringRef out, unsigned stackCells, uint64_t heapCapacity = 0);
+                 llvm::StringRef out, unsigned stackCells, uint64_t heapCapacity = 0, int projection = -1);
 } // namespace bennett

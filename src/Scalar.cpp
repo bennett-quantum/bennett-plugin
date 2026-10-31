@@ -488,7 +488,7 @@ struct Scalar {
   }
 };
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
-                 unsigned stackCells, uint64_t heapCapacity) {
+                 unsigned stackCells, uint64_t heapCapacity, int projection) {
   Scalar s{m, f};
   std::string d = desc.str(), device;
   uint64_t deviceSize = 0, heapLimit = heapCapacity;
@@ -498,13 +498,17 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     device = d.substr(deviceStart + 5, deviceEnd - deviceStart - 5);
     d.erase(deviceStart, deviceEnd == std::string::npos ? std::string::npos : deviceEnd - deviceStart);
   }
-  std::smatch dev;
+  std::vector<std::pair<std::string,uint64_t>> devices;
   if (!device.empty()) {
-    if (!std::regex_match(device, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE|ENTROPY)\(([0-9]+)\))")))
-      unimplemented("§8.3 device binding combination", 2, &f);
-    deviceSize = std::stoull(dev[2]);
-    device = dev[1];
+    SmallVector<StringRef> parts; StringRef(device).split(parts,'+');
+    for (auto part : parts) {
+      std::smatch dev; auto value = part.str();
+      if (!std::regex_match(value, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE|ENTROPY)\(([0-9]+)\))")))
+        fail("shape","invalid device binding",&f);
+      devices.push_back({dev[1],std::stoull(dev[2])});
+    }
   }
+  auto hasDevice = [&](StringRef name) { for (auto &d : devices) if (d.first == name) return true; return false; };
   std::set<const GlobalVariable *> used;
   std::set<const Value *> seen;
   std::function<void(const Value *)> visit = [&](const Value *v) {
@@ -518,16 +522,20 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   for(Instruction &i:instructions(f))for(Value *v:i.operands())visit(v);
   auto deviceGlobal = [&](StringRef suffix) -> GlobalVariable * {
     auto *g = m.getGlobalVariable("__bennett_dev_" + suffix.str(), true);
-    if (!g) fail("shape", ("missing materialised device state: " + suffix).str(), &f);
+    if (!g) g = new GlobalVariable(m, Type::getInt64Ty(m.getContext()),false,GlobalValue::InternalLinkage,
+      ConstantInt::get(Type::getInt64Ty(m.getContext()),0),"__bennett_dev_"+suffix.str());
     used.insert(g);
     return g;
   };
-  if (device == "CLOCK") deviceGlobal("clock_c");
-  if (device == "ENTROPY") { deviceGlobal("entropy_base"); deviceGlobal("entropy_size"); deviceGlobal("entropy_pos"); }
-  if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
-  if (device == "CONSOLE") {
-    deviceGlobal("console_buf"); deviceGlobal("console_L"); deviceGlobal("console_n");
-    heapLimit = std::max(heapLimit, deviceSize);
+  for (auto &d : devices) {
+    auto &device = d.first; auto deviceSize = d.second;
+    if (device == "CLOCK") deviceGlobal("clock_c");
+    if (device == "ENTROPY") { deviceGlobal("entropy_base"); deviceGlobal("entropy_size"); deviceGlobal("entropy_pos"); }
+    if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
+    if (device == "CONSOLE") {
+      deviceGlobal("console_buf"); deviceGlobal("console_L"); deviceGlobal("console_n");
+      heapLimit = std::max(heapLimit, deviceSize);
+    }
   }
   // The entry dependency decision precedes private allocation (§16.2). A
   // pointer supplied by OUT or read from this invocation's model buffer does
@@ -542,9 +550,9 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if (auto *a = dyn_cast<Argument>(root)) return privateArguments.count(a) != 0;
     if (auto *load = dyn_cast<LoadInst>(root)) {
       auto *g = dyn_cast<GlobalVariable>(getUnderlyingObject(load->getPointerOperand()));
-      return g && ((device == "ENTROPY" && g->getName() == "__bennett_dev_entropy_base") ||
-                   (device == "BLOCK" && g->getName() == "__bennett_dev_block_base") ||
-                   (device == "CONSOLE" && g->getName() == "__bennett_dev_console_buf"));
+      return g && ((hasDevice("ENTROPY") && g->getName() == "__bennett_dev_entropy_base") ||
+                   (hasDevice("BLOCK") && g->getName() == "__bennett_dev_block_base") ||
+                   (hasDevice("CONSOLE") && g->getName() == "__bennett_dev_console_buf"));
     }
     return false;
   };
@@ -579,7 +587,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if (!discard && v.getAsInteger(10, tgt))
       fail("shape", "invalid target width");
   }
-  if (tgt == 0 || tgt > 128)
+  if (projection < 0 && (tgt == 0 || tgt > 128))
     unimplemented("§8.6 wide outputs", 2, &f);
   std::regex pat(R"((IN|ARG|OUT|MEM_IN)\((\d+)(?:,(zext|sext))?\))");
   std::sregex_iterator it(bindings.begin(), bindings.end(), pat), end;
@@ -599,6 +607,10 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   };
   std::string buffer;
   uint64_t bufferSize = 0;
+  std::vector<std::pair<std::string,uint64_t>> outputBuffers;
+  std::pair<std::string,uint64_t> consoleBuffer;
+  for (auto &d : devices) {
+  auto &device = d.first; auto deviceSize = d.second;
   if (device == "CLOCK") {
     auto c = prologue("lift.const.i64 " + std::to_string(deviceSize));
     devStore("clock_c", c);
@@ -620,9 +632,12 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     auto n = prologue("lift.const.i64 " + std::to_string(deviceSize));
     devStore("console_L", n);
     buffer = prologue("lift.alloc " + n); devStore("console_buf", buffer);
-    bufferSize = deviceSize;
+    bufferSize = deviceSize; consoleBuffer = {buffer,bufferSize};
     auto z = prologue("lift.const.i64 0"); devStore("console_n", z);
+    if (!deviceSize) buffer.clear();
   }
+  }
+  uint64_t outputBytes = consoleBuffer.second;
   unsigned idx = 0, inCount = 0, argCount = 0;
   std::string reconstructed;
   for (; it != end; ++it) {
@@ -661,13 +676,15 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
       invoke.push_back(loc);
     } else if ((*it)[1] == "OUT") {
       if (!f.getArg(idx)->getType()->isPointerTy()) fail("shape", "OUT requires a pointer parameter");
-      if (!buffer.empty()) unimplemented("§8.6 common multi-output delivery", 2, &f);
+      if (!buffer.empty() && projection < 0) unimplemented("§8.6 common multi-output delivery", 2, &f);
       auto c = "c" + std::to_string(idx), loc = "w" + std::to_string(idx);
       wrapperRegs.push_back(c + ":reg[64]");
       wrapperRows.push_back(c + " = lift.const.i64 " + std::to_string(w));
       wrapperRegs.push_back(loc + ":reg[64]");
       wrapperRows.push_back(loc + " = lift.alloc " + c);
-      invoke.push_back(loc); buffer = loc; bufferSize = w; heapLimit = std::max(heapLimit, uint64_t(w));
+      invoke.push_back(loc); buffer = loc; bufferSize = w; outputBuffers.push_back({loc,w});
+      if (projection < 0) heapLimit = std::max(heapLimit, uint64_t(w));
+      else { outputBytes += w; heapLimit = std::max(heapLimit,outputBytes); }
     } else {
       if (w != param)
         fail("shape", "ARG carrier width mismatch");
@@ -681,12 +698,46 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   if (idx != f.arg_size() || (!bindings.empty() && reconstructed != bindings &&
                               bindings != "tgt=null"))
     unimplemented("§8 descriptor shape", 2, &f);
+  unsigned returnTarget = tgt;
+  bool returnDiscard = discard;
   if (discard)
     tgt = 1;
   std::string lproc = s.body();
   wrapperRegs.push_back("r:reg[" + std::to_string(ret) + "]");
   wrapperRows.push_back("r = lift.call @L1 (" + join(invoke) + ")");
-  if (discard) {
+  if (projection >= 0) {
+    if (!consoleBuffer.first.empty() && consoleBuffer.second) outputBuffers.push_back(consoleBuffer);
+    std::vector<std::pair<std::string,unsigned>> projections;
+    if (!returnDiscard) {
+      // Return payloads use zero extension; narrowed nonzero dropped bits fault.
+      auto n = std::min(returnTarget,128u);
+      std::string value = "r";
+      if (n != ret) {
+        value = "return0"; wrapperRegs.push_back(value + ":reg[" + std::to_string(n) + "]");
+        if (n < ret) {
+          auto shift = "returnShift", dropped = "returnDropped", zero = "returnZero", bad = "returnBad";
+          wrapperRegs.push_back(std::string(shift)+":reg["+std::to_string(ret)+"]"); wrapperRows.push_back(std::string(shift)+" = lift.const.i"+std::to_string(ret)+" "+std::to_string(n));
+          wrapperRegs.push_back(std::string(dropped)+":reg["+std::to_string(ret)+"]"); wrapperRows.push_back(std::string(dropped)+" = lift.lshr r "+shift);
+          wrapperRegs.push_back(std::string(zero)+":reg["+std::to_string(ret)+"]"); wrapperRows.push_back(std::string(zero)+" = lift.const.i"+std::to_string(ret)+" 0");
+          wrapperRegs.push_back(std::string(bad)+":reg[1]"); wrapperRows.push_back(std::string(bad)+" = lift.icmp.ne "+dropped+" "+zero); wrapperRows.push_back(std::string("lift.faultif ")+bad+" 4");
+        }
+        wrapperRows.push_back(value + (n < ret ? " = lift.trunc.i" : " = lift.zext.i") + std::to_string(n) + " r");
+      }
+      projections.push_back({value,n});
+      for (unsigned lo=128;lo<returnTarget;lo+=128) {
+        auto w=std::min(128u,returnTarget-lo); auto p="return"+std::to_string(lo);
+        wrapperRegs.push_back(p+":reg["+std::to_string(w)+"]");wrapperRows.push_back(p+" = lift.const.i"+std::to_string(w)+" 0");projections.push_back({p,w});
+      }
+    }
+    for (auto &out : outputBuffers) for (uint64_t lo=0;lo<out.second;lo+=16) {
+      auto bytes=std::min(uint64_t(16),out.second-lo), w=bytes*8; auto p="payload"+std::to_string(projections.size()); auto address=out.first;
+      if (lo) { auto offset=prologue("lift.const.i64 "+std::to_string(lo)); address=prologue("lift.add "+out.first+" "+offset); }
+      wrapperRegs.push_back(p+":reg["+std::to_string(w)+"]");wrapperRows.push_back("lift.boundscheck "+address+" "+std::to_string(bytes));
+      wrapperRows.push_back(p+" = lift.load.i"+std::to_string(w)+" "+address);projections.push_back({p,unsigned(w)});
+    }
+    if (unsigned(projection)>=projections.size()) fail("shape","output projection index",&f);
+    tgt=projections[projection].second;wrapperRows.push_back("lift.retval "+projections[projection].first);
+  } else if (discard) {
     wrapperRegs.push_back("p0:reg[1]");
     wrapperRows.push_back("p0 = lift.const.i1 0");
     wrapperRows.push_back("lift.retval p0");
@@ -751,8 +802,8 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   uint64_t heap=alignTo(base,uint64_t(4096));unsigned h=0,at=0;
   uint64_t endAddress = heap + heapLimit;
   std::string regionLayout, regionHashLeaves;
-  if (device == "BLOCK") {
-    uint64_t size = uint64_t(1) << (deviceSize + 9);
+  for (auto &d : devices) if (d.first == "BLOCK") {
+    uint64_t size = uint64_t(1) << (d.second + 9);
     uint64_t regionBase = alignTo(endAddress, size);
     auto leaf = "{\"base\":" + std::to_string(regionBase) + "}";
     regionLayout = "\"k0\":" + leaf;

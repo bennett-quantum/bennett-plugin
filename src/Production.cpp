@@ -403,6 +403,8 @@ struct Entry {
                    target.atoms.begin()->integer.isZero();
     std::vector<std::string> ins, args, mems;
     AV output = target;
+    std::vector<AV> outputs;
+    if (!discard) outputs.push_back(target);
     bool bufferOutput = false;
     std::string current;
     unsigned index = 0;
@@ -455,13 +457,13 @@ struct Entry {
           mems.push_back(handle(q, &c));
         } else {
           current += "OUT(" + std::to_string(size) + ")";
-          if (!discard || bufferOutput)
-            unimplemented("§8.6 multiple output slices", 1, &c);
+          outputs.push_back(q);
           output = q; bufferOutput = true;
         }
       } else
         fail("T-IFACE", "§8.2 oracle binding kind", &c);
     }
+    std::vector<std::string> deviceMems;
     std::set<uint64_t> models;
     for (unsigned j = 0; j < ndev; ++j) {
       auto off = hl->getSizeInBytes() + index * bl->getSizeInBytes() + j * 24;
@@ -470,28 +472,32 @@ struct Entry {
         fail("T-IFACE", "§8.3 duplicate model or device mode", &c);
       auto q = field(off + 8, ptr);
       auto value = integer(field(off + 16, u64), &c);
-      if (ndev != 1) unimplemented("§8.3 combined device models", 1, &c);
-      if (model == 3) current += ";dev=CLOCK(" + std::to_string(value) + ")";
+      auto separator = j ? std::string("+") : std::string(";dev=");
+      if (model == 3) current += separator + "CLOCK(" + std::to_string(value) + ")";
       else if (model == 2 || model == 1) {
         auto w = qwidth(q, &c), bytes = w / 8;
         auto unit = model == 2 ? 512 : 1;
         if (w % 8 || bytes < unit || !isPowerOf2_64(bytes / unit))
           fail("T-SIZE", "§8.3 device input extent", &c);
-        current += std::string(";dev=") + (model == 2 ? "BLOCK(" : "ENTROPY(") +
+        current += separator + (model == 2 ? "BLOCK(" : "ENTROPY(") +
                    std::to_string(Log2_64(bytes / unit)) + ")";
-        mems.push_back(handle(q, &c));
+        deviceMems.push_back(handle(q, &c));
       } else if (model == 4) {
-        if (!discard || bufferOutput)
-          unimplemented("§8.6 multiple output slices", 1, &c);
-        auto w = qwidth(q, &c);
+        bool null = !q.top && q.atoms.size()==1 && q.atoms.begin()->kind==Atom::Int && q.atoms.begin()->integer.isZero();
+        auto w = null ? 0 : qwidth(q, &c);
         if (w % 8) fail("T-SIZE", "§8.3 console width", &c);
-        current += ";dev=CONSOLE(" + std::to_string(w / 8) + ")";
-        output = q; bufferOutput = true;
+        current += separator + "CONSOLE(" + std::to_string(w / 8) + ")";
+        if (!null) { outputs.push_back(q); output = q; bufferOutput = true; }
       } else fail("T-IFACE", "§8.3 unknown device model", &c);
     }
+    mems.insert(mems.begin(),deviceMems.begin(),deviceMems.end());
+    struct Slice { AV output; unsigned lo, width; };
+    std::vector<Slice> slices;
+    for (auto &o : outputs) { auto w=qwidth(o,&c); for (unsigned lo=0;lo<w;lo+=128) slices.push_back({o,lo,std::min(128u,w-lo)}); }
+    bool multi = slices.size()>1;
+    current += ";tgt=" + ((multi ? discard : discard && !bufferOutput) ? std::string("null")
+                                  : std::to_string(qwidth(multi ? target : output, &c)));
     discard = discard && !bufferOutput;
-    current += ";tgt=" + (discard ? std::string("null")
-                                  : std::to_string(qwidth(output, &c)));
     // Null selects the resolved default. Explicit records use the published
     // four i64 fields + fault handle; all-ones means table/default lookup.
     auto baseline = table.baseline(*callee);
@@ -504,6 +510,9 @@ struct Entry {
         if (n != UINT64_MAX) budget[i] = n;
       }
     }
+    for (int projection = multi ? int(slices.size())-1 : -1; projection >= (multi ? 0 : -1); --projection) {
+    budget = baseline;
+    for (unsigned i=0;i<5;++i) if (explicitFields[i]!=UINT64_MAX) budget[i]=explicitFields[i];
     std::string refName = "ref";
     ValueToValueMapTy vm;
     auto clone = CloneModule(m, vm);
@@ -511,7 +520,7 @@ struct Entry {
     normaliseScalar(*cf);
     auto path = out + "/oracle-" + std::to_string(references.size());
     auto capacities = table.capacities;
-    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1]);
+    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection);
     auto candidate = read(path + "/ref.bennett");
     auto selection = oracleIdentity(candidate);
     table.overlay(budget, selection);
@@ -538,16 +547,28 @@ struct Entry {
                                    {"depth", std::to_string(budget[3])},
                                    {"sstack", std::to_string(budget[4])}});
     if (refName != "ref") budgets.back()["region"] = refName;
-    std::string tgt;
-    if (discard) {
-      tgt = fresh("qreg[1]");
-      rows.push_back(tgt + " = qreg.new any 1");
-    } else
-      tgt = handle(output, &c);
-    rows.push_back("oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt +
-                   " " + handle(fault, &c) + " (" + join(mems) + ") (" + join(args) + ")");
-    if (discard)
-      rows.push_back("qreg.free " + tgt);
+    std::string tgt, faultRegister = handle(fault,&c);
+    if (multi) {
+      auto &slice = slices[projection];
+      if (projection) {
+        tgt = fresh("qreg["+std::to_string(slice.width)+"]");
+        rows.push_back(tgt+" = qreg.new any "+std::to_string(slice.width));
+        faultRegister=fresh("qreg[4]");rows.push_back(faultRegister+" = qreg.new any 4");
+      } else { tgt=fresh("qreg["+std::to_string(slice.width)+"]"); rows.push_back(tgt+" = qreg.slice "+handle(slice.output,&c)+" "+std::to_string(slice.lo)+" "+std::to_string(slice.width)); }
+    } else if (discard) {
+      tgt = fresh("qreg[1]"); rows.push_back(tgt + " = qreg.new any 1");
+    } else tgt = handle(output, &c);
+    auto call = "oracle_call @" + refName + " " + tk + " (" + join(ins) + ") " + tgt + " " + faultRegister + " (" + join(mems) + ") (" + join(args) + ")";
+    rows.push_back(call);
+    if (multi && projection) {
+      auto &slice=slices[projection];auto view=fresh("qreg["+std::to_string(slice.width)+"]");
+      rows.push_back(view+" = qreg.slice "+handle(slice.output,&c)+" "+std::to_string(slice.lo)+" "+std::to_string(slice.width));
+      auto w=std::to_string(slice.width);
+      auto xorAction=action("d:wire["+w+"] mut","s:wire["+w+"] in",w,w,"qxor s d");
+      rows.push_back("action_call @"+xorAction+" ("+view+") ("+tgt+") () ()");rows.push_back(call);
+      rows.push_back("qreg.free "+faultRegister);rows.push_back("qreg.free "+tgt);
+    } else if (discard) rows.push_back("qreg.free " + tgt);
+    }
   }
   std::string action(std::string mut, std::string in, std::string widths,
                      std::string inWidths, std::string ops) {

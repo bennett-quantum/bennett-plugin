@@ -1,3 +1,7 @@
+Sub-item 3: combined device model lists, null console and §8.6 multiple-output
+projection/copy/uncompute lowering. Two check objects / four runs per major.
+Return+CONSOLE with data globals still needs the sub-item 4 linker below.
+
 Sub-item 2 partial: entry-local acyclic static files/tags check/run on both
 majors; retired handle traps. General N(s), persistent tags, helper call/result
 and recursive environments remain bp-rbl. Do not close bp-dw4.
