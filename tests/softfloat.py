@@ -188,12 +188,13 @@ declare void @__bennett_qfree(ptr)
   for level in (0,3):
    exe=d/f'real-O{level}';z=run([tool+'clang',f'-O{level}',realbc,main,'-o',exe],realenv)
    check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
- # Red real-production witness: never turn the unmaterialised i512 core into a trap/pass.
+ # N22 is exercised by the real published closure, then the next rule is exact.
  realout=d/'real-production'
- z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-disable-output',d/'production-input.ll'],realenv)
- check('published-production-N22-remainder',z.returncode!=0 and '§12 N22 general wide limb operation' in z.stderr and 'i512' in z.stderr and not list(realout.rglob('*.bennett')),z.stderr)
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-bennett-budget-default=1000,4096,4096,128,128','-disable-output',d/'production-input.ll'],realenv)
+ expected=('§14 calls (missing linked definition)' in z.stderr and '__bennett_rt_memmove' in z.stderr) if a.major==18 else ('§12.8 N27 wide integer intrinsic (bp-jx3)' in z.stderr and '@llvm.ctlz.i512' in z.stderr)
+ check('published-production-next-rule',z.returncode!=0 and expected and not list(realout.rglob('*.bennett')),z.stderr)
  rows[-1]['expected_unimplemented']=True
- rows[-1]['determining_sentence']='`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (§12.7).'
+ rows[-1]['determining_sentence']=('N26: call void @__bennett_rt_memmove(ptr d, ptr s, i64 n); production runtime closure is required.' if a.major==18 else 'N27: the fixed expansions of §12.8; ctlz of i512 requires the wide slot ABI (bp-jx3).')
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)

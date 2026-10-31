@@ -419,9 +419,13 @@ void Analysis::seed(Constant *c, const Value *obj, int64_t off, Type *t) {
     for (unsigned i = 0; i < count; ++i)
       if (auto *e = c->getAggregateElement(i))
         seed(e, obj, off + i * dl.getTypeAllocSize(et).getKnownMinValue(), et);
-  } else
-    store(get(c), atom(Atom::Ptr, obj, off),
-          dl.getTypeStoreSize(t).getKnownMinValue());
+  } else {
+    // Initialiser leaves are disjoint and visited exactly once by run().
+    // Appending preserves their precise representation intervals without an
+    // O(leaves^2) duplicate search (N22 exposes large shadow-stack tables).
+    slots.push_back({obj,off,0,dl.getTypeStoreSize(t).getKnownMinValue(),get(c),false,false});
+    changed=true;
+  }
 }
 static bool overlaps(const Atom &p, const Slot &s, uint64_t size) {
   if (p.object != s.object)

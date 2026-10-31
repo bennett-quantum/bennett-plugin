@@ -43,7 +43,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   for (Instruction &i : instructions(f)) {
     SmallVector<std::pair<unsigned,MDNode *>> md; i.getAllMetadataOtherThanDebugLoc(md);
     for (auto &m : md)
-      if(m.first!=f.getContext().getMDKindID("bennett.rstep")) i.setMetadata(m.first,nullptr);
+      if(m.first!=f.getContext().getMDKindID("bennett.rstep") && m.first!=f.getContext().getMDKindID("bennett.n22.pack")) i.setMetadata(m.first,nullptr);
   }
   f.setAttributes(removeAttrs(f.getAttributes()));
   for (Instruction &i : instructions(f))
@@ -360,12 +360,12 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
           if(!bits->getType()->isIntegerTy())bits=bits->getType()->isPointerTy()?b.CreatePtrToInt(bits,b.getIntNTy(sw)):b.CreateBitCast(bits,b.getIntNTy(sw));
           if(sw!=total)bits=b.CreateZExt(bits,packedType,"nz.pack"+suffix);
           unsigned shift=dl.isLittleEndian()?k*sw:total-(k+1)*sw;
-          if(shift)bits=b.CreateShl(bits,ConstantInt::get(packedType,shift),"nz.ps"+suffix);
+          if(shift)bits=n22Packing(b.CreateShl(bits,ConstantInt::get(packedType,shift),"nz.ps"+suffix));
           packed=packed?b.CreateOr(packed,bits,"nz.or"+suffix):bits;
         }
         for(unsigned k=0;k<count;++k) {
           auto suffix=std::to_string(k)+"."+name;unsigned shift=dl.isLittleEndian()?k*dw:total-(k+1)*dw;Value *bits=packed;
-          if(shift)bits=b.CreateLShr(bits,ConstantInt::get(packedType,shift),"nz.bs"+suffix);
+          if(shift)bits=n22Packing(b.CreateLShr(bits,ConstantInt::get(packedType,shift),"nz.bs"+suffix));
           if(dw!=total)bits=b.CreateTrunc(bits,b.getIntNTy(dw),"nz.l"+suffix);
           if(!element->isIntegerTy())bits=element->isPointerTy()?b.CreateIntToPtr(bits,element):b.CreateBitCast(bits,element);
           values.push_back(bits);

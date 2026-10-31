@@ -4,6 +4,10 @@
 #include "llvm/IR/InstIterator.h"
 using namespace llvm;
 namespace bennett {
+Value *n22Packing(Value *v) {
+  if(auto *i=dyn_cast<Instruction>(v);i && i->getType()->isIntegerTy() && i->getType()->getIntegerBitWidth()>128)i->setMetadata("bennett.n22.pack",MDNode::get(i->getContext(),{}));
+  return v;
+}
 static bool wide(Type *t) {return t->isIntegerTy() && t->getIntegerBitWidth()>128;}
 #include "WideRuntime.inc"
 // N22 values are SSA tuples, never a reconstructed wide scalar. Recursive
@@ -28,7 +32,7 @@ void normaliseWideFP(Function &f) {
         for(unsigned k=0;k<n;++k) {
           Type *et=ty->isStructTy()?cast<StructType>(ty)->getElementType(k):cast<ArrayType>(ty)->getElementType();
           uint64_t delta=ty->isStructTy()?m.getDataLayout().getStructLayout(cast<StructType>(ty))->getElementOffset(k):k*m.getDataLayout().getTypeAllocSize(et).getFixedValue();
-          auto *e=access(et,base,v?b.CreateExtractValue(v,{k}):nullptr,off+delta);
+          auto *e=access(et,base,v?(isa<Constant>(v)?cast<Constant>(v)->getAggregateElement(k):b.CreateExtractValue(v,{k})):nullptr,off+delta);
           if(!v)out=b.CreateInsertValue(out,e,{k});
         }
         return out;
@@ -50,9 +54,10 @@ void normaliseWideFP(Function &f) {
     }
   }
   bool cleanup=aggregateMemory;while(cleanup) {SmallVector<Instruction *> erase;for(auto &i:instructions(f))if(i.use_empty() && (isa<ExtractValueInst>(i)||isa<InsertValueInst>(i)))erase.push_back(&i);for(auto *i:erase)i->eraseFromParent();cleanup=!erase.empty();}
-  // Byte-rounded memory fixes all unspecified high storage bits to zero.
-  work.clear();for(auto &i:instructions(f))work.push_back(&i);
-  for(auto *i:work) {
+  // Byte-rounded accesses also include the slots introduced below.
+  auto byteMemory=[&]() {
+  SmallVector<Instruction *> accesses;for(auto &i:instructions(f))accesses.push_back(&i);
+  for(auto *i:accesses) {
     auto *l=dyn_cast<LoadInst>(i);auto *s=dyn_cast<StoreInst>(i);Type *t=l?l->getType():s?s->getValueOperand()->getType():nullptr;
     if(!t || !t->isIntegerTy() || !(t->getIntegerBitWidth()%8))continue;
     IRBuilder<NoFolder> b(i);auto *bt=b.getIntNTy(8*((t->getIntegerBitWidth()+7)/8));
@@ -60,6 +65,8 @@ void normaliseWideFP(Function &f) {
     else {auto *v=b.CreateZExt(s->getValueOperand(),bt);b.CreateStore(v,s->getPointerOperand())->setAlignment(s->getAlign());}
     i->eraseFromParent();
   }
+  };
+  byteMemory();
   work.clear();for(auto &i:instructions(f))work.push_back(&i);
   for(auto *i:work)if(auto *p=dyn_cast<PHINode>(i);p && wide(p->getType())) {
     auto n=p->getType()->getIntegerBitWidth();
@@ -89,6 +96,22 @@ void normaliseWideFP(Function &f) {
     } else if(auto *s=dyn_cast<SelectInst>(i)) {
       auto a=split(s->getTrueValue()),c=split(s->getFalseValue());
       for(unsigned k=0;k<count;++k)out.push_back(b.CreateSelect(s->getCondition(),a[k],c[k],name("m",k)));
+    } else if(auto *p=dyn_cast<PtrToIntInst>(i)) {
+      auto pw=m.getDataLayout().getPointerTypeSizeInBits(p->getOperand(0)->getType());
+      auto *value=fold.CreatePtrToInt(p->getOperand(0),b.getIntNTy(pw));
+      for(unsigned k=0;k<count;++k)out.push_back(slice(value,64*k,std::min(64u,n-64*k),fold));
+    } else if(auto *e=dyn_cast<ExtractValueInst>(i)) {
+      Value *v=e->getAggregateOperand();
+      while(auto *in=dyn_cast<InsertValueInst>(v)) {
+        if(in->getIndices()==e->getIndices()) {out=split(in->getInsertedValueOperand());break;}
+        if(in->getIndices()[0]==e->getIndices()[0])break;
+        v=in->getAggregateOperand();
+      }
+      if(out.empty())if(auto *c=dyn_cast<Constant>(v)) {
+        for(unsigned index:e->getIndices())c=c->getAggregateElement(index);
+        out=split(c);
+      }
+      if(out.empty())unimplemented("§12.7 N22 aggregate projection",2,i);
     } else if(isa<ZExtInst>(i)||isa<SExtInst>(i)||isa<TruncInst>(i)) {
       auto *src=i->getOperand(0);unsigned sw=src->getType()->getIntegerBitWidth();
       for(unsigned k=0;k<count;++k) {
@@ -118,7 +141,7 @@ void normaliseWideFP(Function &f) {
           else if(code==Instruction::Or && isa<ConstantInt>(c[k]) && cast<ConstantInt>(c[k])->isZero())out.push_back(a[k]);
           else out.push_back(fold.CreateBinOp((Instruction::BinaryOps)code,a[k],c[k],name("m",k)));
         }
-      } else if(op->isShift() && isa<ConstantInt>(op->getOperand(1)) && cast<ConstantInt>(op->getOperand(1))->getValue().urem(64)==0) {
+      } else if(op->isShift() && op->getMetadata("bennett.n22.pack") && isa<ConstantInt>(op->getOperand(1)) && cast<ConstantInt>(op->getOperand(1))->getValue().urem(64)==0) {
         auto shift=cast<ConstantInt>(op->getOperand(1))->getLimitedValue(n);unsigned words=shift/64;
         for(unsigned k=0;k<count;++k) {
           int index=code==Instruction::Shl?int(k)-int(words):int(k)+int(words);auto *ty=b.getIntNTy(std::min(64u,n-64*k));
@@ -136,6 +159,8 @@ void normaliseWideFP(Function &f) {
         for(unsigned k=0;k<count;++k)out.push_back(b.CreateLoad(b.getIntNTy(std::min(64u,n-64*k)),b.CreateGEP(b.getInt64Ty(),dst,b.getInt64(k))));
         b.CreateCall(pop,{pb});b.CreateCall(pop,{pa});b.CreateCall(pop,{dst});
       }
+    } else if(auto *c=dyn_cast<CallBase>(i);c && c->getCalledFunction() && c->getCalledFunction()->isIntrinsic()) {
+      unimplemented("§12.8 N27 wide integer intrinsic (bp-jx3): the fixed expansions of §12.8",2,i);
     } else unimplemented("§12 N22 general wide limb operation",2,i);
     parts[v]=out;dead.push_back(i);return out;
   };
@@ -146,6 +171,9 @@ void normaliseWideFP(Function &f) {
     } else if(auto *s=dyn_cast<StoreInst>(i);s && wide(s->getValueOperand()->getType())) {
       auto a=split(s->getValueOperand());IRBuilder<NoFolder> b(s);auto r=f.getName().str()+"."+std::to_string(ordinal++);
       for(unsigned k=0;k<a.size();++k) {auto *p=b.CreateGEP(b.getInt64Ty(),s->getPointerOperand(),b.getInt64(k),"nz.q"+std::to_string(k)+"."+r);b.CreateStore(a[k],p)->setAlignment(commonAlignment(s->getAlign(),8*k));}dead.push_back(s);
+    } else if(auto *p=dyn_cast<IntToPtrInst>(i);p && wide(p->getOperand(0)->getType())) {
+      IRBuilder<> b(p);auto *value=slice(p->getOperand(0),0,m.getDataLayout().getPointerTypeSizeInBits(p->getType()),b);
+      p->replaceAllUsesWith(b.CreateIntToPtr(value,p->getType()));dead.push_back(p);
     } else if(auto *t=dyn_cast<TruncInst>(i);t && wide(t->getOperand(0)->getType()) && !wide(t->getType())) {
       IRBuilder<> b(t);auto a=split(t->getOperand(0));Value *v=b.CreateZExtOrTrunc(a[0],t->getType());
       if(t->getType()->getIntegerBitWidth()>64)v=b.CreateOr(v,b.CreateShl(b.CreateZExt(a[1],t->getType()),ConstantInt::get(t->getType(),64)));
@@ -162,6 +190,7 @@ void normaliseWideFP(Function &f) {
   std::set<Instruction *> unique(dead.begin(),dead.end());
   for(auto *i:unique)for(auto *u:i->users())if(!unique.count(dyn_cast<Instruction>(u)))unimplemented("§12.7 N22 wide consumer ABI",2,i);
   for(auto *i:unique)i->dropAllReferences();for(auto *i:unique)i->eraseFromParent();
+  byteMemory();
 }
 }
 
@@ -180,8 +209,8 @@ Function *normaliseWideABI(Module &m,Function *root) {
     if(wide(old)) {
       unsigned n=old->getIntegerBitWidth();Value *out=Constant::getNullValue(to);
       for(unsigned k=0;k<(n+63)/64;++k) {
-        if(unpack) {Value *e=b.CreateZExt(b.CreateExtractValue(v,{k}),old);if(k)e=b.CreateShl(e,ConstantInt::get(old,64*k));out=b.CreateOr(out,e);}
-        else {Value *e=v;if(k)e=b.CreateLShr(e,ConstantInt::get(old,64*k));e=b.CreateTrunc(e,b.getIntNTy(std::min(64u,n-64*k)));out=b.CreateInsertValue(out,e,{k});}
+        if(unpack) {Value *e=b.CreateZExt(b.CreateExtractValue(v,{k}),old);if(k)e=n22Packing(b.CreateShl(e,ConstantInt::get(old,64*k)));out=b.CreateOr(out,e);}
+        else {Value *e=v;if(k)e=n22Packing(b.CreateLShr(e,ConstantInt::get(old,64*k)));e=b.CreateTrunc(e,b.getIntNTy(std::min(64u,n-64*k)));out=b.CreateInsertValue(out,e,{k});}
       }
       return out;
     }
@@ -195,7 +224,13 @@ Function *normaliseWideABI(Module &m,Function *root) {
     for(auto &a:f->args()) {auto *t=a.getType();change|=shape(t)!=t;if(wide(t))for(auto *e:cast<StructType>(shape(t))->elements())params.push_back(e);else params.push_back(shape(t));}
     if(!change)continue;
     auto *nf=Function::Create(FunctionType::get(shape(f->getReturnType()),params,f->isVarArg()),f->getLinkage(),f->getAddressSpace(),"",&m);nf->takeName(f);f->setName(nf->getName()+".n22.old");nf->setCallingConv(f->getCallingConv());
-    nf->setAttributes(AttributeList::get(ctx,f->getAttributes().getFnAttrs(),{},{}));changed[f]=nf;
+    nf->copyAttributesFrom(f);nf->copyMetadata(f,0);
+    SmallVector<AttributeSet> attrs;
+    for(auto &a:f->args()) {
+      if(wide(a.getType()))attrs.append((a.getType()->getIntegerBitWidth()+63)/64,AttributeSet());
+      else attrs.push_back(shape(a.getType())==a.getType()?f->getAttributes().getParamAttrs(a.getArgNo()):AttributeSet());
+    }
+    nf->setAttributes(AttributeList::get(ctx,f->getAttributes().getFnAttrs(),shape(f->getReturnType())==f->getReturnType()?f->getAttributes().getRetAttrs():AttributeSet(),attrs));changed[f]=nf;
   }
   if(changed.empty())return root;
   std::set<Function *> touched;
@@ -219,7 +254,14 @@ Function *normaliseWideABI(Module &m,Function *root) {
     IRBuilder<> b(c);SmallVector<Value *> args;SmallVector<Type *> types;
     for(auto &u:c->args()) {auto *v=u.get();auto *t=v->getType();auto *e=adapt(b,v,t,false);if(wide(t))for(unsigned k=0;k<(t->getIntegerBitWidth()+63)/64;++k)args.push_back(b.CreateExtractValue(e,{k}));else args.push_back(e);}
     for(auto *v:args)types.push_back(v->getType());auto *callee=c->getCalledOperand();if(auto *g=dyn_cast<Function>(callee);changed.count(g))callee=changed[g];
-    auto *nc=b.CreateCall(FunctionType::get(shape(ft->getReturnType()),types,ft->isVarArg()),callee,args);nc->setCallingConv(c->getCallingConv());
+    auto *nc=b.CreateCall(FunctionType::get(shape(ft->getReturnType()),types,ft->isVarArg()),callee,args);nc->setCallingConv(c->getCallingConv());nc->copyMetadata(*c);
+    SmallVector<AttributeSet> attrs;
+    for(unsigned j=0;j<c->arg_size();++j) {
+      auto *t=c->getArgOperand(j)->getType();
+      if(wide(t))attrs.append((t->getIntegerBitWidth()+63)/64,AttributeSet());
+      else attrs.push_back(shape(t)==t?c->getAttributes().getParamAttrs(j):AttributeSet());
+    }
+    nc->setAttributes(AttributeList::get(ctx,c->getAttributes().getFnAttrs(),shape(c->getType())==c->getType()?c->getAttributes().getRetAttrs():AttributeSet(),attrs));
     if(!c->getType()->isVoidTy()) {auto *v=adapt(b,nc,c->getType(),true);v->takeName(c);c->replaceAllUsesWith(v);}c->eraseFromParent();
   }
   for(auto [f,nf]:changed) {if(root==f)root=nf;f->replaceAllUsesWith(nf);f->eraseFromParent();}

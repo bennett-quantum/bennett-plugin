@@ -135,7 +135,7 @@ void normaliseFP(Function &f) {
       if(fromInt) {
         for(unsigned k=0;k<(bits+63)/64;++k) {
           auto *p=b.CreateGEP(b.getInt64Ty(),slot,b.getInt64(k),"nz.s"+std::to_string(k)+"."+r);
-          Value *v=inputs[0];if(k)v=b.CreateLShr(v,ConstantInt::get(v->getType(),64*k));
+          Value *v=inputs[0];if(k)v=n22Packing(b.CreateLShr(v,ConstantInt::get(v->getType(),64*k)));
           v=b.CreateTrunc(v,IntegerType::get(ctx,std::min(64u,bits-64*k)));
           b.CreateStore(v,p)->setAlignment(Align(8));
         }
@@ -173,7 +173,7 @@ void normaliseFP(Function &f) {
       for(unsigned k=0;k<(bits+63)/64;++k) {
         auto *p=b.CreateGEP(b.getInt64Ty(),slot,b.getInt64(k),"nz.rp"+std::to_string(k)+"."+r);
         auto *v=b.CreateLoad(IntegerType::get(ctx,std::min(64u,bits-64*k)),p,"nz.rm"+std::to_string(k)+"."+r);v->setAlignment(Align(8));
-        Value *part=b.CreateZExt(v,out);if(k)part=b.CreateShl(part,ConstantInt::get(out,64*k));value=b.CreateOr(value,part);
+        Value *part=b.CreateZExt(v,out);if(k)part=n22Packing(b.CreateShl(part,ConstantInt::get(out,64*k)));value=b.CreateOr(value,part);
       }
     }
     if(wide) {auto pop=m.getOrInsertFunction("__bennett_rt_ss_pop",b.getVoidTy(),b.getPtrTy());b.CreateCall(pop,{slot});}
