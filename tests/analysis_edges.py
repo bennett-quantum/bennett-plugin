@@ -62,6 +62,20 @@ define i8 @top() {
  %new = load i8, ptr @cell
  ret i8 %new
 }''',[('top','%old',{'INT(1)','INT(3)'}),('top','%flag',{'INT(0)'}),('top','%new',{'INT(1)','INT(3)'})]),
+# A symbolic zero initial image has no arbitrary numerical cut-off.
+'zero-symbolic-large':('''declare ptr @malloc(i64)
+define i8 @top(i64 %n) {
+ %p = call ptr @malloc(i64 %n)
+ %q = getelementptr i8, ptr %p, i64 1152921504606846976
+ %v = load i8, ptr %q
+ ret i8 %v
+}''',[('top','%v',{'INT(0)'})]),
+'fixed-vscale-pack':('''define i16 @top() {
+ %a = insertelement <vscale x 2 x i8> zeroinitializer, i8 1, i32 1
+ %v = bitcast <vscale x 2 x i8> %a to <vscale x 1 x i16>
+ %n = extractelement <vscale x 1 x i16> %v, i32 0
+ ret i16 %n
+}''',[('top','%n',{'INT(256)'})]),
 'host-tiers':('''define internal i8 @leaf(i8 %n) { ret i8 %n }
 define i8 @top(i8 %n) { %r = call i8 @leaf(i8 %n)
  ret i8 %r }''',[]),

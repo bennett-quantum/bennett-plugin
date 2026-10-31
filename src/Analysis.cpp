@@ -308,16 +308,16 @@ static bool overlaps(const Atom &p, const Slot &s, uint64_t size) {
   if (p.stride == -1 || s.stride == -1)
     return true;
   if (p.stride == 0 && s.stride == 0)
-    return p.offset < s.offset + (int64_t)s.bytes &&
-           s.offset < p.offset + (int64_t)size;
+    return (__int128)p.offset < (__int128)s.offset + s.bytes &&
+           (__int128)s.offset < (__int128)p.offset + size;
   int64_t stride = std::gcd(p.stride, s.stride);
   if (stride == 0)
     return true;
   // Byte interval overlap, including non-aligned partial reads.
-  for (int64_t d = -(int64_t)size + 1; d < (int64_t)s.bytes; ++d)
-    if ((p.offset - s.offset - d) % stride == 0)
-      return true;
-  return false;
+  if((__int128)size+s.bytes-1 >= stride) return true;
+  __int128 distance=((__int128)p.offset-s.offset)%stride;
+  if(distance<0) distance+=stride;
+  return distance < s.bytes || distance+size>stride;
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto &a : p.atoms)
@@ -396,7 +396,7 @@ AV Analysis::load(const AV &p, Type *t) {
         if (overlaps(a, s, size)) {
           if (s.filled && a.stride == 0 && s.stride == 0 &&
               a.offset >= s.offset &&
-              a.offset + (int64_t)size <= s.offset + (int64_t)s.bytes &&
+              (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
               (t->isIntegerTy() || t->isPointerTy())) {
             AV decoded;
             decoded.top = s.value.top;
@@ -571,10 +571,10 @@ static std::vector<Leaf> leaves(Type *t, const DataLayout &dl) {
                  offset + i * dl.getTypeAllocSize(at->getElementType())
                                   .getKnownMinValue());
           }
-        } else if (auto *vt = dyn_cast<FixedVectorType>(ty)) {
+        } else if (auto *vt = dyn_cast<VectorType>(ty)) {
           unsigned bits =
               dl.getTypeSizeInBits(vt->getElementType()).getKnownMinValue();
-          for (unsigned i = 0; i < vt->getNumElements(); ++i) {
+          for (unsigned i = 0; i < vt->getElementCount().getKnownMinValue(); ++i) {
             auto q = p;
             q.push_back(i);
             walk(vt->getElementType(), q, offset + i * bits / 8);
@@ -709,22 +709,22 @@ bool Analysis::composite(Instruction &i) {
   }
   if (auto *e = dyn_cast<ExtractElementInst>(&i)) {
     auto idx = get(e->getIndexOperand());
-    auto *vt = cast<FixedVectorType>(e->getVectorOperand()->getType());
-    for (unsigned k = 0; k < vt->getNumElements(); ++k) {
+    auto *vt = cast<VectorType>(e->getVectorOperand()->getType());
+    for (unsigned k = 0; k < vt->getElementCount().getKnownMinValue(); ++k) {
       bool possible = idx.top;
       for (auto &x : idx.atoms)
         possible |= x.kind == Atom::Int && x.integer == k;
       if (possible)
         setField(&i, {}, field(e->getVectorOperand(), {k}));
     }
-    bool outside = idx.top && (APInt::getMaxValue(e->getIndexOperand()->getType()->getIntegerBitWidth()).uge(vt->getNumElements()));
-    for(auto &x:idx.atoms) if(x.kind==Atom::Int) outside |= x.integer.uge(vt->getNumElements());
+    bool outside = idx.top && (APInt::getMaxValue(e->getIndexOperand()->getType()->getIntegerBitWidth()).uge(vt->getElementCount().getKnownMinValue()));
+    for(auto &x:idx.atoms) if(x.kind==Atom::Int) outside |= x.integer.uge(vt->getElementCount().getKnownMinValue());
     if(outside) setField(&i,{},integer(APInt(dl.getTypeSizeInBits(i.getType()).getKnownMinValue(),0)));
     return true;
   }
   if (auto *e = dyn_cast<InsertElementInst>(&i)) {
     auto idx = get(e->getOperand(2));
-    unsigned n = cast<FixedVectorType>(i.getType())->getNumElements();
+    unsigned n = cast<VectorType>(i.getType())->getElementCount().getKnownMinValue();
     for (unsigned k = 0; k < n; ++k) {
       bool possible = idx.top, other = idx.top;
       for (auto &x : idx.atoms)
@@ -742,7 +742,7 @@ bool Analysis::composite(Instruction &i) {
   if (auto *sh = dyn_cast<ShuffleVectorInst>(&i)) {
     auto mask = sh->getShuffleMask();
     unsigned n =
-        cast<FixedVectorType>(sh->getOperand(0)->getType())->getNumElements();
+        cast<VectorType>(sh->getOperand(0)->getType())->getElementCount().getKnownMinValue();
     for (unsigned k = 0; k < mask.size(); ++k) {
       int j = mask[k];
       if (j < 0)
@@ -876,9 +876,10 @@ void Analysis::step(Instruction &i) {
     auto counts = get(alloc->getArraySize());
     uint64_t bytes = 0;
     for (auto &x : counts.atoms) if (x.kind == Atom::Int)
-      bytes = std::max(bytes, x.integer.getLimitedValue((1ULL << 60)) *
-          M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue());
-    if (counts.top) bytes = 1ULL << 60; // symbolic possible allocated bytes
+      bytes = std::max(bytes, (uint64_t)std::min<unsigned __int128>(UINT64_MAX,
+          (unsigned __int128)x.integer.getLimitedValue() *
+          M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue()));
+    if (counts.top) bytes = UINT64_MAX; // symbolic possible allocated bytes
     if (bytes) store(integer(APInt(8,0)), a, bytes, true);
   }
   else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
@@ -996,7 +997,7 @@ void Analysis::step(Instruction &i) {
               if (d.kind == Atom::Ptr) {
                 if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
                   int64_t lo=std::max(p.offset,s.offset);
-                  int64_t hi=std::min(p.offset+(int64_t)len->getZExtValue(),s.offset+(int64_t)s.bytes);
+                  __int128 hi=std::min((__int128)p.offset+len->getZExtValue(),(__int128)s.offset+s.bytes);
                   if(hi>lo) store(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);
                 } else if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
                     s.offset >= p.offset &&
@@ -1038,18 +1039,18 @@ void Analysis::step(Instruction &i) {
       // possible zero bytes symbolically; PT6 only uses wholly contained reads.
       unsigned sizeArg = n == "calloc" || n == "aligned_alloc" || n == "realloc" ? 1 : 0;
       if (n == "posix_memalign") sizeArg = 2;
-      uint64_t extent = 1ULL << 60;
+      uint64_t extent = UINT64_MAX;
       if (sizeArg < c->arg_size()) {
         auto sizes = get(c->getArgOperand(sizeArg));
         if (!sizes.top && !sizes.atoms.empty()) {
           extent=0;
           for (auto &v:sizes.atoms) if(v.kind==Atom::Int)
-            extent=std::max(extent,v.integer.getLimitedValue(1ULL<<60));
+            extent=std::max(extent,v.integer.getLimitedValue());
           if(n=="calloc") {
             auto count=get(c->getArgOperand(0));
-            uint64_t maxCount=count.top ? 1ULL<<60 : 0;
-            for(auto &v:count.atoms) if(v.kind==Atom::Int) maxCount=std::max(maxCount,v.integer.getLimitedValue(1ULL<<60));
-            extent=extent && maxCount>(1ULL<<60)/extent ? 1ULL<<60 : extent*maxCount;
+            uint64_t maxCount=count.top ? UINT64_MAX : 0;
+            for(auto &v:count.atoms) if(v.kind==Atom::Int) maxCount=std::max(maxCount,v.integer.getLimitedValue());
+            extent=(uint64_t)std::min<unsigned __int128>(UINT64_MAX,(unsigned __int128)extent*maxCount);
           }
         }
       }
@@ -1191,8 +1192,9 @@ void Analysis::step(Instruction &i) {
             auto p = v;
             if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
                                         i.getOpcode() == Instruction::Sub))
-              p.offset += (i.getOpcode() == Instruction::Add ? 1 : -1) *
-                          w.integer.sextOrTrunc(64).getSExtValue();
+              p.offset = (i.getOpcode()==Instruction::Add
+                              ? APInt(64,p.offset)+w.integer.zextOrTrunc(64)
+                              : APInt(64,p.offset)-w.integer.zextOrTrunc(64)).getSExtValue();
             else
               p.stride = -1;
             a.atoms.insert(p);

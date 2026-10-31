@@ -40,6 +40,7 @@ def main():
      if name==n:ok=any(v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data['values'])
     if name=='pt6-subrange':ok=any(v['value']=='%n' and v['top'] for v in data['values'])
    if not ok: failures.append((name,want,x.returncode,x.stderr[-1500:]))
- print(json.dumps({'major':a.major,'cases':len(cases),'passed':len(cases)-len(failures),'failures':failures},indent=2))
+ result={'major':a.major,'cases':len(cases),'passed':len(cases)-len(failures),'failures':failures}
+ (R/f'.tmp/recognition-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
  return bool(failures)
 if __name__=='__main__': raise SystemExit(main())

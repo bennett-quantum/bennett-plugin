@@ -36,6 +36,17 @@ and runtime now come from one immutable commit, with a pin-specific baseline cac
 - N33 own-format libm carrier corrections are part of the pin; arithmetic/helper
   closure materialisation remains explicit M2 work, not claimed implemented here.
 
+## Symbolic extents and fixed-vscale bitcasts
+
+Two extra audit checks were red (10/12) then green **12/12 per major**:
+zero-byte symbolic initial extents now cover the full represented address domain,
+including the read beyond 2^60 that exposed a finite internal cap; widened interval
+arithmetic prevents signed overflow in overlap/containment and clipped copies.
+Scalable vectors use the prescribed fixed-vscale=1 lane geometry during S2;
+`<vscale x 2 x i8>` to `<vscale x 1 x i16>` now packs to 256. Pointer integer
+addition/subtraction uses APInt modular arithmetic rather than C++ signed overflow.
+These regressions do not close the remaining general PT2/PT4/PT5 image audit.
+
 ## Materialised scalar region keys and N15
 
 Keys now run the implemented scalar normalisation slice on a private cloned
