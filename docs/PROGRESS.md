@@ -1,4 +1,4 @@
-# Third pass — 2026-10-31 (M1c, in progress)
+# Third pass — 2026-10-31 (M1c; M1 acceptance still open)
 
 Accepted contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**;
 ISA **0.8**. Round-8 freeze receipt: spec SHA-256
@@ -7,6 +7,86 @@ The sibling worktree is draft 0.2.11; it is not the accepted compatibility unit.
 The drift gate checks the accepted-release registry and pinned blob digest, and
 reports working draft/HEAD differences separately. Cases, header, opaque harness
 and runtime now come from one immutable commit, with a pin-specific baseline cache.
+
+## Current verification and acceptance
+
+The headless CMake 3.28.3 superbuild/load is verified on both majors. The gate
+uses the full required unset-display/project-local TMPDIR prefix, with no viewer
+passes. Exact results, plugin digests, all symbol hashes and vectors are recorded
+in `verification.json` from the actual local artefacts.
+
+| Check | LLVM 18 | LLVM 23 |
+|---|---:|---:|
+| Published recognition examples | 73/73 | 74/74 |
+| Analysis edge/domain regressions | 12/12 | 12/12 |
+| Published materialisation instruction lists | 5/5 | 5/5 |
+| Scalar region key/H-preservation assertions | 3/3 | 3/3 |
+| Complete reference objects, exact untrimmed bytes/hash/check | 12/20 | 12/20 |
+| All stated vectors for those objects | 35/35 | 35/35 |
+| C O3 inc8 and descriptor-derived inc8 | exact | exact |
+| Production descriptor launch | unimplemented | unimplemented |
+
+| LLVM | Before run/agree/deferred/blocked/diverge | After | Cells agree/run |
+|---|---|---|---|
+| 18 | 66/63/1/2/0 (gate exit 1: drift) | 66/65/1/0/0 (exit 0) | 920/924 (before 892/924) |
+| 23 | 66/63/1/2/0 (gate exit 1: drift) | 66/65/1/0/0 (exit 0) | 788/792 (before 764/792) |
+
+The sole remaining non-agreement is **fp-rot-fastmath-reassoc**, L5 at
+`default<O0>`, `strip`, `strip-nondebug`, `mergefunc`: **deferred M2 (§13;
+bp-7ni)**. A new failed property, changed runtime exit or absent check is still a
+real divergence. No deferred/blocked case is counted as agreement.
+
+## Brief 1b items 3–5
+
+| Item | Landed | Still required |
+|---|---|---|
+| 3 | Zero images, geometry/constant/fixed-vscale bitcasts, total lane domains, N9 cmpxchg regression, local descriptor reaching-store proof; scalar materialised keys | **Open M1:** general PT2/PT4/PT5 images, full composites/atomics and boundary/generation tier audit; all-rule keys (bp-3w4); production descriptor/CC launches, host stubs and records (bp-2zv) |
+| 4 | Inventory of every spec-* case and all 20 lift blocks; 12 exact objects/35 vectors per major, including indirectbr; untrimmed byte comparisons | Eight lifts and two object-only integration examples below remain missing; not marked complete |
+| 5 | PLAN, PROGRESS, verification.json and HANDOFF updated from actual runs | M1 remains in progress; next work is item 3 production/general audit |
+
+No M1 requirement was newly moved to M2. Existing mechanics remain explicit
+scheduled work, with determining contract sentences in PLAN and beads. The green
+reference/legality gate is not production acceptance or full §21 conformance.
+Grover over unmodified SQLite remains the core target.
+
+## Byte-for-byte scalar reproduction
+
+Each yes means complete object bytes equal the published accepted fixture on both
+majors, reference `check`, every stated interface hash and every run vector pass.
+
+| Object | LLVM 18 | LLVM 23 | @ref interface hash |
+|---|---|---|---|
+| oracle-empty-output | yes | yes | `358a1b87139653df3c5a82465215f8af96a12d0e8ad02610e04696c2d588a91c` |
+| oracle-empty-fault | yes | yes | `863fd42e300d5bba79d561ceca8c8b72ee1ad384d60f770d961cf25a8e258181` |
+| oracle-discard-return | yes | yes | `622ca26e17519d6e64af5f64f8e0f9c3d9af6c5d36a97740de5d6cbc2b2f62f3` |
+| atomic-nand | yes | yes | `21917fb6f3a0cc9bd14651126bb3fecaadcdccbed30b854170c7ba10741adac4` |
+| pointer-as270 | yes | yes | `62693b6dfefab4480cce6de8257132bcc9fead16250518602c354083332dd16a` |
+| gep-index-obj | yes | yes | `5b3c7d1f368fcc8c24286cc303a71c12b5b615f467149f29928099befd3de534` |
+| gep-index-const | yes | yes | `591f1b48288e000c626c349165ead9ff9158c05c472c9c569bfec3dac42de091` |
+| indirectbr-two-blocks | yes | yes | `a2580fd9aee33acb7501709e08ccc38d57944b716c9aca371f0b2fc93554362c` |
+| inc8 | yes | yes | `151baad5625b3605eadf87005a19ea6e012e4347d6dfe096dbc4edcf2b68b94a` |
+| add2 | yes | yes | `5b4c6624e0f20b5d60780fd8f27056f3f7efd4d27b9d47af8a70c8126100a10a` |
+| switch5 | yes | yes | `0575354a0ecceee58d8dfbcc5cb9a9b8851c5c2b3193bf543395bed13604ce80` |
+| fp-aggregate | yes | yes | `1139edfe71a34500be515f3ff61380020ab781c254339eafbad172a94e095d69` |
+
+| Missing example | Both majors: root cause and required §16 row | Bead |
+|---|---|---|
+| binding-out-byte | §16.2 OUT allocation/delivery and §16.4 indirect buffer load/store | bp-311 |
+| binding-clock-read | §16.2/§11.3 device-state prologue, stores and linked model calls | bp-311 |
+| binding-block-byte | §16.2 device bindings, §16.4 memory and helper calls | bp-311 |
+| binding-console-byte | §16.2 output buffers/projections, §16.4 stores/calls | bp-311 |
+| entry-replay-byte | §8.5 entry snapshot/replay, §16.4 mutable-global stores and calls | bp-311 |
+| rung4-mini | §16.4 MEM_IN, GEP/load/store/direct and indirect calls/comparison layout | bp-311 |
+| rung8-mini | §16.2 ENTROPY prologue, §16.4 model helper calls and memory | bp-311 |
+| listsum | §16.4 alloc/free, direct lift.call closure, heap/allocator entry state | bp-311 |
+| entry-stack (object-only, no lift source) | §8.5/§17.3 replay/adoption helper closure; §16.4 calls/memory | bp-311 |
+| arena-o1 (object-only, no lift source) | TDL-4 arena/action outlining, §16.2 hidden arena pointer, §16.4 memory | bp-qql |
+
+All eight missing lifts are actually attempted; each emits an explicit
+unimplemented diagnostic, never a passing fixture. The two object-only vectors
+are inventoried and not claimed compiler outputs. The six `spec-*` corpus
+programs are quantum action adj/compute/ctrl examples; the scalar oracle subset
+is empty. All six execute in the legality gate on both majors.
 
 ## Observed behavioural changes from 0.2.7
 
@@ -33,6 +113,9 @@ and runtime now come from one immutable commit, with a pin-specific baseline cac
 - The pinned harness now selects ABI 0.2 for spec-sem2-adj/compute; both former
   exit-87 upstream blockers execute successfully and become agreements. Historical
   ABI-v0 cases remain unchanged. No EXPECT line was edited.
+- Normaliser/map subversions advance to 0.2.8/0.2.9; budget-stage selection/final
+  fixture identities also change with corrected G1 naming. This plugin does not
+  yet emit those budget/certificate products, so no execution claim is made.
 - N33 own-format libm carrier corrections are part of the pin; arithmetic/helper
   closure materialisation remains explicit M2 work, not claimed implemented here.
 
@@ -70,7 +153,15 @@ comparison-link supplied layouts remain explicit M2 mechanics, not a rejection.
 The complete supported-object count becomes 12, with eight lift fixtures still
 explicitly unavailable. This does not complete brief 1b item 4.
 
-## Before/after evidence
+## Contract policy mutation guard
+
+Five assertions cover a live accepted pin, an unaccepted working draft, a newly
+accepted release, pinned-byte corruption and a version-only local/registry repin
+that leaves the old blob. The last mutation was red before adding consistent
+version/commit/digest checks. The corpus gate now imports the single PIN constant
+from contracts.py rather than maintaining a second copy.
+
+## Baseline provenance and red→green evidence
 
 Stable 07f942c sources were rebuilt in `.tmp/before-build`; both majors reproduced
 66 run / 63 agree / 1 deferred / 2 blocked / 0 diverge; the old pin-drift gate
@@ -85,6 +176,8 @@ completion is claimed by these checks. The earlier pass record follows for histo
 its pin, runtime blocker, CMake and G0 statements are superseded by this section.
 
 ---
+
+# Historical M1b record — superseded above
 
 # Progress — 2026-10-30 (M1b)
 

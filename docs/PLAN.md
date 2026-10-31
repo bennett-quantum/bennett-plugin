@@ -94,32 +94,45 @@ These messages must never be confused with implemented blocked compilation: §1.
 requires actual objects with precise blocker traps and exit 3. M3 supplies bounded
 realisations; until then the compiler reports unavailable lowering explicitly.
 
-## M1b delivery and acceptance boundary (2026-10-30)
+## Third-pass delivery and remaining acceptance (2026-10-31)
 
-Verified against dialect 0.2.7/95c3cd3: both llvm-config builds; 63/64 applicable
-recognition witnesses (18/23); PT5 erased-range sets, byval copy isolation,
-integer packed-bit/nand transfer witnesses; four scalar materialisation fixtures;
-11 byte-exact ISA objects including FP carriers/aggregate packing and atomic-nand;
-static descriptor-derived inc8 reference objects. The gate is 66/63/1/2/0
-(run/agree/deferred/blocked/diverge) on each major. None of these partial interfaces
-claims a production compile or full reference-analysis conformance.
+Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
+ISA 0.8. Draft 0.2.11 is not adopted. The gate checks the accepted registry and
+pinned blob SHA-256; it reports later unaccepted HEAD/worktree text separately.
+The opaque corpus runtime/harness/header and all cases use that same immutable pin.
 
-M1 acceptance remains open for the analysis/materialised-key audit and the
-production descriptor/CC-launch path documented in PROGRESS. Pull forward the
-scalar part of M3 CC emission to close that path; a test-only descriptor extractor
-is not its completion. CMake remains unverified (bp-ahz); full frontend/legality
-materialised comparisons remain open. No requirement was dropped to make the gate
-exit zero.
+Delivered: verified CMake 3.28.3 dual-major superbuild; 23-marker recognition;
+73/74 applicable published recognition examples (18/23); 12 analysis regressions
+including zero initial images, geometry-changing/fixed-vscale bitcasts, sub-byte
+packing, Cartesian alternatives and N9 cmpxchg domains; five materialisation
+fixtures; scalar materialised closure keys; 12 exact reference objects and all
+published vectors; static descriptor inc8 reference extraction. The legality gate
+is 66 run / 65 agree / 1 deferred / 0 blocked / 0 diverge per major.
 
-**Explicit M2 gate deferral:** `fp-rot-fastmath-reassoc`, §13/§17.7 deterministic
-FP arithmetic helpers, i128 conversion carrier and linked call closure. M1's
-bit-exact FP carriers/constant packing do not implement these arithmetic mechanics.
-M2 also executes the nine still-unavailable lift fixtures listed with §16 rows
-in PROGRESS. Retain the staged 0.2.7 budget selection/final identities and frozen
-capacities when implementing §9.2; no budget-table implementation is claimed now.
+**M1 is not delivered.** Brief 1b item 3 remains open for general reference
+analysis (PT2/PT4/PT5 represented-address images, composites/atomics, exact tier and
+boundary seeding), all-rule materialised keys (**bp-3w4**) and production scalar
+descriptor/CC objects, launches, host entry replacement and records (**bp-2zv**).
+The test-only descriptor path is not production acceptance. Pull forward that
+scalar CC work from M3; general generation/TDL remains M3. No unfinished M1
+obligation has been moved to M2 in this pass.
 
-**Upstream gate blocker:** `spec-sem2-adj`, `spec-sem2-compute`, bp-c2i /
-b-dialect-spec-566. Same opaque runtime exits 87 at ABI 0.2, zero with a local
-v0 call probe, without using the plugin on both majors/codegen levels. They stay
-separately counted/printed on every gate run. Any additional failed property or
-changed exit is a real divergence. Canonical G0/G1 wording ambiguity is bp-p26.
+Brief 1b item 4 now checks untrimmed fixture bytes and all stated hashes/vectors
+for 12/20 lift examples. Eight scalar-typed examples and the two object-only
+integration vectors remain inventoried with exact missing rows in PROGRESS and
+verification.json. Every scalar `spec-*` case is inventoried: the pin has six
+quantum action cases and no scalar oracle case.
+
+Existing mechanical deferrals (none removes a source capability):
+
+| Work | Owning sentence / rows | Bead |
+|---|---|---|
+| M2 soft-float and native comparison closure | §13.1: “The entry points are defined by bennett-arith and are part of its bitcode the driver links.” | bp-7ni |
+| M2 memory/replay/device bindings/calls, eight lift examples and entry-stack | §8.5: “The region function runs on a private copy of the caller's whole classical memory at the call”; §16.2 prologue, §16.4 load/store/alloc/calls | bp-311 |
+| M3 arena-o1 outlining | TDL-4: “The objects in any may-Co set of MC are placed in the arena”; §16.2 hidden pointer and §16.4 memory | bp-qql |
+
+The sole gate deferral is fp-rot-fastmath-reassoc (L5; bp-7ni), printed on every
+run. The two ABI-v0 runtime blockers and G0/G1 ambiguity are resolved at the new
+pin (bp-c2i/bp-p26 closed); the CMake validation bead bp-ahz is closed.
+Full N0–N35/V1–V16, entry-state replay, comparison link and frontend envelopes
+remain scheduled. General Grover over unmodified SQLite stays the core target.
