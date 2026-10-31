@@ -16,11 +16,12 @@ def main():
  stated_hashes=dict(re.findall(r'```text hash=([^\n ]+)\n(.*?)```',spec,re.S))
  runs=dict(re.findall(r'```text run=([^\n ]+)\n(.*?)```',spec,re.S))
  results=[]
- for tag,body in re.findall(r'```llvm (lift=[^\n]+)\n(.*?)```',spec,re.S):
+ lifts=re.findall(r'```llvm (lift=[^\n]+)\n(.*?)```',spec,re.S)+[('lift=entry-stack region=@f desc=;tgt=64',(R/'tests/probes/entry-stack.ll').read_text())]
+ for tag,body in lifts:
   fields={k:v.strip(chr(34)) for k,v in re.findall(r'([\w]+)=([^ ]+)',tag)};name=fields['lift']
   if a.case and name not in a.case:continue
   # Enumerate every published lift, including explicitly unavailable mechanics.
-  supported=name in ['binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte','oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks','entry-replay-byte','rung4-mini','rung8-mini','listsum']
+  supported=name in ['binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte','oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks','entry-replay-byte','rung4-mini','rung8-mini','listsum','entry-stack']
   dest=R/f'.tmp/scalars/{a.major}/{name}';dest.mkdir(parents=True,exist_ok=True)
   primitives={'__bennett_nz_fault':'void @__bennett_nz_fault(i64)','__bennett_nz_alloc':'ptr @__bennett_nz_alloc(i64)','__bennett_nz_free':'void @__bennett_nz_free(ptr)'}
   for n,sig in primitives.items():
@@ -32,8 +33,8 @@ def main():
   src=dest/'input.ll';src.write_text(body)
   stack=re.search(r'stack (?:max |max=|)(\d+)',maps.get(name,''))
   if not stack:stack=re.search(r'stack\s+(\d+)',maps.get(name,''))
-  cells=int(stack[1]) if stack else 32
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+re.sub(r'MEM_IN\((\d+)\)',lambda m:'MEM_IN('+str(1<<int(m[1]))+')',fields['desc']),'-bennett-scalar-stack='+str(cells),'-bennett-scalar-heap='+str(int(re.search(r'heap_limit_max=(\d+)',maps.get(name,''))[1]) if re.search(r'heap_limit_max=(\d+)',maps.get(name,'')) else 0),'-bennett-out='+str(dest),'-disable-output',str(src)]
+  cells=int(stack[1]) if stack else (64 if name=='entry-stack' else 32)
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+re.sub(r'MEM_IN\((\d+)\)',lambda m:'MEM_IN('+str(1<<int(m[1]))+')',fields['desc']),'-bennett-scalar-stack='+str(cells),'-bennett-scalar-heap='+str(int(re.search(r'heap_limit_max=(\d+)',maps.get(name,''))[1]) if re.search(r'heap_limit_max=(\d+)',maps.get(name,'')) else (64 if name=='entry-stack' else 0)),'-bennett-out='+str(dest),'-disable-output',str(src)]
   (dest/'ref.bennett').unlink(missing_ok=True)
   x=run(cmd);row={'name':name,'lowered':x.returncode==0}
   if x.returncode:

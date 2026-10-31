@@ -55,7 +55,7 @@ def object_paths(tmp, major, scalars):
         for rel in ('launch.bennett', 'oracle-0/ref.bennett'):
             out.append((f'production/{case}/{rel}', tmp / f'production/{major}/{case}/out/top/{rel}'))
     out.append(('production/abi/launch.bennett', tmp / f'production/{major}/abi/out/abi/launch.bennett'))
-    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments'):
+    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack'):
         base = tmp / f'{family}/{major}'
         for p in sorted(base.rglob('*.bennett')):
             out.append((f'{family}/{p.relative_to(base)}', p))
@@ -95,12 +95,15 @@ def main():
         p = read(f'production-{m}.json')
         assert p['passed'] == 3 and p['published_oracle_inc8']['ok'] and p['native_abi']['ok']
         c['production'] = check_rows(p['cases'])
-        for fam in ('dispatch', 'environments', 'shapes', 'budgets', 'records'):
+        for fam in ('dispatch', 'environments', 'shapes', 'budgets', 'records', 'lifts'):
             c[f'production-{fam}'] = check_rows(read(f'production-{fam}-{m}.json')['cases'])
             assert c[f'production-{fam}']['cases'] == c[f'production-{fam}']['ok'], (fam, m)
+        ss = read(f'shadow-stack-{m}.json')
+        assert all(r.get('check') and r.get('ok') for r in ss['cases'])
+        c['shadow-stack'] = check_rows(ss['cases'])
         checks[str(m)] = c
         sc = read(f'scalars-{m}.json')
-        assert sc['c_inc8_equal'] and sc['passed'] == 16
+        assert sc['c_inc8_equal'] and sc['passed'] == 21
         lowered = [o for o in sc['objects'] if o.get('lowered')]
         assert all(o['check'] and o['fixture_equal'] and o['hash_fixture_equal'] and all(r['ok'] for r in o['runs']) for o in lowered)
         scalars[str(m)] = {'objects_byte_exact': len(lowered), 'run_vectors': sum(len(o['runs']) for o in lowered),

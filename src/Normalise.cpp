@@ -296,3 +296,107 @@ void normaliseScalar(Function &f) {
 
 }
 } // namespace bennett
+
+// N24 and the independent, materialised runtime. A linked runtime definition
+// wins: its exact rows are contract/link input (e.g. the budget-stage fixture).
+#include <regex>
+#include "llvm/AsmParser/Parser.h"
+#include "llvm/Linker/Linker.h"
+#include "llvm/Support/SourceMgr.h"
+namespace bennett {
+void normaliseStack(Function &f) {
+  // Stack save/restore are calls into the same logical lifetime machinery.
+  SmallVector<CallInst *> intrinsics;
+  for(auto &i:instructions(f))if(auto *c=dyn_cast<CallInst>(&i))if(auto *g=c->getCalledFunction())
+    if(g->getName().starts_with("llvm.stacksave") || g->getName().starts_with("llvm.stackrestore"))intrinsics.push_back(c);
+  for(auto *c:intrinsics) {
+    bool save=c->getCalledFunction()->getName().starts_with("llvm.stacksave");
+    auto target=f.getParent()->getOrInsertFunction(save?"__bennett_rt_ss_save":"__bennett_rt_ss_restore",c->getFunctionType());
+    IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *r=b.CreateCall(target,args);r->takeName(c);c->replaceAllUsesWith(r);c->eraseFromParent();
+  }
+  SmallVector<AllocaInst *> allocas;
+  for(auto &i:instructions(f))if(auto *a=dyn_cast<AllocaInst>(&i))allocas.push_back(a);
+  if(allocas.empty())return;
+  auto &m=*f.getParent();auto &ctx=f.getContext();auto *i64=Type::getInt64Ty(ctx);auto *ptr=PointerType::getUnqual(ctx);
+  uint64_t size=0,alignment=1;std::map<AllocaInst *,uint64_t> offsets;
+  for(auto *a:allocas)if(a->getParent()==&f.getEntryBlock())if(auto *n=dyn_cast<ConstantInt>(a->getArraySize())) {
+    auto align=a->getAlign().value();alignment=std::max(alignment,align);size=alignTo(size,align);offsets[a]=size;
+    auto bytes=m.getDataLayout().getTypeAllocSize(a->getAllocatedType()).getFixedValue();
+    if(n->getValue().ugt(UINT64_MAX/std::max(uint64_t(1),bytes)) || UINT64_MAX-size<n->getZExtValue()*bytes)fail("input","§17.3 frame extent overflow",a);
+    size+=n->getZExtValue()*bytes;
+  }
+  if(size>UINT64_MAX-(alignment-1))fail("input","§17.3 aligned frame extent overflow",&f);
+  size=alignTo(size,alignment);
+  IRBuilder<> b(&*f.getEntryBlock().getFirstInsertionPt());
+  auto push=m.getOrInsertFunction("__bennett_rt_ss_push",ptr,i64,i64);
+  auto *fp=b.CreateCall(push,{b.getInt64(size),b.getInt64(alignment)},"nz.fp."+f.getName());
+  auto dynamic=m.getOrInsertFunction("__bennett_rt_ss_alloca",ptr,i64,i64);
+  for(auto *a:allocas) {
+    b.SetInsertPoint(a);Value *p;
+    if(offsets.count(a))p=b.CreateGEP(b.getInt8Ty(),fp,b.getInt64(offsets[a]));
+    else {
+      auto *count=b.CreateZExtOrTrunc(a->getArraySize(),i64);
+      auto bytes=m.getDataLayout().getTypeAllocSize(a->getAllocatedType()).getFixedValue();
+      // Nonwrapping allocation size is part of the faulting N24 semantics.
+      auto *bad=b.CreateICmpUGT(count,b.getInt64(UINT64_MAX/std::max(uint64_t(1),bytes)));
+      auto check=m.getOrInsertFunction("__bennett_ss_size_check",b.getVoidTy(),b.getInt1Ty());b.CreateCall(check,{bad});
+      p=b.CreateCall(dynamic,{b.CreateMul(count,b.getInt64(bytes)),b.getInt64(a->getAlign().value())});
+    }
+    if(p->getType()!=a->getType())p=b.CreateAddrSpaceCast(p,a->getType());
+    p->takeName(a);a->replaceAllUsesWith(p);a->eraseFromParent();
+  }
+  auto pop=m.getOrInsertFunction("__bennett_rt_ss_pop",b.getVoidTy(),ptr);
+  for(auto &i:instructions(f))if(isa<ReturnInst>(i)) {b.SetInsertPoint(&i);b.CreateCall(pop,{fp});}
+}
+void prepareStack(Module &m,Function &root,uint64_t capacity) {
+  std::set<Function *> closure;std::function<void(Function *)> visit=[&](Function *f) {
+    if(!f || f->isDeclaration() || !closure.insert(f).second)return;
+    for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))visit(c->getCalledFunction());
+  };visit(&root);
+  for(auto *f:closure)normaliseStack(*f);
+  bool needed=false;
+  for(auto *f:closure)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())needed|=g->getName()=="__bennett_rt_ss_push";
+  if(!needed)return;
+  auto *init=m.getFunction("__bennett_rt_ss_init");
+  if(!init || init->isDeclaration()) {
+    std::string source=
+#include "runtime/ShadowStack.inc"
+    ;
+    source=std::regex_replace(source,std::regex("CAP"),std::to_string(capacity+1));
+    SMDiagnostic error;auto runtime=parseAssemblyString(source,error,m.getContext());
+    if(!runtime) {error.print("bennett shadow runtime",errs());fail("output","invalid internal shadow runtime");}
+    runtime->setDataLayout(m.getDataLayout());
+    for(auto &f:*runtime)if(!f.isDeclaration())f.addFnAttr("bennett.stack.internal");
+    if(Linker::linkModules(m,std::move(runtime)))fail("output","shadow runtime link failed");
+  }
+  // Prove only a constant subrange of a fresh frame in the same block, before
+  // any possibly invalidating call. Everything else uses the logical table.
+  for(auto *f:closure)if(!f->hasFnAttribute("bennett.stack.internal")) {
+    SmallVector<Instruction *> accesses;
+    for(auto &i:instructions(f))if(isa<LoadInst>(i)||isa<StoreInst>(i))accesses.push_back(&i);
+    for(auto *i:accesses) {
+      Value *p;Type *type;
+      if(auto *l=dyn_cast<LoadInst>(i)){p=l->getPointerOperand();type=l->getType();}
+      else {auto *s=cast<StoreInst>(i);p=s->getPointerOperand();type=s->getValueOperand()->getType();}
+      APInt offset(m.getDataLayout().getPointerTypeSizeInBits(p->getType()),0);
+      auto *base=p->stripAndAccumulateConstantOffsets(m.getDataLayout(),offset,true);
+      if(isa<GlobalVariable>(base))continue;
+      bool proven=false;
+      if(auto *c=dyn_cast<CallBase>(base);c && c->getParent()==i->getParent() && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_rt_ss_push") {
+        auto bytes=m.getDataLayout().getTypeStoreSize(type).getFixedValue();
+        if(auto *n=dyn_cast<ConstantInt>(c->getArgOperand(0));n && !offset.isNegative() && offset.getLimitedValue()<=n->getZExtValue() && bytes<=n->getZExtValue()-offset.getLimitedValue()) {
+          proven=true;for(auto it=std::next(c->getIterator());&*it!=i;++it)if(isa<CallBase>(*it)){proven=false;break;}
+        }
+      }
+      if(proven)continue;
+      // A linked runtime must expose its logical checker or carry an explicit
+      // internal-path proof. Runtime-looking source names never exempt access.
+      if(!m.getFunction("__bennett_rt_ss_check"))
+        unimplemented("§17.3 linked runtime logical-frame validation",2,i);
+      IRBuilder<> b(i);auto check=m.getOrInsertFunction("__bennett_rt_ss_check",b.getVoidTy(),b.getPtrTy(),b.getInt64Ty());
+      if(p->getType()!=b.getPtrTy())p=b.CreateAddrSpaceCast(p,b.getPtrTy());
+      b.CreateCall(check,{p,b.getInt64(m.getDataLayout().getTypeStoreSize(type).getFixedValue())});
+    }
+  }
+}
+} // namespace bennett

@@ -1046,7 +1046,10 @@ void Analysis::step(Instruction &i) {
         for(auto &x:increments.atoms)if(x.kind==Atom::Int)zeros=std::min(zeros,x.integer.countr_zero());
         if(width-zeros>12 || zeros==width)continue;
         auto seeds=a.atoms;APInt delta=APInt::getOneBitSet(width,zeros);
+        std::set<uint64_t> residues;
         for(auto &seed:seeds)if(seed.kind==Atom::Int) {
+          auto residue=(seed.integer & (delta-1)).getLimitedValue();
+          if(!residues.insert(residue).second)continue;
           APInt next=seed.integer;
           do {a.merge(integer(next));next+=delta;}while(next!=seed.integer);
         }

@@ -7,7 +7,8 @@ from scalars import run, REF
 def execute(major, names):
  text=dialect_text();objects=dict(re.findall(r'```isa object=([^\n ]+)\n(.*?)```',text,re.S));maps=dict(re.findall(r'```text linkmap=([^\n ]+)\n(.*?)```',text,re.S))
  rows=[]
- for tag,body in re.findall(r'```llvm (lift=[^\n]+)\n(.*?)```',text,re.S):
+ lifts=re.findall(r'```llvm (lift=[^\n]+)\n(.*?)```',text,re.S)+[('lift=shadow-n24 region=@f desc=;tgt=8','define internal i8 @f() { %p = alloca i8\n %v = load i8, ptr %p\n ret i8 %v }\n!llvm.module.flags = !{!0}\n!0 = !{i32 1, !\"bennett.sstack\", i64 128}\n')]
+ for tag,body in lifts:
   fields=dict(re.findall(r'(\w+)=([^ ]+)',tag));name=fields['lift']
   if name not in names:continue
   d=R/f'.tmp/production-lifts/{major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
@@ -32,14 +33,15 @@ def execute(major, names):
   body+='\n'.join(f'%p{i} = getelementptr i8, ptr %desc, i64 {off}\nstore {ty} {v}, ptr %p{i}' for i,(off,ty,v) in enumerate(stores))
   body+='\n'+f'call void @__bennett_oracle(ptr {fields["region"]}, ptr null, ptr %desc)\n'*2+'call void @__bennett_qfree(ptr %fault)\ncall void @__bennett_qfree(ptr %t)\n'+'\n'.join(free)+'\nret void\n}\ndeclare ptr @__bennett_qalloc(i64, i64)\ndeclare void @__bennett_qfree(ptr)\ndeclare void @__bennett_oracle(ptr, ptr, ptr)\n'
   source=d/'input.ll';source.write_text(body);out=d/'out'
-  layout=json.loads(objects[name].split('section layout\n')[1]);stack=1<<layout['S_cells'];heap=layout['heap_limit_max']
+  layout=json.loads(objects[name].split('section layout\n')[1]) if name in objects else {'S_cells':12,'heap_limit_max':128};stack=1<<layout['S_cells'];heap=layout['heap_limit_max']
   z=run([f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=10000,{heap},{stack},16,0','-bennett-out='+str(out),'-disable-output',source]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:continue
-  row['reference_exact']=(out/'top/oracle-0/ref.bennett').read_bytes()==objects[name].encode()
+  row['reference_exact']=(out/'top/oracle-0/ref.bennett').read_bytes()==objects[name].encode() if name in objects else True
+  row['published_golden']=name if name in objects else None
   obj=out/'top/launch.bennett';z=run([REF,'check',obj]);row['check']=z.returncode==0;row['check_output']=z.stdout+z.stderr
   z=run([REF,'run-program',obj,'top','--args','10000,10000','--budget',f'100000,{heap},{stack},16']);row['execution']=z.stdout+z.stderr;row['run']=z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED'
  return rows
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--major',required=True,type=int);p.add_argument('--case',action='append');a=p.parse_args();rows=execute(a.major,a.case or ['entry-replay-byte','rung4-mini','rung8-mini','listsum']);report={'major':a.major,'cases':rows};(R/f'.tmp/production-lifts-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return not rows or not all(r.get('reference_exact') and r.get('check') and r.get('run') for r in rows)
+ p=argparse.ArgumentParser();p.add_argument('--major',required=True,type=int);p.add_argument('--case',action='append');a=p.parse_args();rows=execute(a.major,a.case or ['entry-replay-byte','rung4-mini','rung8-mini','listsum','shadow-n24']);report={'major':a.major,'cases':rows};(R/f'.tmp/production-lifts-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return not rows or not all(r.get('reference_exact') and r.get('check') and r.get('run') for r in rows)
 if __name__=='__main__':raise SystemExit(main())

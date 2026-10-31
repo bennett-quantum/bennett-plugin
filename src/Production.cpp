@@ -747,7 +747,7 @@ struct Entry {
     auto path = out + "/oracle-" + std::to_string(references.size());
     auto capacities = table.capacities;
     std::map<std::string,std::string> globalNames;
-    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection, &globalNames);
+    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection, &globalNames, baseline[4]);
     auto candidate = read(path + "/ref.bennett");
     auto selection = oracleIdentity(candidate);
     table.overlay(budget, selection);

@@ -28,12 +28,25 @@ static std::string join(const std::vector<std::string> &v,
   }
   return s;
 }
+static std::string canonicalJSON(const json::Value &v) {
+  if(auto *o=v.getAsObject()) {
+    std::map<std::string,const json::Value *> sorted;for(auto &e:*o)sorted[e.first.str()]=&e.second;
+    std::string out="{";for(auto &e:sorted){if(out.size()>1)out+=",";out+=canonicalJSON(json::Value(e.first))+":"+canonicalJSON(*e.second);}return out+"}";
+  }
+  if(auto *a=v.getAsArray()) {std::string out="[";for(auto &e:*a){if(out.size()>1)out+=",";out+=canonicalJSON(e);}return out+"]";}
+  return formatv("{0}",v).str();
+}
 struct Scalar {
   Module &m;
   Function &f;
   std::map<const Value *, std::string> names;
   std::vector<std::string> regs, lines;
   unsigned constants = 0, temps = 0, expressions = 0;
+  // Linked runtime microvectors may retain their explicitly supplied register
+  // spelling. Source functions always use the canonical §16.3 numbering.
+  bool runtimeNames() {return f.hasFnAttribute("bennett.runtime.locations");}
+  std::map<std::string,std::string> runtimeConstants;
+
   std::map<const GlobalVariable *, std::string> globals;
   std::map<Function *, std::string> functions;
   Analysis *analysis = nullptr;
@@ -57,7 +70,15 @@ struct Scalar {
     regs.push_back(n + ":reg[" + std::to_string(w) + "]");
   }
   std::string constant(APInt n) {
+    auto key=std::to_string(n.getBitWidth())+":"+number(n);
+    if(runtimeNames() && runtimeConstants.count(key))return runtimeConstants[key];
     std::string s = "c" + std::to_string(constants++);
+    if(runtimeNames()) {
+      auto attr=f.getFnAttribute("bennett.runtime.constants").getValueAsString();
+      SmallVector<StringRef> list;attr.split(list,',');
+      if(constants<=list.size() && !list[constants-1].empty())s=list[constants-1].str();
+      runtimeConstants[key]=s;
+    }
     dest(s, n.getBitWidth());
     lines.push_back(s + " = lift.const.i" + std::to_string(n.getBitWidth()) +
                     " " + number(n));
@@ -75,7 +96,9 @@ struct Scalar {
       return constant(APInt(width(v->getType()), 0));
     if (auto *g = dyn_cast<GlobalVariable>(v)) {
       if (!globals.count(g)) unimplemented("§19.5 comparison global layout",2,g);
+      if(runtimeNames() && names.count(g))return names[g];
       std::string n = "c" + std::to_string(constants++);
+      if(runtimeNames()) {n="g";--constants;names[g]=n;}
       dest(n,width(g->getType())); lines.push_back(n+" = lift.addr @"+globals[g]); return n;
     }
     if (auto *c = dyn_cast<ConstantFP>(v))
@@ -174,7 +197,7 @@ struct Scalar {
     k = 0;
     for (Instruction &i : instructions(f))
       if (!i.getType()->isVoidTy())
-        names[&i] = "v" + std::to_string(k++);
+        names[&i] = runtimeNames() && i.hasName() ? i.getName().str() : "v" + std::to_string(k++);
     std::map<BasicBlock *, unsigned> blockIndex;
     k = 0;
     for (BasicBlock &b : f)
@@ -489,6 +512,7 @@ struct Scalar {
     std::map<std::string, std::string> renames;
     unsigned cn = 0, tn = 0;
     for (auto &line : lines) {
+      if(runtimeNames())break;
       auto eq = line.find(" = ");
       if (eq == std::string::npos)
         continue;
@@ -515,7 +539,7 @@ struct Scalar {
       auto eq = line.find(" = ");
       if (eq != std::string::npos) {
         std::string dst = line.substr(0, eq);
-        std::regex loc(R"([A-Za-z]+[0-9]+)");
+        std::regex loc(R"([A-Za-z_][A-Za-z_0-9]*)");
         for (std::sregex_iterator it(dst.begin(), dst.end(), loc), end;
              it != end; ++it) {
           auto n = it->str();
@@ -574,7 +598,9 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
   image(g.getInitializer(),0);return toHex(ArrayRef<uint8_t>(bytes),true);
 }
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
-                 unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames) {
+                 unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack) {
+  if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
+  prepareStack(m,f,sstack);
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
   Analysis analysis(m); analysis.run();
@@ -594,7 +620,15 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
         });for(auto *target:sorted) collect(target);
       }
     }
-  };collect(&f);
+  };
+  auto flag=[&](StringRef name,uint64_t fallback) {auto *md=m.getModuleFlag(name);return md?cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue():fallback;};
+  sstack=flag("bennett.sstack",sstack);
+  unsigned snapshot=flag("bennett.entry.snapshot",0);
+  bool initialise=flag("bennett.ss.init",0);
+  if(snapshot) collect(m.getFunction("__bennett_rt_entry_replay"));
+  for(auto &g:m)for(auto &i:instructions(g))if(auto *c=dyn_cast<CallBase>(&i))if(c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_rt_ss_push")initialise=true;
+  if(initialise)collect(m.getFunction("__bennett_rt_ss_init"));
+  collect(&f);
   Scalar s{m, f}; s.functions=functions;s.analysis=&analysis;
   std::string d = desc.str(), device;
   uint64_t deviceSize = 0, heapLimit = heapCapacity;
@@ -652,21 +686,26 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   unsigned bindingIndex = 0;
   for (std::sregex_iterator it(d.begin(),d.end(),bindingPattern),end;it!=end;++it,++bindingIndex)
     if (((*it)[1] == "OUT" || (*it)[1] == "MEM_IN") && bindingIndex < f.arg_size()) privateArguments.insert(f.getArg(bindingIndex));
-  auto privatePointer = [&](Value *p) {
-    auto *root = getUnderlyingObject(p);
-    if (auto *a = dyn_cast<Argument>(root)) return privateArguments.count(a) != 0;
-    if (auto *load = dyn_cast<LoadInst>(root)) {
-      auto *g = dyn_cast<GlobalVariable>(getUnderlyingObject(load->getPointerOperand()));
-      if (g && g->isConstant() && g->hasInitializer() &&
-          isa<GlobalVariable>(getUnderlyingObject(g->getInitializer()))) return true;
-      return g && ((hasDevice("ENTROPY") && g->getName() == "__bennett_dev_entropy_base") ||
-                   (hasDevice("BLOCK") && g->getName() == "__bennett_dev_block_base") ||
-                   (hasDevice("CONSOLE") && g->getName() == "__bennett_dev_console_buf"));
+  // Track caller pointer parameters through uses and defined calls. Conversion
+  // alone needs no bytes; a memory access requires an actual entry snapshot.
+  std::set<Value *> pointerUses;
+  std::function<bool(Value *)> memoryUse=[&](Value *v) {
+    if(!pointerUses.insert(v).second)return false;
+    for(User *u:v->users()) {
+      if(auto *l=dyn_cast<LoadInst>(u);l && l->getPointerOperand()==v)return true;
+      if(auto *st=dyn_cast<StoreInst>(u);st && st->getPointerOperand()==v)return true;
+      if(auto *c=dyn_cast<CallBase>(u)) {
+        auto *g=c->getCalledFunction();
+        if(!g || g->isDeclaration())return true;
+        for(unsigned j=0;j<c->arg_size();++j)if(c->getArgOperand(j)==v && memoryUse(g->getArg(j)))return true;
+      } else if(isa<Instruction>(u) && !isa<ReturnInst>(u) && memoryUse(u))return true;
     }
     return false;
   };
+  if(!snapshot) for(auto &a:f.args())if(a.getType()->isPointerTy() && !privateArguments.count(&a) && memoryUse(&a))
+    unimplemented("§8.5 caller pointer snapshot transfer",2,&a);
   // The closure, rather than just its root, owns writes to private globals.
-  for(Function &g:m) if(!functions.count(&g))
+  for(Function &g:m) if(!functions.count(&g) && !g.hasFnAttribute("bennett.stack.internal"))
     for(Instruction &i:instructions(g)) if(auto *st=dyn_cast<StoreInst>(&i))
       if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
         unimplemented("§8.5 caller snapshot transfer",2,&i);
@@ -703,6 +742,17 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     wrapperRows.push_back("lift.boundscheck " + p + " 8");
     wrapperRows.push_back("lift.store.i64 " + p + " " + value);
   };
+  if(snapshot) {
+    mems.push_back("s0:region["+std::to_string(snapshot)+",8] in");
+    memSigs.push_back("{\"A\":"+std::to_string(snapshot)+",\"W\":8,\"role\":\"in\"}");
+    wrapperRegs.push_back("s:reg[64]");wrapperRows.push_back("s = lift.addr @s0");
+    wrapperRegs.push_back("d0:reg[1]");wrapperRows.push_back("d0 = lift.call @"+functions.at(m.getFunction("__bennett_rt_entry_replay"))+" (s)");
+  }
+  if(initialise) {
+    wrapperRegs.push_back("c0:reg[64]");wrapperRows.push_back("c0 = lift.const.i64 "+std::to_string(sstack));
+    auto loc=snapshot?"d1":"t0";wrapperRegs.push_back(std::string(loc)+":reg[1]");
+    wrapperRows.push_back(std::string(loc)+" = lift.call @"+functions.at(m.getFunction("__bennett_rt_ss_init"))+" (c0)");
+  }
   std::string buffer;
   uint64_t bufferSize = 0;
   std::vector<std::pair<std::string,uint64_t>> outputBuffers;
@@ -811,7 +861,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if(!lproc.empty())lproc+="\n";lproc+=bodies[name];
   }
   wrapperRegs.push_back("r:reg[" + std::to_string(ret) + "]");
-  wrapperRows.push_back("r = lift.call @L1 (" + join(invoke) + ")");
+  wrapperRows.push_back("r = lift.call @" + functions.at(&f) + " (" + join(invoke) + ")");
   if (projection >= 0) {
     if (!consoleBuffer.first.empty() && consoleBuffer.second) outputBuffers.push_back(consoleBuffer);
     std::vector<std::pair<std::string,unsigned>> projections;
@@ -888,7 +938,8 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   // M1 standalone comparison layout: globals in link/module order, data at
   // 4096, heap at the next page, no heap allocations. Driver-supplied layouts M4.
   std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
-  uint64_t base=4096;std::map<const GlobalVariable *,uint64_t> globalBases;
+  uint64_t nullSize=flag("bennett.null_size",4096);
+  uint64_t base=nullSize;std::map<const GlobalVariable *,uint64_t> globalBases;
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));globalBases[&g]=base;base+=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();}
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {
     auto size=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
@@ -898,8 +949,8 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
     globalLeaves[name]="{\"base\":"+std::to_string(globalBases[&g])+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
   }
-  uint64_t heap=alignTo(base,uint64_t(4096));unsigned h=0,at=0;
-  uint64_t endAddress = heap + heapLimit;
+  uint64_t heap=flag("bennett.heap_base",alignTo(base,uint64_t(4096)));unsigned h=0,at=0;
+  uint64_t endAddress = flag("bennett.region_base",heap + heapLimit);
   std::string regionLayout, regionHashLeaves;
   for (auto &d : devices) if (d.first == "BLOCK") {
     uint64_t size = uint64_t(1) << (d.second + 9);
@@ -911,7 +962,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   for (auto &mem : mems) {
     std::smatch parts;
-    if (!std::regex_search(mem, parts, std::regex(R"(([me][0-9]+):region\[([0-9]+),8\])"))) continue;
+    if (!std::regex_search(mem, parts, std::regex(R"(([mes][0-9]+):region\[([0-9]+),8\])"))) continue;
     uint64_t size = uint64_t(1) << std::stoul(parts[2]);
     auto leaf = "{\"base\":" + std::to_string(alignTo(endAddress, size)) + "}";
     if (!regionLayout.empty()) regionLayout += ",";
@@ -976,14 +1027,16 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   canonical += wrapper.substr(last);
   std::string leaves="layout A_tab "+std::to_string(at)+"\nlayout H "+std::to_string(h)+"\nlayout S_cells "+std::to_string(sc)+"\n"+globalHashLeaves+
-    "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max "+std::to_string(heapLimit)+"\n"+regionHashLeaves+"layout null_size 4096\nlayout ptr_width "+std::to_string(pw)+"\n";
+    "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max "+std::to_string(heapLimit)+"\n"+regionHashLeaves+"layout null_size "+std::to_string(nullSize)+"\nlayout ptr_width "+std::to_string(pw)+"\n";
   std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+wrapperRefs);
   std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"}";
   unsigned si=1;
   for(auto *g:closure) {auto n=functions[g];symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+hashes[n]+"\",\"kind\":\"lproc\",\"name\":\""+n+"\",\"signature\":"+signatures[n]+"}";}
   for(auto &e:data)symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+dataHashes[e.first]+"\",\"kind\":\"data\",\"name\":\""+e.first+"\",\"signature\":"+dataSigs[e.first]+"}";
   symbols+="}";
-  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":4096,\"ptr_width\":"+std::to_string(pw)+"}";
+  auto parsedSymbols=json::parse(symbols);if(!parsedSymbols)fail("output",toString(parsedSymbols.takeError()));
+  symbols=canonicalJSON(*parsedSymbols);
+  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":"+std::to_string(nullSize)+",\"ptr_width\":"+std::to_string(pw)+"}";
   if (auto ec = sys::fs::create_directories(out))
     fail("output", ec.message());
   SmallString<256> path(out);
