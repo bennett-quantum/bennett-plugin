@@ -420,19 +420,28 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   // N26. The helpers are ordinary linked device functions; this rewrite does
   // not supply their implementation or make an unknown call a passing object.
   unsigned memoryOrdinal=0;
-  SmallVector<MemIntrinsic *> memory;
-  for(Instruction &i:instructions(f)) if(auto *m=dyn_cast<MemIntrinsic>(&i)) memory.push_back(m);
+  SmallVector<IntrinsicInst *> memory;
+  for(Instruction &i:instructions(f)) if(auto *m=dyn_cast<IntrinsicInst>(&i)) if(isa<AnyMemIntrinsic>(m) || m->getCalledFunction()->getName().starts_with("llvm.experimental.memset.pattern.")) memory.push_back(m);
   for(auto *m:memory) {
     IRBuilder<> b(m);std::string r=m->hasName()?m->getName().str():f.getName().str()+"."+std::to_string(memoryOrdinal++);
-    auto *length=m->getLength();auto *i64=Type::getInt64Ty(f.getContext());
+#if LLVM_VERSION_MAJOR >= 23
+    if(auto *pattern=dyn_cast<MemSetPatternInst>(m)) {
+      auto *pre=m->getParent();auto *done=pre->splitBasicBlock(m->getIterator(),"nz.mp."+r+".done");pre->getTerminator()->eraseFromParent();
+      auto *loop=BasicBlock::Create(f.getContext(),"nz.mp."+r+".loop",&f,done);b.SetInsertPoint(pre);
+      auto *length=b.CreateZExtOrTrunc(pattern->getLength(),b.getInt64Ty());b.CreateCondBr(b.CreateICmpEQ(length,b.getInt64(0)),done,loop);b.SetInsertPoint(loop);
+      auto *index=b.CreatePHI(b.getInt64Ty(),2,"nz.mp."+r+".i");index->addIncoming(b.getInt64(0),pre);auto *value=pattern->getValue();
+      b.CreateStore(value,b.CreateGEP(value->getType(),pattern->getDest(),index))->setAlignment(Align(1));auto *next=b.CreateAdd(index,b.getInt64(1));index->addIncoming(next,loop);b.CreateCondBr(b.CreateICmpULT(next,length),loop,done);m->eraseFromParent();continue;
+    }
+#endif
+    auto *length=cast<AnyMemIntrinsic>(m)->getLength();auto *i64=Type::getInt64Ty(f.getContext());
     Value *n=length;
     if(length->getType()!=i64) n=b.CreateZExtOrTrunc(length,i64,"nz.n."+r);
     auto *ptr=PointerType::get(f.getContext(),0);auto *voidTy=Type::getVoidTy(f.getContext());
-    if(auto *copy=dyn_cast<MemTransferInst>(m)) {
+    if(auto *copy=dyn_cast<AnyMemTransferInst>(m)) {
       if(copy->getDestAddressSpace()!=0 || copy->getSourceAddressSpace()!=0) unimplemented("§12 N26 address-space helper ABI",2,copy);
       auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_memmove",voidTy,ptr,ptr,i64);
       b.CreateCall(helper,{copy->getDest(),copy->getSource(),n});
-    } else if(auto *fill=dyn_cast<MemSetInst>(m)) {
+    } else if(auto *fill=dyn_cast<AnyMemSetInst>(m)) {
       if(fill->getDestAddressSpace()!=0) unimplemented("§12 N26 address-space helper ABI",2,fill);
       auto helper=f.getParent()->getOrInsertFunction("__bennett_rt_memset",voidTy,ptr,Type::getInt8Ty(f.getContext()),i64);
       b.CreateCall(helper,{fill->getDest(),fill->getValue(),n});

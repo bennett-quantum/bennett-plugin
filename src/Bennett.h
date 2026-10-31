@@ -103,3 +103,5 @@ void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,
 } // namespace bennett
 
 namespace bennett { void normaliseInteger(llvm::Function &); void materialiseIntegerRuntime(llvm::Function &); }
+
+namespace bennett { void materialiseMemoryRuntime(llvm::Function &); }

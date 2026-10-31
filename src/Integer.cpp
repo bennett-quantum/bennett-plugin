@@ -67,6 +67,8 @@ void normaliseInteger(Function &f) {
 // A linked definition always wins, including its own data and callees.
 void materialiseIntegerRuntime(Function &f) {
   if(!f.isDeclaration())return;
+  materialiseMemoryRuntime(f);
+  if(!f.isDeclaration())return;
   std::smatch match;auto name=f.getName().str();bool slot=std::regex_match(name,match,std::regex("__bennett_rt_i([0-9]+)_(.+)"));
   unsigned n;std::string op;
   if(slot) {n=std::stoul(match[1]);op=match[2];}

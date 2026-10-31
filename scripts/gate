@@ -22,6 +22,7 @@ for major in 18 23; do
   python3 "$root/tests/softfloat.py" --major "$major"
   python3 "$root/tests/wide.py" --major "$major"
   python3 "$root/tests/integer_intrinsics.py" --major "$major"
+  python3 "$root/tests/memory_runtime.py" --major "$major"
   python3 "$root/tests/region_keys.py" --major "$major"
   python3 "$root/tests/key_audit.py" --major "$major"
   python3 "$root/tests/validation.py" --major "$major"
