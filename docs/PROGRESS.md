@@ -1,3 +1,100 @@
+# Fifth pass — 2026-10-31 (four binding objects complete; production launch still open)
+
+Started at **91a0d7d**. Binding implementation/tests: **384dd54**. Hook repair:
+**c91c288**. Accepted dialect **0.2.10 @ 023f5a7**, ISA **0.8**; no re-pin,
+no new M2 deferral, no push. **This pass does not complete the requested Item A
+or M1.** The fourth-pass record below is historical.
+
+| Requested item | Actual result on LLVM 18 and 23 |
+|---|---|
+| A: production scalar descriptor/CC launches, host replacement, records (bp-2zv) | **Still red.** Production exits 1 at CC/marker event lowering and emits no files. No production implementation landed. Descriptor-reference inc8 remains exact. |
+| B: four device-binding lifts (bp-311) | **Green: 0/4 → 4/4**, untrimmed bytes equal, independent check/hash valid, **5/5** published vectors pass per major. |
+| Hook bug bp-zk2 | **Green.** Inherited GIT_DIR reproducer exit 128; actual `git push --dry-run` now exits 0 after the full dual-major gate. |
+
+The new OUT path allocates the private buffer and delivers its loaded byte.
+CLOCK, BLOCK and CONSOLE emit the published device-state prologues; BLOCK also
+gets its input interface region and layout. The entry dependency check precedes
+private allocation: OUT/model-private pointers are distinguished from arbitrary
+caller pointers, which still require replay. These are the four materialised
+binding microvectors; general runtime/model/helper closure remains with bp-311.
+
+The console witness requires constant operands in LLVM operand order (store
+value before pointer). Device prologues may name globals absent from the callee:
+lproc hashes therefore use their own named-global closure; oracle hashes include
+the whole object layout and references in first-appearance order. The BLOCK CLI
+adapter now translates the published `mem=k0:hex` to `--mem k0=hex`; both input
+images execute instead of merely being indexed.
+
+| Object | LLVM 18 full published bytes | LLVM 23 full published bytes | Vectors per major |
+|---|---|---|---:|
+| inc8, including descriptor-reference | exact | exact | 6 |
+| binding-out-byte | exact | exact | 1 |
+| binding-clock-read | exact | exact | 1 |
+| binding-block-byte | exact | exact | 2 |
+| binding-console-byte | exact | exact | 1 |
+
+Whole scalar inventory: **12/20 → 16/20** exact objects, **35/35 → 40/40**
+published run vectors per major; C O3 inc8 also stays exact. Remaining scalar
+lifts: entry-replay-byte, rung4-mini, rung8-mini, listsum. Entry-stack and
+arena-o1 remain object-only obligations. Nothing is declared out of scope.
+
+| Corpus gate (run/agree/deferred/blocked/diverge) | Before, unchanged binaries | After, dry-run hook |
+|---|---|---|
+| LLVM 18 | 66/65/1/0/0 | 66/65/1/0/0 |
+| LLVM 23 | 66/65/1/0/0 | 66/65/1/0/0 |
+
+The fresh before **corpus** command exited 0. The initial pre-push encountered
+the newly strict binding tests with unchanged binaries and exited 1 (TDD red)
+before reaching the corpus suite; it is not recorded as a passing baseline
+pre-push. The after full headless gate, invoked by `git push --dry-run`, exited
+0: cells agree/run **920/924** (18), **788/792** (23). The sole corpus deferral
+remains fp-rot-fastmath-reassoc (bp-7ni, M2 §13).
+
+Other fresh checks: recognition **73/73**, **74/74**; analysis **17/17** each;
+reference images **6/6** each; materialisation and selected key checks **14/14**
+(18), **15/15** (23). Full materialised-key acceptance remains historically red
+at **18/49**, **19/50** from the fourth pass, not rerun or relabelled this pass.
+
+## Item A failure: determining requirements and tracked root cause
+
+The root cause is the missing implementation in this repository, not a missing
+source capability or an ISA classification. bp-2zv is updated and remains open.
+`tests/descriptors.py --major 18 --require-production` and major 23 both exit 1;
+their isolated production directories are empty. The default descriptor
+regression still exits 0 by explicitly checking the reference path and the loud
+production failure; it is **not** a production acceptance verdict.
+
+The determining accepted dialect §17.4 sentence requires that "marker calls lower
+to the region calls and `qreg.*` instructions of §18.3 with the handle register
+environment of §6.5". §19.9 requires "the host module with device entries replaced
+by launch stubs", plus device bitcode, ISA objects, certificate, coverage and
+resolved build records. ISA 0.8 §10: "A run executes a device CC entry". The
+current production branch instead calls `unimplemented` for CC/marker lowering;
+there is no host replacement or launch-record emitter. These requirements remain
+unmet. The pinned dialect publishes inc8's **reference oracle/lproc** object and
+no CC launch-object golden; §17.4 says CC/R lowering is plugin-defined. This
+fixture distinction does not waive production implementation or ABI execution.
+
+## Hook verification and evidence
+
+Unsetting `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` alone still failed the first
+actual dry-run: the installed hook symlink lives under `.git/hooks`, and root
+discovery there fails even with those variables unset. Resolving the symlink
+before `git rev-parse` fixes that second cause. The next actual
+`git -C /home/tobias/Projects/bennett-workspace/bennett-plugin push --dry-run`
+ran all gate suites and exited 0. **No push occurred.** bp-zk2 is closed;
+bp-311 is updated for the four completed lifts and stays open for its remaining
+outputs; bp-qql is unchanged. Exported `.beads/issues.jsonl` is committed by path.
+
+All commands used the headless unset-display prefix and project-local TMPDIR;
+no LLVM viewer passes or sibling modifications. verification.json records actual
+plugin digests, full-object hashes/symbols/vectors, both production diagnostics,
+the initial red gate and final dry-run exit. M1's broader fourth-pass audit,
+production launches, replay/calls/arena outputs, and Grover over unmodified
+SQLite remain required.
+
+---
+
 # Fourth pass — 2026-10-31 (partial item 1; M1 acceptance open)
 
 Code/tests landed in **95fa83f**. Accepted dialect remains **0.2.10 @ 023f5a7**, ISA **0.8**. No re-pin,

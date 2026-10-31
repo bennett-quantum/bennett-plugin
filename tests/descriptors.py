@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Descriptor built by C stores (§8.1): same reference object as §16 inc8."""
-import argparse,json,subprocess
-from contracts import ROOT as R,DIALECT
+import argparse,json,re,shutil,subprocess
+from contracts import ROOT as R,DIALECT,dialect_text
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();d=R/f'.tmp/descriptors/{a.major}';d.mkdir(parents=True,exist_ok=True)
+ p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);p.add_argument('--require-production',action='store_true',help='production smoke probe: an unimplemented diagnostic is failure');a=p.parse_args();d=R/f'.tmp/descriptors/{a.major}';d.mkdir(parents=True,exist_ok=True)
  # Use the published ABI header as a fixture, not a sibling implementation.
  header=subprocess.check_output(['git','-C',str(DIALECT),'show','023f5a7:spec/bennett_markers.h'],text=True);(d/'bennett_markers.h').write_text(header)
  # Field names are avoided so this tests the published positional ABI too.
@@ -21,9 +21,10 @@ void top(void) {
  tool=f'/usr/lib/llvm-{a.major}/bin/';ll=d/'in.ll'
  subprocess.run([tool+'clang','-O1','-emit-llvm','-S',src,'-o',ll],check=True)
  cmd=[tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-descriptor-reference','-bennett-scalar-stack=7','-bennett-out='+str(d),'-disable-output',str(ll)]
- x=subprocess.run(cmd,capture_output=True,text=True);obj=d/'oracle-0/ref.bennett';fixture=R/f'.tmp/scalars/{a.major}/inc8/ref.bennett';ok=x.returncode==0 and obj.exists() and obj.read_bytes()==fixture.read_bytes()
+ x=subprocess.run(cmd,capture_output=True,text=True);obj=d/'oracle-0/ref.bennett';fixture=re.search(r'```isa object=inc8\n(.*?)```',dialect_text(),re.S)[1].encode();ok=x.returncode==0 and obj.exists() and obj.read_bytes()==fixture
  # Production must still fail loudly until CC launch/object emission exists.
- production=subprocess.run([arg for arg in cmd if arg!='-bennett-descriptor-reference'],capture_output=True,text=True)
+ prod=d/'production';shutil.rmtree(prod,ignore_errors=True);prod.mkdir()
+ production=subprocess.run([('-bennett-out='+str(prod) if arg.startswith('-bennett-out=') else arg) for arg in cmd if arg!='-bennett-descriptor-reference'],capture_output=True,text=True)
  loud=production.returncode!=0 and 'unimplemented' in production.stderr
- result={'major':a.major,'descriptor_inc8_equal':ok,'production_unimplemented':loud,'diagnostic':x.stderr};(R/f'.tmp/descriptors-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return not(ok and loud)
+ result={'major':a.major,'descriptor_inc8_equal':ok,'production_unimplemented':loud,'production_exit':production.returncode,'production_artifacts':sorted(str(p.relative_to(prod)) for p in prod.rglob('*') if p.is_file()),'production_diagnostic':production.stderr,'diagnostic':x.stderr};(R/f'.tmp/descriptors-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return not(ok and (production.returncode==0 if a.require_production else loud))
 if __name__=='__main__':raise SystemExit(main())

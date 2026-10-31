@@ -1,17 +1,23 @@
 # Handoff: bennett-plugin
 
-State (2026-10-31): fourth-pass code/tests **95fa83f** advanced item 1; **M1 remains incomplete**.
+State (2026-10-31): fifth-pass bindings **384dd54**, hook fix **c91c288**;
+**requested production launch Item A and M1 remain incomplete**.
 No push. Accepted dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
 ISA **0.8**. Do not read/adopt the sibling working draft 0.2.11.
 
 Fresh dual-major headless gate: **66/65/1/0/0** per major
-(run/agree/deferred/blocked/diverge), exit 0 before and after. Sole deferral:
-fp-rot-fastmath-reassoc (M2 §13 / bp-7ni). Twelve full published objects and
-all 35 run vectors reproduce on each major; no additional example is complete.
+(run/agree/deferred/blocked/diverge). Fresh before corpus and after full hook
+gate exited 0. Initial pre-push encountered new strict binding tests with old
+binaries and exited 1 (TDD red), not a passing baseline gate. Sole deferral:
+fp-rot-fastmath-reassoc (M2 §13 / bp-7ni). Sixteen full published objects and
+all 40 run vectors reproduce on each major. The four new completed objects are
+binding-out-byte, binding-clock-read, binding-block-byte and binding-console-byte:
+strict red 0/4 → green 4/4, five vectors on each major. Descriptor-reference and
+C O3 inc8 remain exact. No production launch implementation landed.
 
-Fourth-pass checks: 17/17 analysis regressions, 6/6 address/provenance cases,
+Fresh fifth-pass checks: 17/17 analysis regressions, 6/6 address/provenance cases,
 14/14 materialisation fixtures and key assertions on LLVM 18, 15/15 of each on
-23. Full published key acceptance audit is separately **red**, 18/49 on 18,
+23. Historical fourth-pass full key acceptance remains **red**, 18/49 on 18,
 19/50 on 23 (four base assertions included). Run with `--all-fixtures`.
 PROGRESS has a witness/status row for every §4/§5 rule, every N rule and V1–V16.
 verification.json records actual digests, objects, hashes, vectors and failures.
@@ -23,12 +29,28 @@ source forwarding-thunk resolution makes the published N0 widenable wrapper an
 external intrinsic candidate, while its materialised body is defined `ret true`.
 The required virtual materialisation/resolve order needs clarification.
 
-Then item 2 (bp-2zv): production scalar descriptors/CC launch objects, host
-replacement, records; descriptor-reference is still test-only. Item 3 still
-requires binding-out-byte/clock-read/block-byte/console-byte, entry-replay-byte,
-rung4-mini, rung8-mini, listsum, entry-stack and arena-o1. Exact missing rows and
+The requested fifth-pass Item A (bp-2zv) still needs production scalar
+descriptors/CC launch objects, host replacement and records. Fresh
+`tests/descriptors.py --major <18|23> --require-production` exits 1 at CC/marker
+event lowering, with empty isolated production output directories. The default
+test checks reference equality and loud production failure; it is not acceptance.
+Determining requirements: accepted dialect §17.4 marker calls lower to region
+calls and qreg.* with §6.5's handle environment; §19.9 requires host launch stubs,
+device objects, certificates, coverage and resolved build records; ISA §10 says
+a run executes a device CC entry. This is a repository implementation gap.
+The pinned dialect publishes no CC launch-object golden (§17.4 is plugin-defined);
+the inc8 golden is the reference oracle/lproc object. No requirement is waived.
+
+Item 3 now still requires entry-replay-byte, rung4-mini, rung8-mini, listsum,
+entry-stack and arena-o1. Exact missing rows and
 existing mechanical owners bp-311/bp-qql are in PROGRESS/PLAN; none is out of scope.
 No new M2 deferral was added. Grover over unmodified SQLite remains core.
+
+bp-zk2 is closed: actual `git push --dry-run` ran the full dual-major gate
+and exited 0. No push. pre-push unsets GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE and
+resolves its installed symlink before root discovery; unsetting alone still
+started git inside .git/hooks and failed. PROGRESS and verification.json record
+the runs, object hashes and remaining production failure.
 
 Run the full regression gate from any directory:
 

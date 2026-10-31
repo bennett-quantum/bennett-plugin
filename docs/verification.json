@@ -1,25 +1,25 @@
 {
-  "recorded_at": "2026-10-31T13:35:23.921731+00:00",
-  "code_head": "95fa83f6f9640fa2fff85185b7a86cd833702580",
+  "recorded_at": "2026-10-31T13:53:06.985326+00:00",
+  "code_head": "c91c2887c227d481d447efeb7688aefdb868e9b1",
   "dialect": "0.2.10",
   "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
   "dialect_spec_sha256": "d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206",
   "isa": "0.8",
-  "contract_head": "4ce89793b3c920abd241e7d19d9a606a8880a237",
+  "contract_head": "472e2914a33b2c07d52c2d7f4d706443305c78d6",
   "contract_head_drift": true,
   "contract_worktree_drift": true,
   "accepted_contract_drift": false,
   "plugin_sha256": {
-    "18": "29459239830d88e38f4e1db663340c62b4e92d631b5f42b350fc7e1beeeec0d1",
-    "23": "d962512c0442c4517fd4073bdedafee910b1b6a65079ad94f68542b819308c51"
+    "18": "1d689c6e4f53f015e106d165edebb744ddc73812c38eb8ffe68ada7b516c23fb",
+    "23": "b6055984f6b64bf7d56dd81b7e7378a66e87be1b21b43b8102eee49f082a8452"
   },
   "pre_push_exit": 0,
   "before": {
-    "code_head": "2d5f323",
+    "code_head": "91a0d7d",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "plugin_sha256": {
-      "18": "194417c4d734426b6ad2885bd863c2096c88b366bef5ebd181030a21dc21535e",
-      "23": "75232545c696eb29f2d77661578f10bc8712c3f749a83db69a8a7521553640ce"
+      "18": "29459239830d88e38f4e1db663340c62b4e92d631b5f42b350fc7e1beeeec0d1",
+      "23": "d962512c0442c4517fd4073bdedafee910b1b6a65079ad94f68542b819308c51"
     },
     "corpus_summary": {
       "18": {
@@ -41,8 +41,9 @@
         "cases_diverge": 0
       }
     },
-    "pre_push_exit": 0,
-    "reason": "Reproduced clean third-pass HEAD before fourth-pass implementation."
+    "corpus_exit": 0,
+    "initial_pre_push_exit": 1,
+    "reason": "Fresh unchanged-binary corpus passed. Initial pre-push encountered the newly strict binding assertions and exited 1 (TDD red); it did not reach the corpus suite."
   },
   "corpus_summary": {
     "18": {
@@ -758,6 +759,9 @@
         "major": 18,
         "descriptor_inc8_equal": true,
         "production_unimplemented": true,
+        "production_exit": 1,
+        "production_artifacts": [],
+        "production_diagnostic": "bennett: unimplemented: \u00a717.4 CC/marker event lowering (milestone 3) at ; Function Attrs: nounwind uwtable\ndefine dso_local void @top() local_unnamed_addr #1 {\n  %1 = alloca %struct.Desc, align 8\n  %2 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 8) #5\n  %3 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 8) #5\n  %4 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 4) #5\n  call void @llvm.lifetime.start.p0(i64 64, ptr nonnull %1) #5\n  store i32 2, ptr %1, align 8, !tbaa !5\n  %5 = getelementptr inbounds %struct.anon, ptr %1, i64 0, i32 1\n  store i32 1, ptr %5, align 4, !tbaa !11\n  %6 = getelementptr inbounds %struct.anon, ptr %1, i64 0, i32 2\n  store i32 0, ptr %6, align 8, !tbaa !12\n  %7 = getelementptr inbounds %struct.anon, ptr %1, i64 0, i32 3\n  store i32 0, ptr %7, align 4, !tbaa !13\n  %8 = getelementptr inbounds %struct.anon, ptr %1, i64 0, i32 4\n  store ptr %3, ptr %8, align 8, !tbaa !14\n  %9 = getelementptr inbounds %struct.anon, ptr %1, i64 0, i32 5\n  store ptr %4, ptr %9, align 8, !tbaa !15\n  %10 = getelementptr inbounds %struct.Desc, ptr %1, i64 0, i32 1\n  store i32 1, ptr %10, align 8, !tbaa !16\n  %11 = getelementptr inbounds %struct.Desc, ptr %1, i64 0, i32 1, i64 0, i32 1\n  store i32 0, ptr %11, align 4, !tbaa !19\n  %12 = getelementptr inbounds %struct.Desc, ptr %1, i64 0, i32 1, i64 0, i32 2\n  store ptr %2, ptr %12, align 8, !tbaa !20\n  %13 = getelementptr inbounds %struct.Desc, ptr %1, i64 0, i32 1, i64 0, i32 3\n  call void @llvm.memset.p0.i64(ptr noundef nonnull align 8 dereferenceable(16) %13, i8 0, i64 16, i1 false)\n  call void @__bennett_oracle(ptr noundef nonnull @inc8, ptr noundef null, ptr noundef nonnull %1) #5\n  call void @__bennett_qfree(ptr noundef %4) #5\n  call void @__bennett_qfree(ptr noundef %3) #5\n  call void @__bennett_qfree(ptr noundef %2) #5\n  call void @llvm.lifetime.end.p0(i64 64, ptr nonnull %1) #5\n  ret void\n}\n\n",
         "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/descriptors/18/oracle-0/ref.bennett\nbennett: descriptor reference objects only; CC launches remain unimplemented: \u00a717.4 (milestone 3)\n"
       }
     },
@@ -1259,6 +1263,9 @@
         "major": 23,
         "descriptor_inc8_equal": true,
         "production_unimplemented": true,
+        "production_exit": 1,
+        "production_artifacts": [],
+        "production_diagnostic": "bennett: unimplemented: \u00a717.4 CC/marker event lowering (milestone 3) at ; Function Attrs: nounwind uwtable\ndefine dso_local void @top() local_unnamed_addr #1 {\n  %1 = alloca %struct.Desc, align 8\n  %2 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 8) #5\n  %3 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 8) #5\n  %4 = tail call ptr @__bennett_qalloc(i64 noundef 0, i64 noundef 4) #5\n  call void @llvm.lifetime.start.p0(ptr nonnull %1) #5\n  store i32 2, ptr %1, align 8, !tbaa !9\n  %5 = getelementptr inbounds nuw i8, ptr %1, i64 4\n  store i32 1, ptr %5, align 4, !tbaa !12\n  %6 = getelementptr inbounds nuw i8, ptr %1, i64 8\n  store i32 0, ptr %6, align 8, !tbaa !13\n  %7 = getelementptr inbounds nuw i8, ptr %1, i64 12\n  store i32 0, ptr %7, align 4, !tbaa !14\n  %8 = getelementptr inbounds nuw i8, ptr %1, i64 16\n  store ptr %3, ptr %8, align 8, !tbaa !15\n  %9 = getelementptr inbounds nuw i8, ptr %1, i64 24\n  store ptr %4, ptr %9, align 8, !tbaa !16\n  %10 = getelementptr inbounds nuw i8, ptr %1, i64 32\n  store i32 1, ptr %10, align 8, !tbaa !17\n  %11 = getelementptr inbounds nuw i8, ptr %1, i64 36\n  store i32 0, ptr %11, align 4, !tbaa !20\n  %12 = getelementptr inbounds nuw i8, ptr %1, i64 40\n  store ptr %2, ptr %12, align 8, !tbaa !21\n  %13 = getelementptr inbounds nuw i8, ptr %1, i64 48\n  call void @llvm.memset.p0.i64(ptr noundef nonnull align 8 dereferenceable(16) %13, i8 0, i64 16, i1 false)\n  call void @__bennett_oracle(ptr noundef nonnull @inc8, ptr noundef null, ptr noundef nonnull %1) #5\n  call void @__bennett_qfree(ptr noundef %4) #5\n  call void @__bennett_qfree(ptr noundef %3) #5\n  call void @__bennett_qfree(ptr noundef %2) #5\n  call void @llvm.lifetime.end.p0(ptr nonnull %1) #5\n  ret void\n}\n\n",
         "diagnostic": "bennett: scalar reference object /home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/descriptors/23/oracle-0/ref.bennett\nbennett: descriptor reference objects only; CC launches remain unimplemented: \u00a717.4 (milestone 3)\n"
       }
     }
@@ -1492,27 +1499,137 @@
         },
         {
           "name": "binding-out-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 9, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,1,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":9,\"steps\":10}"
+            }
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f",
+              "interface_hash": "d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f"
+            },
+            "ref": {
+              "closure_hash": "53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91",
+              "interface_hash": "53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91"
+            }
+          }
         },
         {
           "name": "binding-clock-read",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.3 device descriptor bindings (milestone 2) at define internal i8 @f() {\n  %c = load i64, ptr @__bennett_dev_clock_c, align 8\n  %n = add i64 %c, 1\n  store i64 %n, ptr @__bennett_dev_clock_c, align 8\n  %r = trunc i64 %c to i8\n  ret i8 %r\n}\n\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":3,\"steps\":16}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "L1": {
+              "closure_hash": "96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48",
+              "interface_hash": "96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48"
+            },
+            "ref": {
+              "closure_hash": "27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73",
+              "interface_hash": "27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73"
+            }
+          }
         },
         {
           "name": "binding-block-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %r = load i8, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":42,\"steps\":16}"
+            },
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":255,\"steps\":16}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "G2": {
+              "closure_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e",
+              "interface_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e"
+            },
+            "L1": {
+              "closure_hash": "f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0",
+              "interface_hash": "f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0"
+            },
+            "ref": {
+              "closure_hash": "04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4",
+              "interface_hash": "04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4"
+            }
+          }
         },
         {
           "name": "binding-console-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 120, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,1,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":120,\"steps\":27}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "G2": {
+              "closure_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e",
+              "interface_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e"
+            },
+            "G3": {
+              "closure_hash": "9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550",
+              "interface_hash": "9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550"
+            },
+            "L1": {
+              "closure_hash": "e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db",
+              "interface_hash": "e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db"
+            },
+            "ref": {
+              "closure_hash": "82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5",
+              "interface_hash": "82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5"
+            }
+          }
         },
         {
           "name": "entry-replay-byte",
@@ -1776,16 +1893,12 @@
         }
       ],
       "deferred": [
-        "binding-out-byte",
-        "binding-clock-read",
-        "binding-block-byte",
-        "binding-console-byte",
         "entry-replay-byte",
         "rung4-mini",
         "rung8-mini",
         "listsum"
       ],
-      "passed": 12
+      "passed": 16
     },
     "23": {
       "major": 23,
@@ -2015,27 +2128,137 @@
         },
         {
           "name": "binding-out-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 9, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,1,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":9,\"steps\":10}"
+            }
+          ],
+          "symbols": {
+            "L1": {
+              "closure_hash": "d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f",
+              "interface_hash": "d6d4b832fb8db9fc5b958869e19e2e40b09f48bdae7b025ad992dc158a03c85f"
+            },
+            "ref": {
+              "closure_hash": "53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91",
+              "interface_hash": "53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91"
+            }
+          }
         },
         {
           "name": "binding-clock-read",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.3 device descriptor bindings (milestone 2) at define internal i8 @f() {\n  %c = load i64, ptr @__bennett_dev_clock_c, align 8\n  %n = add i64 %c, 1\n  store i64 %n, ptr @__bennett_dev_clock_c, align 8\n  %r = trunc i64 %c to i8\n  ret i8 %r\n}\n\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":3,\"steps\":16}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "L1": {
+              "closure_hash": "96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48",
+              "interface_hash": "96dc6b23dc45a2ae237008b19b5d4b6ec1d142e94329871d57cf797199dfbe48"
+            },
+            "ref": {
+              "closure_hash": "27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73",
+              "interface_hash": "27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73"
+            }
+          }
         },
         {
           "name": "binding-block-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   %r = load i8, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":42,\"steps\":16}"
+            },
+            {
+              "input": "",
+              "budget": "64,0,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":255,\"steps\":16}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "G2": {
+              "closure_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e",
+              "interface_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e"
+            },
+            "L1": {
+              "closure_hash": "f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0",
+              "interface_hash": "f446e3af7690839e9a32c9a63b7bd87030b2d874ce5bc6fb426fbced076df0f0"
+            },
+            "ref": {
+              "closure_hash": "04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4",
+              "interface_hash": "04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4"
+            }
+          }
         },
         {
           "name": "binding-console-byte",
-          "lowered": false,
-          "error": "bennett: unimplemented: \u00a78.5 entry-state replay / \u00a717.3 shadow-stack memory (milestone 2) at   store i8 120, ptr %p, align 1\n",
-          "deferred": true
+          "lowered": true,
+          "check": true,
+          "fixture_equal": true,
+          "hash_fixture_equal": true,
+          "object_hash": "c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf",
+          "runs": [
+            {
+              "input": "",
+              "budget": "64,1,128,8",
+              "ok": true,
+              "output": "{\"code\":0,\"payload\":120,\"steps\":27}"
+            }
+          ],
+          "symbols": {
+            "G1": {
+              "closure_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8",
+              "interface_hash": "3a60742cd66a29ff962e5c5d7d7826179e62c216f129a53f18177fac4416f0e8"
+            },
+            "G2": {
+              "closure_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e",
+              "interface_hash": "152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e"
+            },
+            "G3": {
+              "closure_hash": "9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550",
+              "interface_hash": "9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550"
+            },
+            "L1": {
+              "closure_hash": "e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db",
+              "interface_hash": "e7ae395ec28f1ca3f2f30e81046b4b4a79ae95295a900a5d687daae2177486db"
+            },
+            "ref": {
+              "closure_hash": "82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5",
+              "interface_hash": "82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5"
+            }
+          }
         },
         {
           "name": "entry-replay-byte",
@@ -2299,16 +2522,12 @@
         }
       ],
       "deferred": [
-        "binding-out-byte",
-        "binding-clock-read",
-        "binding-block-byte",
-        "binding-console-byte",
         "entry-replay-byte",
         "rung4-mini",
         "rung8-mini",
         "listsum"
       ],
-      "passed": 12
+      "passed": 16
     }
   },
   "acceptance_audits": {
@@ -3735,7 +3954,7 @@
     "general_reference_audit_and_all_rule_keys": "bp-3w4",
     "intrinsic_thunk_ordering_question": "bp-tr5",
     "production_descriptors_CC_launches_host_stubs_records": "bp-2zv",
-    "rung1_scalar_examples_missing": 8,
+    "rung1_scalar_examples_missing": 4,
     "object_only_vectors_not_emitted": [
       "entry-stack",
       "arena-o1"
@@ -3743,7 +3962,7 @@
   },
   "existing_mechanical_deferrals": {
     "FP": "bp-7ni: section 13.1 helpers and native comparison linking",
-    "memory_bindings_calls": "bp-311: sections 8.5/16.2/16.4; eight scalar lifts and entry-stack"
+    "memory_bindings_calls": "bp-311: sections 8.5/16.2/16.4; four remaining scalar lifts and entry-stack"
   },
   "limits": [
     "No full section 21 conformance claim: L4 compares keys across the plugin, not every materialised optimisation pipeline.",
@@ -3770,7 +3989,7 @@
       "target_fault": "XOR delivery is independent of their entry values"
     }
   },
-  "historical_step_check_provenance": "Previous passes, unchanged inc8/switch5 bytes, 256 inputs each; not re-run in fourth pass. add2 exhaustive timeout remains historical.",
+  "historical_step_check_provenance": "Earlier passes; unchanged inc8/switch5 bytes, 256 inputs each. Not rerun in fifth pass; add2 exhaustive timeout remains historical.",
   "example_byte_equality": [
     {
       "name": "oracle-empty-output",
@@ -3809,23 +4028,23 @@
     },
     {
       "name": "binding-out-byte",
-      "18": false,
-      "23": false
+      "18": true,
+      "23": true
     },
     {
       "name": "binding-clock-read",
-      "18": false,
-      "23": false
+      "18": true,
+      "23": true
     },
     {
       "name": "binding-block-byte",
-      "18": false,
-      "23": false
+      "18": true,
+      "23": true
     },
     {
       "name": "binding-console-byte",
-      "18": false,
-      "23": false
+      "18": true,
+      "23": true
     },
     {
       "name": "entry-replay-byte",
@@ -3885,5 +4104,48 @@
       "reason": "No published LLVM lift source; not compiler-emitted."
     }
   ],
-  "new_deferrals": []
+  "new_deferrals": [],
+  "hook_verification": {
+    "command": "git -C /home/tobias/Projects/bennett-workspace/bennett-plugin push --dry-run",
+    "exit": 0,
+    "gate_executed": true,
+    "pushed": false,
+    "fixes": [
+      "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE",
+      "resolve installed hook symlink before git root discovery"
+    ],
+    "red_exit": 128,
+    "first_dry_run_exit": 1,
+    "first_dry_run_error": "fatal: this operation must be run in a work tree",
+    "first_dry_run_cause": "Unsetting alone leaves root discovery inside .git/hooks."
+  },
+  "acceptance_audit_provenance": {
+    "all_published_materialised_keys": "Historical fourth-pass runs recorded at 2026-10-31T13:35:23.921731+00:00; not rerun in fifth pass. Analysis/key implementation unchanged.",
+    "production_scalar": "Fresh --require-production smoke probes on both majors: exit 1, no production artefacts."
+  },
+  "fifth_pass": {
+    "bindings": {
+      "red": {
+        "18": "0/4; exit 1",
+        "23": "0/4; exit 1"
+      },
+      "green": {
+        "18": "4/4; five vectors",
+        "23": "4/4; five vectors"
+      }
+    },
+    "production_scalar": {
+      "18": "red; exit 1",
+      "23": "red; exit 1",
+      "bead": "bp-2zv",
+      "root_cause": "BennettPass still rejects CC/marker event lowering; host replacement and launch records are not implemented.",
+      "determining_requirements": [
+        "dialect 0.2.10 section 17.4: marker calls lower to region calls and qreg.* instructions with the handle register environment of section 6.5",
+        "dialect 0.2.10 section 19.9: host module with device entries replaced by launch stubs; ISA objects, certificate, coverage and build record",
+        "ISA 0.8 section 10: A run executes a device CC entry."
+      ],
+      "published_cc_launch_golden": false,
+      "golden_note": "Section 17.4 makes CC/R lowering plugin-defined. inc8 is a published reference oracle/lproc object, not a CC launch object; this does not waive production obligations."
+    }
+  }
 }
