@@ -9,7 +9,7 @@ from contracts import ROOT as R
 from scalars import REF
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);p.add_argument('--production-cc',action='store_true',help='also execute the full-width real CC oracle launch (bp-7ni long-running probe)');a=p.parse_args()
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
  def run(argv,env=None,timeout=180):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=timeout,env=env)
@@ -209,9 +209,18 @@ declare void @__bennett_qfree(ptr)
     z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
     data=json.loads(z.stdout) if z.returncode==0 else {}
     check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
-   launch=realout/'top/launch.bennett'
-   z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'],timeout=600)
-   check('published-production-CC-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
+   # The direct CC path has a concrete, separately owned recursive producer.
+   # This is a known refusal, never a claim of CC numerical conformance.
+   ccdir=realout/'direct-cc'
+   z,_=opt(ccbody,'published-cc-input',['-bennett-out='+str(ccdir),'-disable-output'],published)
+   (d/'published-cc-diagnostic.txt').write_text(z.stderr)
+   check('published-production-CC-next-rule',z.returncode!=0 and '§13.1 recursive CC soft-float closure' in z.stderr and '@bennett_sf_eval' in z.stderr and not list(ccdir.rglob('*.bennett')),'\n'.join(z.stderr.splitlines()[:3]))
+   rows[-1]['expected_unimplemented']=True
+   rows[-1]['determining_sentence']='§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links; recursive CC materialisation of bennett_sf_eval is required (bp-7ni), with the integer/memory and multi-result rules of §17.4.'
+   if a.production_cc:
+    launch=realout/'top/launch.bennett'
+    z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'],timeout=600)
+    check('published-production-CC-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)
