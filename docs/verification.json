@@ -1,23 +1,28 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "m2-fourth-bp-3w4",
+    "name": "thirteenth",
     "date": "2026-10-31",
     "commits": [
-      "88649d6",
-      "d946f36",
-      "58b7817",
-      "540d57a",
-      "1f45b38"
+      "8511b3a",
+      "0b38364",
+      "f64706d",
+      "6315583",
+      "610365b",
+      "923900c",
+      "3530bdf",
+      "0881670",
+      "ed5ae4e",
+      "d592014"
     ],
-    "code_head": "1f45b38be1d5e574353aa00b64660760bfa561b4",
-    "recorded_at": "2026-10-31T17:31:50+00:00",
+    "code_head": "d5920147cc14a87789f602c10974aec4dd24a40a",
+    "recorded_at": "2026-10-31T18:08:36+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
     "plugin_sha256": {
-      "18": "94d9946fba5d8cc23484b8da0ceb22316f2b758d566c9c3c5c95a7d0bf538c56",
-      "23": "64433760b8c1c666846213609e89781801c8db0567cbebdee4cc0ff6f397befa"
+      "18": "50c587b7738c3386b1af732cc2196ffc445187a1f3a91206c29f3ee3b4dce0fb",
+      "23": "b74ca7ff6d1e2fbd2a20ad9ca715df2d8ed27e75ddeffde372822ebca85d05d9"
     },
     "gate": {
       "command": "scripts/gate",
@@ -91,26 +96,26 @@
           "passed": 17
         },
         "reference-images": {
-          "cases": 10,
-          "passed": 10
+          "cases": 23,
+          "passed": 23
         },
         "materialisation": {
-          "cases": 17,
-          "passed": 17
+          "cases": 22,
+          "passed": 22
         },
         "region-keys": {
-          "cases": 17,
-          "passed": 17
+          "cases": 31,
+          "passed": 31
         },
         "validation": {
-          "cases": 46,
-          "passed": 46
+          "cases": 49,
+          "passed": 49
         },
         "full-key-audit": {
           "cases": 49,
-          "matched": 21,
-          "unmatched": 28,
-          "accounted": 28,
+          "matched": 26,
+          "unmatched": 23,
+          "accounted": 23,
           "unaccounted": []
         },
         "descriptors": {
@@ -179,26 +184,26 @@
           "passed": 17
         },
         "reference-images": {
-          "cases": 10,
-          "passed": 10
+          "cases": 23,
+          "passed": 23
         },
         "materialisation": {
-          "cases": 18,
-          "passed": 18
+          "cases": 23,
+          "passed": 23
         },
         "region-keys": {
-          "cases": 18,
-          "passed": 18
+          "cases": 32,
+          "passed": 32
         },
         "validation": {
-          "cases": 46,
-          "passed": 46
+          "cases": 49,
+          "passed": 49
         },
         "full-key-audit": {
           "cases": 50,
-          "matched": 22,
-          "unmatched": 28,
-          "accounted": 28,
+          "matched": 27,
+          "unmatched": 23,
+          "accounted": 23,
           "unaccounted": []
         },
         "descriptors": {

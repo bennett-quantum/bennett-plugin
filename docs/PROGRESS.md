@@ -101,3 +101,9 @@ PT2 finite Cartesian modulo-I GEP images and exact bound intersections, PT12 wra
 N21 packed i24 memory and bitcast geometry: materialisation/keys 17/17 on LLVM 18, 18/18 on 23; independent V1–V16 reader 46/46 each.
 Full raw key audit 18/49→21/49 and 19/50→22/50; all 28 unequal witnesses have determining-sentence beads; raw audit stays red, no completion claimed.
 Final gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal object pairs, 45 published matches, all 232 previous hashes preserved.
+
+### Pass 13 - 2026-10-31 - 8511b3a..d592014 (bp-3w4 closed under explicit audit-accounting exception)
+PT2/PT5 symbolic finite and wide images, PT8 partial copies/PT12 opaque transfers, and host/device boundary seeds; reference_images 23/23 per major.
+N21 VP/vector and N27 integer expansions; indirect/helper/thunk closure keys 31/31 on LLVM 18, 32/32 on 23; automatic L validator 49/49 each.
+Full raw key audit 21/49→26/49 and 22/50→27/50 stays red; all 23 remainders per major have exact determining sentences and concrete reasons in open bd owners.
+Final complete gate exit 0, 66/65/1/0/0 each, no new deferrals; 232 equal pairs, 45 published matches, all 232 previous hashes preserved; earlier boundary/pruning failures fixed.
