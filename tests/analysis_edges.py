@@ -46,10 +46,15 @@ define internal i8 @copy(ptr byval(i8) %p) {
  %v = load i8, ptr %p
  ret i8 %v
 }
-define i8 @top() {
+define internal i8 @top() {
  %r = call i8 @copy(ptr byval(i8) @seed)
  %v = load i8, ptr @seed
  ret i8 %v
+}
+declare void @__bennett_oracle(ptr,ptr,ptr)
+define void @host() {
+ call void @__bennett_oracle(ptr @top,ptr null,ptr null)
+ ret void
 }''', [('top','%v',{'INT(7)'}),('copy','%v',{'INT(7)','INT(9)'})]),
 'packed':('''define i64 @top() {
  %v = bitcast <2 x i32> <i32 1, i32 2> to i64

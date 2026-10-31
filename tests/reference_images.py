@@ -146,6 +146,34 @@ define i32 @top(i1 %c) {
  ret i32 %v
 }""", set(), True),
 
+    'PT11-host-caller-constant-argument': (
+        'e-p:64:64',
+        """define internal i8 @leaf(i8 %x) {
+ %v = add i8 %x, 0
+ ret i8 %v
+}
+define i8 @top() {
+ %r = call i8 @leaf(i8 7)
+ ret i8 %r
+}""", set(), True),
+    'PT11-device-only-address-use': (
+        'e-p:64:64',
+        """@table = internal constant ptr @leaf
+declare void @__bennett_oracle(ptr,ptr,ptr)
+define internal i8 @leaf(i8 %x) {
+ %v = add i8 %x, 0
+ ret i8 %v
+}
+define internal i8 @region() {
+ %fp = load ptr, ptr @table
+ %r = call i8 %fp(i8 7)
+ ret i8 %r
+}
+define void @top() {
+ call void @__bennett_oracle(ptr @region,ptr null,ptr null)
+ ret void
+}""", {'INT(7)'}, False),
+
     'PT12-uinc-wrap-select-union': (
         'e-p:64:64',
         """@g = internal global i8 0

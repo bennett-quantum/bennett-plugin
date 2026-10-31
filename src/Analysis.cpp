@@ -1445,18 +1445,52 @@ void Analysis::run() {
   for (GlobalVariable &g : M.globals())
     if (g.hasInitializer())
       seed(g.getInitializer(), &g, 0, g.getValueType());
-  for (Function &f : M)
-    if (!f.isDeclaration() && (!f.hasLocalLinkage() || f.hasAddressTaken() || &f==Entry))
-      for (Argument &a : f.args()) {
-        if (a.getType()->isPointerTy()) {
-          values[&a].merge(atom(Atom::Ptr));
-          values[&a].merge(atom(Atom::Root, &a));
-        } else
-          values[&a].top = true;
+  std::set<Function *> host,entries;
+  for(Function &f:M)if(!f.isDeclaration() && !f.hasLocalLinkage())host.insert(&f);
+  if(Entry)entries.insert(Entry);
+  auto seedParameters=[&](Function *f,bool boundary) {
+    if(!f || f->isDeclaration())return;
+    for(Argument &arg:f->args())for(auto &leaf:leaves(arg.getType(),M.getDataLayout())) {
+      AV value;
+      if(leaf.type->isPointerTy()) {
+        value=atom(Atom::Ptr,nullptr,0,-1);
+        if(boundary)value.merge(atom(Atom::Root,&arg));
+      } else value.top=true;
+      setField(&arg,leaf.path,value);
+    }
+  };
+  // Host reachability, address uses and device boundaries grow together with
+  // PT9 and region candidates. An address used only by device code is not a
+  // host seed. Region edges start a new entry and do not inherit H.
+  auto seeds=[&]() {
+    for(auto *f:host) {
+      std::set<Value *> visited;
+      std::function<void(Value *)> use=[&](Value *v) {
+        if(!visited.insert(v).second)return;
+        if(auto *g=resolve(v)) {if(!g->isDeclaration())changed|=host.insert(g).second;return;}
+        if(auto *g=dyn_cast<GlobalVariable>(v)) {if(g->hasInitializer())use(g->getInitializer());return;}
+        if(auto *c=dyn_cast<Constant>(v))for(Value *operand:c->operands())use(operand);
+      };
+      bool markersHere=false;
+      for(auto &i:instructions(f)) {
+        auto *call=dyn_cast<CallBase>(&i);auto *callee=call?call->getCalledFunction():nullptr;
+        if(callee && markers().count(callee->getName().str())) {markersHere=true;continue;}
+        for(Value *operand:i.operands())use(operand);
       }
+      for(auto *g:edges[f])changed|=host.insert(g).second;
+      if(markersHere)changed|=entries.insert(f).second;
+      seedParameters(f,entries.count(f));
+    }
+    for(Function &f:M)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
+      if(auto *g=call->getCalledFunction())for(unsigned p:regionOperands(g->getName()))
+        for(auto *candidate:candidates(call->getArgOperand(p)))
+          if(!candidate->isDeclaration())changed|=entries.insert(candidate).second;
+    for(auto *f:entries)seedParameters(f,true);
+  };
   unsigned rounds = 0;
   do {
     changed = false;
+    seeds();
     for (Function &f : M)
       for (Instruction &i : instructions(f))
         step(i);
@@ -1491,8 +1525,7 @@ void Analysis::run() {
   std::map<Function *, std::set<Function *>> full = edges;
   for (Function &f : M)
     if (!f.isDeclaration()) {
-      if (!f.hasLocalLinkage())
-        tiers[&f].insert("H");
+      if (host.count(&f))tiers[&f].insert("H");
       if (&f==Entry)tiers[&f].insert("CC");
       for (Argument &a : f.args())
         if (get(&a).roots())
