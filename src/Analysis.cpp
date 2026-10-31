@@ -803,7 +803,12 @@ static AV laneBinary(unsigned opcode,const AV &x,const AV &y,Module &m) {
       auto *left=ConstantInt::get(m.getContext(),a.integer),*right=ConstantInt::get(m.getContext(),b.integer);
       Constant *fold=ConstantFoldBinaryOpOperands(opcode,left,right,m.getDataLayout());
       if(auto *c=dyn_cast_or_null<ConstantInt>(fold))value.merge(integer(c->getValue()));
-      else if(fold && (isa<PoisonValue>(fold)||isa<UndefValue>(fold)))value.merge(integer(APInt(a.integer.getBitWidth(),0)));
+      else if(fold && (isa<PoisonValue>(fold)||isa<UndefValue>(fold))) {
+        // Only N14 totalises a dynamic operation to zero. A divide fault
+        // produces no result; N7 zeroes constants, not a faulting operation.
+        if(opcode==Instruction::Shl || opcode==Instruction::LShr || opcode==Instruction::AShr)
+          value.merge(integer(APInt(a.integer.getBitWidth(),0)));
+      }
       else value.top=true;
     } else {
       value.top=true;

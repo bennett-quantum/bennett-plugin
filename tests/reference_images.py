@@ -197,6 +197,14 @@ define i32 @top() {
  ret i32 %v
 }""", {'INT(3)','INT(7)'}, False),
 
+    'N21-faulting-division-no-result': (
+        'e-p:64:64',
+        """define i8 @top() {
+ %x = udiv <2 x i8> <i8 7,i8 8>, <i8 0,i8 1>
+ %v = extractelement <2 x i8> %x, i32 0
+ ret i8 %v
+}""", set(), False),
+
     'PT12-uinc-wrap-select-union': (
         'e-p:64:64',
         """@g = internal global i8 0

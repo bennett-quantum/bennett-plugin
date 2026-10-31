@@ -21,11 +21,13 @@ for bead in beads:
   assert witness not in owners,(witness,owners.get(witness),bead['id'])
   sentences=meta.get('determining_sentences',[])
   assert sentences and all(sentence in spec for sentence in sentences),(bead['id'],'missing accepted determining sentence')
-  owners[witness]=bead['id']
+  reason=meta.get('audit_remainder_reason','')
+  assert reason.strip(),(bead['id'],'missing concrete remainder reason')
+  owners[witness]=(bead['id'],reason)
 remaining=[];unaccounted=[]
 for row in raw['published_closures']:
  if not row['ok']:
-  obligation=owners.get(row['fixture']);remaining.append(dict(witness=row['fixture'],bead=obligation))
+  obligation=owners.get(row['fixture']);remaining.append(dict(witness=row['fixture'],bead=obligation[0] if obligation else None,reason=obligation[1] if obligation else None))
   if not obligation:unaccounted.append(row['fixture'])
 # The four local identity checks must never be filed away as producer gaps.
 assert all(raw['closure_checks'].values()),raw['closure_checks']
