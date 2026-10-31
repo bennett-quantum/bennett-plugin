@@ -55,7 +55,7 @@ def object_paths(tmp, major, scalars):
         for rel in ('launch.bennett', 'oracle-0/ref.bennett'):
             out.append((f'production/{case}/{rel}', tmp / f'production/{major}/{case}/out/top/{rel}'))
     out.append(('production/abi/launch.bennett', tmp / f'production/{major}/abi/out/abi/launch.bennett'))
-    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage', 'entry-snapshot', 'softfloat', 'wide'):
+    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage', 'entry-snapshot', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime'):
         base = tmp / f'{family}/{major}'
         for p in sorted(base.rglob('*.bennett')):
             out.append((f'{family}/{p.relative_to(base)}', p))
@@ -85,7 +85,7 @@ def main():
     checks, scalars = {}, {}
     for m in MAJORS:
         c = {}
-        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'softfloat', 'wide', 'region-keys', 'validation'):
+        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}

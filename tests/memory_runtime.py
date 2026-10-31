@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """N26: every memory intrinsic, ordinary helper closure, logical memory and faults."""
-import argparse,ctypes,json,re,subprocess,random
+import argparse,ctypes,json,re,subprocess,shutil
 from contracts import ROOT as R
 from scalars import REF
-p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();d=R/f'.tmp/memory-runtime/{a.major}';d.mkdir(parents=True,exist_ok=True);tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
+p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();d=R/f'.tmp/memory-runtime/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True,exist_ok=True);tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
 def run(args):
  z=subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=180);assert z.returncode==0,z.stderr;return z
 source=[];cases=[]
@@ -45,7 +45,7 @@ define internal i8 @f() {{{{
   run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=f','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-scalar-shape=;tgt=8','-bennett-out='+str(case),'-disable-output',src]);obj=case/'ref.bennett';run([REF,'check',obj])
   bad=dest+length>16 or (not fill and start+length>16)
   data=json.loads(run([REF,'run-oracle',obj,'ref','--input','','--budget','100000,4096,4096,128']).stdout)
-  if bad:assert data['code']!=0,data
+  if bad:assert data['code']==7,data
   else:
    want=bytearray(range(16));want[dest:dest+length]=bytes([171])*length if fill else bytes(range(16))[start:start+length];assert data['code']==0 and data['payload']==want[4],data
   rows.append(case.name+'/ISA-overlap-logical-bounds')

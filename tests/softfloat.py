@@ -12,7 +12,7 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
- def run(argv,env=None):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=60,env=env)
+ def run(argv,env=None):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=180,env=env)
  env=dict(os.environ);env['BENNETT_ARITH_BITCODE']=''
  def opt(body,name,flags,linked=None):
   src=d/(name+'.ll');src.write_text(body);dest=d/name
@@ -38,6 +38,10 @@ def main():
   z,_=opt(body,op,['-bennett-normalise-only','-S','-o','-'])
   helper={'fadd':'add','fsub':'sub','fmax':'maxnum','fmin':'minnum'}.get(op,op[1:])
   check('N9-'+op,z.returncode==0 and '@__bennett_sf_'+helper+'_f64' in z.stdout and 'atomicrmw' not in z.stdout,z.stderr)
+ if a.major==23:
+  body='define void @f(ptr initializes((0, 4)) %p) { store i32 0,ptr %p\n ret void }'
+  z,_=opt(body,'N3-range-list',['-bennett-normalise-only','-S','-o','-'])
+  check('N3-range-list-attribute',z.returncode==0 and 'initializes' not in z.stdout,z.stderr)
  # Each carrier-call family uses the prescribed result and operand widths.
  for op,argc in [('sqrt',1),('floor',1),('ceil',1),('trunc',1),('round',1),('roundeven',1),('rint',1),('nearbyint',1),('canonicalize',1),('minnum',2),('maxnum',2),('minimum',2),('maximum',2),('fma',3)]:
   args=', '.join('double %x' for _ in range(argc));types=', '.join('double' for _ in range(argc))
@@ -188,13 +192,23 @@ declare void @__bennett_qfree(ptr)
   for level in (0,3):
    exe=d/f'real-O{level}';z=run([tool+'clang',f'-O{level}',realbc,main,'-o',exe],realenv)
    check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
- # N22 is exercised by the real published closure, then the next rule is exact.
- realout=d/'real-production'
- z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-bennett-budget-default=1000,4096,4096,128,128','-disable-output',d/'production-input.ll'],realenv)
- expected=('§14 calls (missing linked definition)' in z.stderr and '__bennett_rt_memmove' in z.stderr) if a.major==18 else ('§12.8 N27 wide integer intrinsic (bp-jx3)' in z.stderr and '@llvm.ctlz.i512' in z.stderr)
- check('published-production-next-rule',z.returncode!=0 and expected and not list(realout.rglob('*.bennett')),z.stderr)
- rows[-1]['expected_unimplemented']=True
- rows[-1]['determining_sentence']=('N26: call void @__bennett_rt_memmove(ptr d, ptr s, i64 n); production runtime closure is required.' if a.major==18 else 'N27: the fixed expansions of §12.8; ctlz of i512 requires the wide slot ABI (bp-jx3).')
+ # Real published production: LLVM18's next producer is flattened aggregate rows.
+ # Major-local probes are recorded separately from the byte-identical object suite.
+ realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv)
+ if a.major==18:
+  expected='§16.4 scalar row' in z.stderr and 'extractvalue { i64, i64 }' in z.stderr
+  check('published-production-next-rule',z.returncode!=0 and expected and not list(realout.rglob('*.bennett')),z.stderr)
+  rows[-1]['expected_unimplemented']=True
+  rows[-1]['determining_sentence']='§16.4: insertvalue/extractvalue use lift.mov of the depth-first flattened field locations; aggregate call results are unpacked field by field (bp-1us).'
+ else:
+  check('published-production-link',z.returncode==0,z.stderr)
+  if z.returncode==0:
+   obj=realout/'top/oracle-0/ref.bennett';z=run([REF,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
+   for value in [0,1,0x3ff0000000000000,0x7ff0000000000000,0x7ff8000000000000]:
+    z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
+    data=json.loads(z.stdout) if z.returncode==0 else {}
+    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)
