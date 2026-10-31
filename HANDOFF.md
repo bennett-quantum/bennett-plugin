@@ -1,3 +1,7 @@
+Sub-item 4: heterogeneous union layouts, source-global identities, data-pointer
+relocations and per-oracle region mappings; three objects check and six runs per
+major verify payloads/failure zeros. Standalone reference objects remain available.
+
 Sub-item 3: combined device model lists, null console and §8.6 multiple-output
 projection/copy/uncompute lowering. Two check objects / four runs per major.
 Return+CONSOLE with data globals still needs the sub-item 4 linker below.

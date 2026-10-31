@@ -1,3 +1,14 @@
+# Eighth pass sub-item 4 — heterogeneous production layouts
+
+Production linking now retains source global identities, unions aligned global
+images, relocates global pointers, lays out each oracle's interface regions,
+freezes common heap/stack/address/table capacities and recomputes data/lproc/
+oracle/CC hashes. Standalone references are retained byte-for-byte. Three new
+objects check on both majors: distinct global layouts, relocated pointer globals,
+and return plus CONSOLE. Six runs per major check observed values and common
+budget-failure zeros. Arbitrary source call-graph lifts remain their existing
+obligations; no work expanded into them or checked executable claims.
+
 # Eighth pass sub-item 3 — combined devices and multiple outputs
 
 Device lists support combined models and null CONSOLE. Multiple outputs compile

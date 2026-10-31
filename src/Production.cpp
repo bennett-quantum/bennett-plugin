@@ -193,6 +193,7 @@ struct Entry {
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
   std::vector<std::string> references;
+  std::vector<std::map<std::string,std::string>> referenceGlobals;
   json::Array coverage;
   std::map<std::string, std::pair<std::string, std::string>> actions;
   unsigned next = 0, ordinal = 0;
@@ -520,7 +521,8 @@ struct Entry {
     normaliseScalar(*cf);
     auto path = out + "/oracle-" + std::to_string(references.size());
     auto capacities = table.capacities;
-    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection);
+    std::map<std::string,std::string> globalNames;
+    lowerScalar(*clone, *cf, current, path, capacities[2], capacities[1], projection, &globalNames);
     auto candidate = read(path + "/ref.bennett");
     auto selection = oracleIdentity(candidate);
     table.overlay(budget, selection);
@@ -530,9 +532,9 @@ struct Entry {
       {"region_key", regionKey(callee)}, {"symbol", callee->getName()}, {"shape", current},
       {"selection_identity", selection}, {"identity", oracleIdentity(candidate)},
       {"baseline", tuple(baseline)}, {"resolved", tuple(budget)}});
-    auto it = std::find(references.begin(), references.end(), candidate);
-    unsigned ri = it - references.begin();
-    if (it == references.end()) references.push_back(candidate);
+    unsigned ri = 0;
+    while (ri < references.size() && (references[ri] != candidate || referenceGlobals[ri] != globalNames)) ++ri;
+    if (ri == references.size()) { references.push_back(candidate); referenceGlobals.push_back(globalNames); }
     else sys::fs::remove_directories(path);
     if (ri) refName += std::to_string(ri);
     if (reference.empty()) { reference = candidate; shape = current; refPath = path; }
@@ -837,10 +839,140 @@ struct Entry {
 };
 // ISA envelopes are derived from generated functions and reference metadata.
 // Keep the standalone reference object untouched for byte-exact comparison.
+std::map<std::string,std::string> objectSections(StringRef object) {
+  std::map<std::string,std::string> sections;
+  auto pos=object.find("\n\nsection ");
+  while(pos!=StringRef::npos) {
+    auto start=pos+10,end=object.find('\n',start),next=object.find("\n\nsection ",end);
+    sections[object.slice(start,end).str()]=object.slice(end+1,next).rtrim().str();pos=next;
+  }
+  return sections;
+}
+// Unified production layout. Standalone reference files retain their original
+// images/layout/hash for independent published-object comparisons.
+std::string linkReferences(Entry &e) {
+  auto &dl=e.m.getDataLayout(); auto pw=dl.getPointerSizeInBits();
+  std::string prefix="isa=0.8\nptr_width="+std::to_string(pw)+"\n";
+  struct Symbol { std::string name,kind,body; json::Value sig; };
+  std::vector<Symbol> functions;
+  std::map<std::string,std::string> globalSymbols, data, dataSignatures;
+  std::map<std::string,uint64_t> bases,sizes;
+  std::set<std::string> used;
+  for (auto &names:e.referenceGlobals) for (auto &n:names) used.insert(n.second);
+  uint64_t base=4096;
+  for (auto &g:e.m.globals()) if (used.count(g.getName().str())) {
+    auto key=g.getName().str(),name="G"+std::to_string(globalSymbols.size()+1);
+    globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=base;
+    sizes[name]=dl.getTypeAllocSize(g.getValueType()).getFixedValue();base+=sizes[name];
+  }
+  for(auto &key:used) if(!globalSymbols.count(key)) {
+    // Model state materialised only in a scalar clone has the published i64
+    // default image; its source name still identifies it across wrappers.
+    if(!StringRef(key).starts_with("__bennett_dev_")) unimplemented("§19.5 unnamed unified global",1,&e.f);
+    auto name="G"+std::to_string(globalSymbols.size()+1);globalSymbols[key]=name;
+    base=alignTo(base,uint64_t(8));bases[name]=base;sizes[name]=8;base+=8;
+  }
+  std::map<const GlobalVariable *,uint64_t> sourceBases;
+  for(auto &g:e.m.globals()) if(globalSymbols.count(g.getName().str()))sourceBases[&g]=bases.at(globalSymbols.at(g.getName().str()));
+  json::Object globals,interfaces;
+  uint64_t heap=alignTo(base,uint64_t(4096)),heapLimit=0,stack=0;
+  std::vector<std::map<std::string,std::string>> parsed;
+  for(auto &ref:e.references) {
+    parsed.push_back(objectSections(ref));auto layout=parse(parsed.back().at("layout"));
+    heapLimit=std::max(heapLimit,uint64_t(*layout.getAsObject()->getInteger("heap_limit_max")));
+    stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
+  }
+  uint64_t endAddress=heap+heapLimit,memCount=0;
+  for(unsigned i=0;i<parsed.size();++i) {
+    auto &sec=parsed[i];auto syms=parse(sec.at("symbols"));auto suffix=i?std::to_string(i):"";
+    std::map<std::string,std::string> rename;
+    rename["ref"]="ref"+suffix;rename["L1"]=i?"L1_"+suffix:"L1";
+    for(auto &g:e.referenceGlobals[i]) rename[g.first]=globalSymbols.at(g.second);
+    auto replace=[&](std::string text) {
+      std::string result;size_t last=0;std::regex refs(R"(@([A-Za-z_][A-Za-z_0-9]*))");
+      for(std::sregex_iterator it(text.begin(),text.end(),refs),end;it!=end;++it) {
+        auto name=(*it)[1].str();result+=text.substr(last,it->position()-last)+"@"+(rename.count(name)?rename.at(name):name);last=it->position()+it->length();
+      }
+      return result+text.substr(last);
+    };
+    auto body=sec.at("functions");
+    for(auto &v:*syms.getAsObject()) {
+      auto *sym=v.second.getAsObject();auto name=sym->getString("name")->str(),kind=sym->getString("kind")->str();
+      if(kind=="data") {
+        auto renamed=rename.at(name);auto bytes=StringRef(sec.at("data")).split(name+" ").second.split('\n').first.str();
+        auto source=e.referenceGlobals[i].at(name);
+        if(auto *g=e.m.getGlobalVariable(source,true)) bytes=scalarGlobalImage(*g,sourceBases);
+        if(data.count(renamed) && data.at(renamed)!=bytes) fail("output","inconsistent shared global image",&e.f);
+        data[renamed]=bytes;dataSignatures[renamed]=jcs(*sym->get("signature"));
+        globals[renamed]=json::Object{{"base",int64_t(bases.at(renamed))},{"size",int64_t(sizes.at(renamed))},{"image",renamed}};
+      } else {
+        std::string marker=(kind=="oracle"?"oracle @":"lproc @")+name+" ";auto begin=body.find(marker);
+        auto finish=body.find("\nlproc @",begin+1);
+        auto text=StringRef(body).slice(begin,finish).rtrim().str();
+        functions.push_back({rename.at(name),kind,replace(text),parse(jcs(*sym->get("signature")))});
+        if(kind=="oracle") {
+          json::Object regions;std::regex mem(R"(([A-Za-z_][A-Za-z_0-9]*):region\[([0-9]+),([0-9]+)\])");
+          auto header=StringRef(text).split('\n').first.str();
+          for(std::sregex_iterator it(header.begin(),header.end(),mem),end;it!=end;++it) {
+            uint64_t size=(uint64_t(1)<<std::stoul((*it)[2]))*std::stoul((*it)[3])/8;
+            endAddress=alignTo(endAddress,size);regions[(*it)[1].str()]=json::Object{{"base",int64_t(endAddress)}};endAddress+=size;++memCount;
+          }
+          interfaces[rename.at(name)]=std::move(regions);
+        }
+      }
+    }
+  }
+  unsigned h=0,tab=0;
+  while((uint64_t(1)<<h)<endAddress)++h;
+  while((uint64_t(1)<<tab)<data.size()+memCount+heapLimit)++tab;
+  json::Object layout{{"A_tab",tab},{"H",h},{"S_cells",int64_t(stack)},{"globals",std::move(globals)},
+    {"heap_base",int64_t(heap)},{"heap_limit_max",int64_t(heapLimit)},{"interface_regions",std::move(interfaces)},{"null_size",4096},{"ptr_width",pw}};
+  std::map<std::string,std::string> allLeaves;
+  for(auto &v:layout) {
+    if(v.first=="globals") for(auto &g:*v.second.getAsObject()) allLeaves["globals."+g.first.str()]=jcs(g.second);
+    else if(v.first=="interface_regions") for(auto &o:*v.second.getAsObject()) for(auto &r:*o.second.getAsObject()) allLeaves["interface_regions."+o.first.str()+"."+r.first.str()]=jcs(r.second);
+    else allLeaves[v.first.str()]=jcs(v.second);
+  }
+  std::map<std::string,std::string> hashes;json::Object symbols;
+  auto addSymbol=[&](std::string name,std::string kind,json::Value sig,std::string ih) {
+    symbols[std::to_string(symbols.size())]=json::Object{{"name",name},{"kind",kind},{"signature",std::move(sig)},{"interface_hash",ih}};
+  };
+  for(auto &v:data) { hashes[v.first]=hash(prefix+dataSignatures.at(v.first)+"\n"+v.first+" "+v.second+"\n"); addSymbol(v.first,"data",parse(dataSignatures.at(v.first)),hashes.at(v.first)); }
+  // Lprocs depend on images; wrappers depend on lprocs. This scalar production
+  // path has one lproc per reference; remaining call-graph lifts stay tracked.
+  for(auto kind:{"lproc","oracle"}) for(auto &f:functions) if(f.kind==kind) {
+    auto newline=f.body.find('\n');std::string canonical=f.body.substr(0,newline+1),refs;auto rest=f.body.substr(newline+1);
+    std::set<std::string> referenced;size_t last=0;std::regex token(R"(@([A-Za-z_][A-Za-z_0-9]*))");
+    for(std::sregex_iterator it(rest.begin(),rest.end(),token),end;it!=end;++it) {
+      auto n=(*it)[1].str();
+      if(!hashes.count(n)) fail("output","unresolved production symbol "+n,&e.f);
+      canonical+=rest.substr(last,it->position()-last)+"@"+hashes.at(n);last=it->position()+it->length();
+      if(referenced.insert(n).second)refs+=hashes.at(n)+"\n";
+    }
+    canonical+=rest.substr(last);std::string images,leaves;
+    for(auto &v:data) if(f.kind=="oracle" || referenced.count(v.first)) images+="data "+v.first+" "+v.second+"\n";
+    for(auto &v:allLeaves) {
+      bool include=f.kind=="oracle" ? !StringRef(v.first).starts_with("interface_regions.") || StringRef(v.first).starts_with("interface_regions."+f.name+".") : false;
+      if(f.kind=="lproc" && StringRef(v.first).starts_with("globals.")) include=referenced.count(StringRef(v.first).drop_front(8).str());
+      if(include)leaves+="layout "+v.first+" "+v.second+"\n";
+    }
+    hashes[f.name]=hash(prefix+jcs(f.sig)+"\n"+canonical+"\n"+images+leaves+refs);addSymbol(f.name,f.kind,parse(jcs(f.sig)),hashes.at(f.name));
+  }
+  std::string object=e.reference.substr(0,e.reference.find("\n\nsection "))+"\n\nsection symbols\n"+jcs(json::Value(std::move(symbols)))+"\n\nsection functions\n";
+  for(auto &f:functions)object+=f.body+"\n";
+  object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n";
+  object+="\nsection layout\n"+jcs(json::Value(std::move(layout)))+"\n";return object;
+}
 std::string launchObject(Entry &e, json::Object &record,
                          json::Object &certificate) {
   std::map<std::string, std::string> sections;
   std::string ref = e.reference;
+  bool unified = false;
+  if (e.references.size()>1) {
+    auto first=objectSections(ref);
+    for (auto &r:e.references) { auto sec=objectSections(r); if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty()) unified=true; }
+  }
+  if(unified) ref=linkReferences(e);
   size_t pos = ref.find("\n\nsection ");
   std::string header =
       pos == std::string::npos
@@ -876,7 +1008,9 @@ std::string launchObject(Entry &e, json::Object &record,
       oracleHash = s.second.getAsObject()->getString("interface_hash")->str();
   std::map<std::string, std::string> referenceHashes;
   referenceHashes["ref"] = oracleHash;
-  for (unsigned i = 1; i < e.references.size(); ++i) {
+  if(unified) for(auto &s:*so) if(s.second.getAsObject()->getString("kind")=="oracle")
+    referenceHashes[s.second.getAsObject()->getString("name")->str()]=s.second.getAsObject()->getString("interface_hash")->str();
+  for (unsigned i = 1; !unified && i < e.references.size(); ++i) {
     std::map<std::string, std::string> extra;
     auto text = e.references[i];
     size_t p = text.find("\n\nsection ");

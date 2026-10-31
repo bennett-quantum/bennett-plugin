@@ -487,8 +487,31 @@ struct Scalar {
     return b;
   }
 };
+std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVariable *,uint64_t> &bases) {
+  auto &dl=g.getParent()->getDataLayout();
+  uint64_t size=dl.getTypeAllocSize(g.getValueType()).getFixedValue();std::vector<uint8_t> bytes(size,0);
+  std::function<void(Constant *,uint64_t)> image=[&](Constant *c,uint64_t off) {
+    auto *t=c->getType();if(c->isNullValue() || isa<UndefValue>(c) || isa<PoisonValue>(c))return;
+    if(auto *st=dyn_cast<StructType>(t)) {auto *sl=dl.getStructLayout(st);for(unsigned k=0;k<st->getNumElements();++k)image(c->getAggregateElement(k),off+sl->getElementOffset(k));return;}
+    if(auto *at=dyn_cast<ArrayType>(t)) {for(unsigned k=0;k<at->getNumElements();++k)image(c->getAggregateElement(k),off+k*dl.getTypeAllocSize(at->getElementType()).getFixedValue());return;}
+    APInt bits(1,0);
+    if(auto *n=dyn_cast<ConstantInt>(c))bits=n->getValue();
+    else if(auto *n=dyn_cast<ConstantFP>(c))bits=n->getValueAPF().bitcastToAPInt();
+    else if(t->isPointerTy()) {
+      auto pw=dl.getPointerSizeInBits(t->getPointerAddressSpace());APInt offset(pw,0);
+      auto *root=c->stripAndAccumulateConstantOffsets(dl,offset,true);
+      if(auto *target=dyn_cast<GlobalVariable>(root);target && bases.count(target))bits=APInt(pw,bases.at(target))+offset;
+      else if(auto *ce=dyn_cast<ConstantExpr>(c);ce && ce->getOpcode()==Instruction::IntToPtr && isa<ConstantInt>(ce->getOperand(0)))bits=cast<ConstantInt>(ce->getOperand(0))->getValue().zextOrTrunc(pw);
+      else unimplemented("§19.5 global pointer relocation target",1,c);
+    } else unimplemented("§19.5 vector data image",2,c);
+    auto n=dl.getTypeStoreSize(t).getFixedValue();bits=bits.zextOrTrunc(n*8);
+    for(unsigned k=0;k<n;++k)bytes[off+k]=bits.lshr((dl.isLittleEndian()?k:n-1-k)*8).getLimitedValue()&255;
+  };
+  if(!g.hasInitializer())unimplemented("§19.5 undefined data image",2,&g);
+  image(g.getInitializer(),0);return toHex(ArrayRef<uint8_t>(bytes),true);
+}
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
-                 unsigned stackCells, uint64_t heapCapacity, int projection) {
+                 unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames) {
   Scalar s{m, f};
   std::string d = desc.str(), device;
   uint64_t deviceSize = 0, heapLimit = heapCapacity;
@@ -550,6 +573,8 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if (auto *a = dyn_cast<Argument>(root)) return privateArguments.count(a) != 0;
     if (auto *load = dyn_cast<LoadInst>(root)) {
       auto *g = dyn_cast<GlobalVariable>(getUnderlyingObject(load->getPointerOperand()));
+      if (g && g->isConstant() && g->hasInitializer() &&
+          isa<GlobalVariable>(getUnderlyingObject(g->getInitializer()))) return true;
       return g && ((hasDevice("ENTROPY") && g->getName() == "__bennett_dev_entropy_base") ||
                    (hasDevice("BLOCK") && g->getName() == "__bennett_dev_block_base") ||
                    (hasDevice("CONSOLE") && g->getName() == "__bennett_dev_console_buf"));
@@ -574,6 +599,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
           unimplemented("§8.5 mutable global entry-state replay",2,&i);
     }
   unsigned gn=1;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
+  if (globalNames) for (auto &g : s.globals) (*globalNames)[g.second] = g.first->getName().str();
   unsigned ret = s.width(f.getReturnType());
   auto semi = d.find(';');
   std::string bindings = d.substr(0, semi);
@@ -773,31 +799,15 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   // M1 standalone comparison layout: globals in link/module order, data at
   // 4096, heap at the next page, no heap allocations. Driver-supplied layouts M4.
   std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
-  uint64_t base=4096;
+  uint64_t base=4096;std::map<const GlobalVariable *,uint64_t> globalBases;
+  for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));globalBases[&g]=base;base+=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();}
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {
-    if(!g.hasInitializer())unimplemented("§19.5 undefined data image",2,&g);
-    auto &dl=m.getDataLayout();uint64_t size=dl.getTypeAllocSize(g.getValueType()).getFixedValue();
-    base=alignTo(base,dl.getPreferredAlign(&g));
-    std::vector<uint8_t> bytes(size,0);
-    std::function<void(Constant *,uint64_t)> image=[&](Constant *c,uint64_t off) {
-      Type *t=c->getType();
-      if(c->isNullValue())return;
-      if(isa<UndefValue>(c)||isa<PoisonValue>(c))return;
-      if(auto *st=dyn_cast<StructType>(t)) {auto *sl=dl.getStructLayout(st);for(unsigned k=0;k<st->getNumElements();++k)image(c->getAggregateElement(k),off+sl->getElementOffset(k));return;}
-      if(auto *at=dyn_cast<ArrayType>(t)) {for(unsigned k=0;k<at->getNumElements();++k)image(c->getAggregateElement(k),off+k*dl.getTypeAllocSize(at->getElementType()).getFixedValue());return;}
-      APInt bits(1,0);
-      if(auto *n=dyn_cast<ConstantInt>(c))bits=n->getValue();
-      else if(auto *n=dyn_cast<ConstantFP>(c))bits=n->getValueAPF().bitcastToAPInt();
-      else unimplemented("§19.5 pointer/vector data relocation",2,c);
-      unsigned n=dl.getTypeStoreSize(t).getFixedValue();bits=bits.zextOrTrunc(n*8);
-      for(unsigned k=0;k<n;++k)bytes[off+k]=bits.lshr((dl.isLittleEndian()?k:n-1-k)*8).getLimitedValue()&255;
-    };
-    image(g.getInitializer(),0);std::string hex=toHex(ArrayRef<uint8_t>(bytes),true),name=s.globals[&g];
+    auto size=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
+    auto hex=scalarGlobalImage(g,globalBases),name=s.globals[&g];
     data[name]=hex;
     dataSigs[name]="{\"abi\":\"0.8\",\"kind\":\"data\",\"size\":"+std::to_string(size)+",\"tier\":\"-\"}";
     dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
-    globalLeaves[name]="{\"base\":"+std::to_string(base)+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
-    base+=size;
+    globalLeaves[name]="{\"base\":"+std::to_string(globalBases[&g])+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
   }
   uint64_t heap=alignTo(base,uint64_t(4096));unsigned h=0,at=0;
   uint64_t endAddress = heap + heapLimit;
