@@ -1105,7 +1105,7 @@ void Analysis::step(Instruction &i) {
     if(!slice) {
       auto *f=Function::Create(FunctionType::get(i.getType(),false),GlobalValue::InternalLinkage,"",M);
       auto *bb=BasicBlock::Create(M.getContext(),"",f);auto *copy=i.clone();copy->setName(i.getName());copy->insertInto(bb,bb->end());
-      ReturnInst::Create(M.getContext(),i.getType()->isVoidTy()?nullptr:copy,bb);normaliseScalar(*f,false);materialiseFPBits(*f);f->removeFromParent();slice.reset(f);
+      ReturnInst::Create(M.getContext(),i.getType()->isVoidTy()?nullptr:copy,bb);normaliseScalar(*f,false,true);materialiseFPBits(*f);f->removeFromParent();slice.reset(f);
     }
     virtualFP=true;
     for(auto &v:instructions(*slice))if(!isa<ReturnInst>(v))step(v);

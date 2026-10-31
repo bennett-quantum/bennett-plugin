@@ -123,8 +123,7 @@ def classify(row):
  if not failed and row.get('agree'):return 'agree'
  if row.get('case') in ['spec-sem2-adj','spec-sem2-compute'] and failed=={'L1','L5'} and row.get('native_exits')=={'pre_O0':87,'pre_O3':87,'post_O0':87,'post_O3':87}:
   return 'blocked-upstream: bp-c2i (upstream b-dialect-spec-566)'
- if row.get('case')=='fp-rot-fastmath-reassoc' and failed=={'L5'} and row.get('missing_entry_point') in {'__bennett_sf_sitofp_f64','__bennett_sf_add_f64','__bennett_sf_mul_f64','__bennett_sf_div_f64'} and '§13.1 missing entry point '+row['missing_entry_point'] in (row.get('softfloat_error') or ''):
-  return 'deferred: M2 (§13.1 bennett-arith unavailable: '+row['missing_entry_point']+'; bp-xms, bp-7ni)'
+ # Its f64 entries are pinned and published; no missing-library allowance remains.
  return 'diverge'
 def summarize(cells):
  bycase={name:[classify(x) for x in cells if x['case']==name] for name in {x['case'] for x in cells}}

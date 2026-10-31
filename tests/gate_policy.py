@@ -9,7 +9,7 @@ assert classify(b)=='blocked-upstream: bp-c2i (upstream b-dialect-spec-566)'
 assert classify(row('spec-sem2-compute',dict(base,L3=False),native_exits=b['native_exits']))=='diverge'
 assert classify(row('spec-sem2-adj',base,native_exits=dict(b['native_exits'],post_O3=1)))=='diverge'
 missing=dict(missing_entry_point='__bennett_sf_sitofp_f64',softfloat_error='unavailable: §13.1 missing entry point __bennett_sf_sitofp_f64; supply BENNETT_ARITH_BITCODE')
-assert classify(row('fp-rot-fastmath-reassoc',dict(base,L1=True),**missing)).startswith('deferred: M2 (§13.1 bennett-arith unavailable: __bennett_sf_sitofp_f64;')
+assert classify(row('fp-rot-fastmath-reassoc',dict(base,L1=True),**missing))=='diverge'
 assert classify(row('fp-rot-fastmath-reassoc',dict(base,L1=True)))=='diverge'
 assert classify(row('fp-rot-fastmath-reassoc',dict(base,L1=True),missing_entry_point='__bennett_sf_unrelated_f64',softfloat_error=missing['softfloat_error']))=='diverge'
 assert classify(row('fp-rot-fastmath-reassoc',dict(base,L1=True,L4=False)))=='diverge'

@@ -86,11 +86,12 @@ std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
 void validateResidual(llvm::Module &, bool classical = false,
                       const std::set<llvm::Function *> *variants = nullptr);
-void normaliseScalar(llvm::Function &, bool wide = true);
+void normaliseScalar(llvm::Function &, bool wide = true, bool privateTransfer = false);
 void normaliseFP(llvm::Function &);
 void materialiseFPBits(llvm::Function &);
 void normaliseWideFP(llvm::Function &);
 void linkArith(llvm::Module &);
+void prepareNativeComparison(llvm::Module &);
 void requireSoftFloat(llvm::Function &);
 bool prepareStack(llvm::Module &, llvm::Function &, uint64_t);
 std::vector<llvm::GlobalVariable *> entryGlobals(llvm::Module &);

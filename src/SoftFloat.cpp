@@ -5,6 +5,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
@@ -26,11 +27,24 @@ static std::string format(Type *t) {
 static Type *carrier(Type *t) {return IntegerType::get(t->getContext(),t->getPrimitiveSizeInBits());}
 // No numerical implementation lives here. This is the published bitcode edge.
 void linkArith(Module &m) {
-  auto *path=std::getenv("BENNETT_ARITH_BITCODE");
-  if(!path || !*path)return; // Require individual definitions at production closure collection.
+  auto *overridePath=std::getenv("BENNETT_ARITH_BITCODE");
+  auto *path=overridePath?overridePath:BENNETT_ARITH_DEFAULT_PATH;
+  if(!*path)return;
+  if(!m.getModuleFlag("bennett.arith.bitcode.sha256")) {
+  // Publish only the required closure. Discover N9/N32/N33 declarations on
+  // a private source clone, then let LLVM's binary linker follow dependencies.
+  auto probe=CloneModule(m);
+  for(auto &f:*probe)if(!f.isDeclaration())normaliseScalar(f,false);
+  bool needed=false;
+  for(auto &f:*probe)if(f.isDeclaration() && !f.use_empty() && f.getName().starts_with("__bennett_sf_")) {
+    m.getOrInsertFunction(f.getName(),f.getFunctionType());needed=true;
+  }
+  if(!needed)return;
+  } // Require individual definitions at production closure collection.
   auto bytes=MemoryBuffer::getFile(path);
   if(!bytes)fail("unavailable","§13.1 BENNETT_ARITH_BITCODE could not be read: "+std::string(path));
   auto hash=toHex(SHA256::hash(arrayRefFromStringRef((*bytes)->getBuffer())),true);
+  if(!overridePath && hash!=BENNETT_ARITH_DEFAULT_SHA256)fail("input","§13.1 pinned bennett-arith bitcode SHA-256 mismatch");
   if(auto *prior=m.getModuleFlag("bennett.arith.bitcode.sha256")) {
     if(auto *id=dyn_cast<MDString>(prior);id && id->getString()==hash)return;
     fail("input","§13.1 BENNETT_ARITH_BITCODE changed across comparison links");
@@ -39,7 +53,8 @@ void linkArith(Module &m) {
   if(!lib) {error.print("BENNETT_ARITH_BITCODE",errs());fail("unavailable","§13.1 BENNETT_ARITH_BITCODE could not be read");}
   if(!lib->getDataLayoutStr().empty() && !m.getDataLayoutStr().empty() && lib->getDataLayout()!=m.getDataLayout())
     fail("input","§13.1 BENNETT_ARITH_BITCODE DataLayout mismatch");
-  if(Linker::linkModules(m,std::move(lib)))fail("input","§13.1 BENNETT_ARITH_BITCODE link failed");
+
+  if(Linker::linkModules(m,std::move(lib),Linker::Flags::LinkOnlyNeeded))fail("input","§13.1 BENNETT_ARITH_BITCODE link failed");
   m.addModuleFlag(Module::Error,"bennett.arith.bitcode.sha256",MDString::get(m.getContext(),hash));
 }
 void requireSoftFloat(Function &f) {
@@ -193,6 +208,7 @@ void normaliseFP(Function &f) {
     if(auto *cmp=dyn_cast<FCmpInst>(i)) {args={cmp->getOperand(0),cmp->getOperand(1),ConstantInt::get(Type::getInt32Ty(ctx),cmp->getPredicate())};op="cmp";}
     else if(auto *c=dyn_cast<IntrinsicInst>(i)) {
       auto base=Intrinsic::getBaseName(c->getIntrinsicID()).drop_front(5);bool constrained=base.consume_front("experimental.constrained.");
+      if(constrained && base=="fcmps")fail("unavailable","§13.5 signaling comparison entry-point ABI is not published (bennett-arith-chn)",c);
       if(base=="convert.to.arbitrary.fp" || base=="convert.from.arbitrary.fp") {
         bool to=base=="convert.to.arbitrary.fp";std::string fmt;SmallVector<Value *> values;
         for(auto &arg:c->args())if(auto *meta=dyn_cast<MetadataAsValue>(arg.get())) {
@@ -347,5 +363,24 @@ void materialiseFPBits(Function &f) {
     }
     out=b.CreateBitCast(out,i->getType(),r);i->replaceAllUsesWith(out);i->eraseFromParent();
   }
+}
+}
+
+#include "llvm/AsmParser/Parser.h"
+namespace bennett {
+void prepareNativeComparison(Module &m) {
+  // Non-numerical N26/F(C) adapters for native execution of materialised IR.
+  // A linked runtime definition wins. No arith entry point is defined here.
+  bool needed=false;for(StringRef name:{"__bennett_rt_memmove","__bennett_rt_memset","__bennett_nz_fault"})
+    if(auto *f=m.getFunction(name);f && f->isDeclaration() && !f->use_empty())needed=true;
+  if(!needed)return;
+  std::string source=
+#include "runtime/NativeComparison.inc"
+  ;
+  SMDiagnostic error;auto runtime=parseAssemblyString(source,error,m.getContext());
+  if(!runtime)fail("output","invalid native comparison memory runtime");
+  runtime->setDataLayout(m.getDataLayout());runtime->setTargetTriple(m.getTargetTriple());
+  for(auto &f:*runtime)if(!f.isDeclaration())f.addFnAttr("bennett.native.comparison.runtime");
+  if(Linker::linkModules(m,std::move(runtime),Linker::Flags::LinkOnlyNeeded))fail("output","native comparison memory runtime link failed");
 }
 }

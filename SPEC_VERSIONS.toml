@@ -6,3 +6,8 @@ isa = "0.8"
 "bennett-isa-spec" = "0.8"
 [commits]
 "bennett-dialect-spec" = "023f5a771a814270634db3be9cfde88ded69f975"
+[arith]
+llvm18_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc"
+llvm18_sha256 = "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51"
+llvm23_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc"
+llvm23_sha256 = "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"

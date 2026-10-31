@@ -80,7 +80,7 @@ def main():
         assert digest(build / f'libbennett-plugin-{major}.so') == h, f'plugin {major} changed after the gate'
     for m in MAJORS:
         s = gate['summary'][str(m)]
-        assert s['cases_run']==66 and s['cases_agree']+s['cases_deferred']==66 and s['cases_deferred']<=1 and s['cases_blocked']==s['cases_diverge']==0, (m,s)
+        assert [s[k] for k in SUMMARY_KEYS]==[66,66,0,0,0], (m,s)
 
     checks, scalars = {}, {}
     for m in MAJORS:
@@ -89,6 +89,7 @@ def main():
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
+            if name=='softfloat':c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
         audit = read(f'key-audit-{m}.json')
         assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
         c['full-key-audit'] = {k: audit[k] for k in ('cases', 'matched', 'unmatched', 'accounted', 'unaccounted')}
@@ -157,6 +158,7 @@ def main():
         'name': a.name, 'date': a.date, 'commits': a.commits.split(','), 'code_head': head,
         'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
         'dialect': '0.2.10', 'dialect_commit': PIN, 'isa': '0.8',
+        'arith': __import__('tomllib').loads((R/'SPEC_VERSIONS.toml').read_text())['arith'],
         'plugin_sha256': gate['plugin_sha256'],
         'gate': {'command': 'scripts/gate', 'exit': a.gate_exit, 'accepted_contract_drift': False,
                  'contract_head_drift': gate['contract_head_drift'], 'contract_worktree_drift': gate['contract_worktree_drift'],

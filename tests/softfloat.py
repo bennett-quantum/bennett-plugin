@@ -4,7 +4,7 @@
 The synthetic definitions deliberately only implement bit operations. They prove
 linkage/closure and carrier transport, never stand in for bennett-arith's arithmetic.
 """
-import argparse, json, os, re, subprocess, shutil
+import argparse, json, os, re, subprocess, shutil, hashlib, tomllib
 from contracts import ROOT as R
 from scalars import REF
 
@@ -13,7 +13,7 @@ def main():
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
  def run(argv,env=None):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=60,env=env)
- env=dict(os.environ);env.pop('BENNETT_ARITH_BITCODE',None)
+ env=dict(os.environ);env['BENNETT_ARITH_BITCODE']=''
  def opt(body,name,flags,linked=None):
   src=d/(name+'.ll');src.write_text(body);dest=d/name
   e=dict(env)
@@ -163,6 +163,37 @@ declare void @__bennett_qfree(ptr)
   obj=out/'top/launch.bennett';z=run([REF,'check',obj]);check('CC-check',z.returncode==0,z.stdout+z.stderr)
   z=run([REF,'run-program',obj,'top','--args','0','--budget','100000,0,0,0'])
   check('CC-execute',z.returncode==0 and json.loads(z.stdout).get('results')==[{'type':'i1','value':'1'}],z.stdout+z.stderr)
+ # N26 adapters execute both overlap directions and the zero-length/null cases.
+ memory='declare void @__bennett_rt_memmove(ptr,ptr,i64)\ndeclare void @__bennett_rt_memset(ptr,i8,i64)\ndefine void @move(ptr %d,ptr %s,i64 %n) { call void @__bennett_rt_memmove(ptr %d,ptr %s,i64 %n)\n ret void }\ndefine void @fill(ptr %d,i8 %v,i64 %n) { call void @__bennett_rt_memset(ptr %d,i8 %v,i64 %n)\n ret void }'
+ membc=d/'memory.bc';z,_=opt(memory,'memory-input',['-bennett-comparison','-o',str(membc)])
+ check('comparison-memory-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  main=d/'memory-main.c';main.write_text('#include <string.h>\nextern void move(void*,void*,unsigned long); extern void fill(void*,unsigned char,unsigned long); int main(void) { char s[9]="abcdefgh"; move(s+1,s,7); if(memcmp(s,"aabcdefg",8))return 1; move(s,s+1,7); if(memcmp(s,"abcdefg",7))return 2; fill(s,42,8); for(int i=0;i<8;i++)if(s[i]!=42)return 3; move(0,0,0); fill(0,0,0); return 0; }')
+  exe=d/'memory-test';z=run([tool+'clang',membc,main,'-o',exe]);check('comparison-memory-overlap',z.returncode==0 and run([exe]).returncode==0,z.stderr)
+ # Signaling comparison cannot silently use the quiet helper (published ABI question chn).
+ body='declare i1 @llvm.experimental.constrained.fcmps.f64(double,double,metadata,metadata)\ndefine i1 @f(double %a,double %b) { %r = call i1 @llvm.experimental.constrained.fcmps.f64(double %a,double %b,metadata !"oeq",metadata !"fpexcept.strict")\n ret i1 %r }'
+ z,_=opt(body,'signaling',['-bennett-normalise-only','-S','-o','-'])
+ check('signaling-ABI-loud',z.returncode!=0 and 'bennett-arith-chn' in z.stderr,z.stderr)
+ # The newly published numerical library is consumed solely via its pinned binary edge.
+ pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith'];published=__import__('pathlib').Path(pins[f'llvm{a.major}_path'])
+ check('published-pin',hashlib.sha256(published.read_bytes()).hexdigest()==pins[f'llvm{a.major}_sha256'])
+ manifest=json.loads((published.parent/'manifest.json').read_text());exports={x['name'] for x in manifest['exports']}
+ check('published-required-exports',all('__bennett_sf_'+op+'_f64' in exports for op in ['sitofp','add','mul','div','cmp']))
+ realenv=dict(os.environ);realenv.pop('BENNETT_ARITH_BITCODE',None)
+ real=d/'real.ll';real.write_text('define i64 @real(i64 %x) { %a = sitofp i64 %x to double\n %b = fadd double %a, 1.0\n %r = bitcast double %b to i64\n ret i64 %r }')
+ realbc=d/'real.bc';z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',real,'-o',realbc],realenv)
+ check('published-comparison-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  main=d/'real-main.c';main.write_text('#include <stdint.h>\nextern uint64_t real(uint64_t); int main(void) { return real(2)!=UINT64_C(0x4008000000000000) || real(0)!=UINT64_C(0x3ff0000000000000); }')
+  for level in (0,3):
+   exe=d/f'real-O{level}';z=run([tool+'clang',f'-O{level}',realbc,main,'-o',exe],realenv)
+   check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
+ # Red real-production witness: never turn the unmaterialised i512 core into a trap/pass.
+ realout=d/'real-production'
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-disable-output',d/'production-input.ll'],realenv)
+ check('published-production-N22-remainder',z.returncode!=0 and '§12 N22 general wide limb operation' in z.stderr and 'i512' in z.stderr and not list(realout.rglob('*.bennett')),z.stderr)
+ rows[-1]['expected_unimplemented']=True
+ rows[-1]['determining_sentence']='`and`, `or`, `xor`: per limb; `icmp`: lexicographic from the top limb (signed on the top limb only for signed predicates); `select`, `phi`: per limb (§12.7).'
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)

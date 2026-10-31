@@ -16,8 +16,9 @@ See [PLAN](docs/PLAN.md), [BUILD](docs/BUILD.md), [PROGRESS](docs/PROGRESS.md) a
 
 ### Soft-float bitcode input
 
-Set `BENNETT_ARITH_BITCODE` to the absolute path of the published bennett-arith
-LLVM bitcode for the LLVM major being run. The plugin links that explicit input
+`SPEC_VERSIONS.toml` pins each LLVM major’s published bennett-arith bitcode path
+and SHA-256. `BENNETT_ARITH_BITCODE` overrides that input (an explicit empty value
+exercises unavailable-library diagnostics). The plugin links the required closure
 before analysis and follows introduced numerical helpers through materialisation
 and production launches. The input SHA-256 is retained in the module and build
 record; repeating the same comparison link is idempotent. An incompatible helper
@@ -26,6 +27,9 @@ signature is an input error.
 `-bennett-comparison` emits the normalised native comparison module and requires
 its soft-float entry points to have definitions. Missing definitions fail loudly
 with `unavailable: §13.1 missing entry point <name>` and the bitcode input name.
+Native comparison keeps integer-wide LLVM operations for native code generation
+and supplies only non-numerical byte-move/fill/fault adapters. The real arith
+`i512` core still exposes an explicit N22 production-lowering obligation (bd).
 The plugin contains no replacement numerical library. Tests use clearly marked
 integer-only ABI fixtures to check the link path independently of numerical
 conformance.

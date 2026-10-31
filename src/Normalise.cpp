@@ -11,7 +11,7 @@ using namespace llvm;
 namespace bennett {
 // M1 scalar materialisation slice. Other rules remain explicit M2 obligations;
 // this function is not a full §12 validator or a production conformance verdict.
-void normaliseScalar(Function &f, bool wide) {
+void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   // N0's last lowering, invoked only when this intrinsic occurs.
   bool widenable=false;
   for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i))
@@ -89,7 +89,7 @@ void normaliseScalar(Function &f, bool wide) {
   for(Instruction *i:work)if(i)for(Value *v:i->operands())data(v);
   // A private S2 transfer graph shares source operands; never mutate their
   // globals. S2 already interprets undef/poison as zero in its initial images.
-  if(wide)for(auto *g:globals)if(g->hasInitializer())g->setInitializer(zero(g->getInitializer()));
+  if(!privateTransfer)for(auto *g:globals)if(g->hasInitializer())g->setInitializer(zero(g->getInitializer()));
   // N8.
   for (Instruction *&i : work) if (auto *z=dyn_cast_or_null<FreezeInst>(i)) {z->replaceAllUsesWith(z->getOperand(0));z->eraseFromParent();i=nullptr;}
   // N9, scalar atomics. LLVM's single-thread lowering is represented explicitly.
