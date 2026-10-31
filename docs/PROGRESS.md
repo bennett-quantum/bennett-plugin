@@ -1,4 +1,133 @@
-# Seventh pass — 2026-10-31 (in progress, bp-2zv remains open)
+# Seventh pass final evidence — 2026-10-31
+
+**bp-2zv remains OPEN; this pass does not complete M1 or any full acceptance
+group.** Base 32427ed; implementation commits 55d3b0d, ba7f0d8, c8b477b.
+No push, sibling modifications, repin, remaining-lift/key-audit expansion or new
+deferrals. Accepted dialect 0.2.10 @ 023f5a7 and ISA 0.8 are unchanged.
+
+| Group | Landed | LLVM 18 and 23 tests | Commit |
+|---|---|---|---|
+| 1 descriptors/environments | OUT/MEM_IN, CLOCK/BLOCK/CONSOLE production bindings, same-layout distinct scalar references, direct handle/scalar block parameters | 7/7 new objects check/run per major; four binding references full-byte exact | 55d3b0d |
+| 2 budget tables | JCS table parsing, per-component key/symbol precedence, unmatched/raw/explicit frozen maxima, once-only identity overlays, explicit precedence | 4/4 table objects check/run per major; published sstack vector still red (bp-piq) | ba7f0d8 |
+| 3 records | Supplementary artifact SHA-256/size inventories and every emitted instruction's coverage | 5/5 record cases per major; 30/30 existing metadata sidecars byte-stable; checked certificates still incomplete (bp-o7f) | c8b477b |
+
+The before and after **full headless pre-push gates both exit 0** against fixed
+binaries. No build occurred during either corpus phase.
+
+| run/agree/deferred/blocked/diverge | Before | After | cells agree/run |
+|---|---|---|---|
+| LLVM 18 | 66/65/1/0/0 | 66/65/1/0/0 | 920/924 |
+| LLVM 23 | 66/65/1/0/0 | 66/65/1/0/0 | 788/792 |
+
+Sole corpus deferral: fp-rot-fastmath-reassoc / bp-7ni (existing M2 §13).
+All 16 scalar goldens / 40 vectors per major, C O3 inc8, descriptor-reference
+inc8, four binding lifts and five production inc8 references remain exact.
+Measured inc8: 6/6 runs per major plus the unmodified published fixture; native
+ABI and protocol mocks pass. They still are not linked launch-library acceptance.
+All 34 prior sixth-pass per-file digests are unchanged. All 30 build/certificate/
+CC-coverage sidecars captured before group 3 remain byte-identical afterwards.
+
+## Exact remaining acceptance obligations
+
+- **bp-dw4:** finite descriptor/candidate/kind/mode/width dispatch and invalid-field
+  runtime traps; general handle memory/static files/generation tags/call/result
+  environments; combined devices/null console, multiple output slices, heterogeneous
+  region/data layout linking and production inplace/INOUT. Fresh finite-kind and
+  memory-handle probes both exit 1 on both majors, respectively at §8.4 finite
+  dispatch and `%slot = alloca ptr`. Determining §8.4: “the caller's tier reads the
+  descriptor and selects the compiled shape with the compare tree of §14.2”.
+  §17.4 requires marker calls with “the handle register environment of §6.5”.
+  These are plugin implementation gaps, not missing ISA capabilities.
+- **bp-piq:** published budget-stage-runtime still exits 1 on both majors at
+  `store i8 %x, ptr %p` (entry-state replay/shadow-stack memory). Its H16→H32
+  selection/final hashes and 316-row vector are not reproduced. Determining §9.2
+  step 3: provisional objects use “baseline `sstack` and other baseline wrapper
+  inputs”; step 4: “Apply this overlay once only. Generate the final object using
+  the resolved values”. Shadow-stack runtime lowering/final regeneration and
+  general finite/launch-supplied budget token selection remain required.
+- **bp-o7f:** checked target/schedule-bound executable claims, complete build/runtime/
+  arith/asm/snapshot provenance and real linked launch-library acceptance remain
+  unimplemented. Dialect §19.9 requires “the certificate (ISA §12)” and the resolved
+  build record. ISA §12.3: executable claims “bind to `schedule_hash` through their
+  subject”; §9.2 requires closure-hash bindings. Published D-expected-oracle-claim
+  itself marks the checker/ref expansion unavailable (b-isa-spec-8r4/bennett-vm-47t).
+  Only negative f_cert_unknown_field bears a certificate section; no positive
+  published certificate-bearing LLVM/object pair can currently be reproduced.
+  This publication gap does not discharge the plugin implementation obligations.
+- **bp-95o:** paired published production CC golden remains absent. Determining
+  §17.4 says CC/R lowering “is plugin-defined and constrained by §18.7”. Useful
+  cross-major equality and independent execution do not invent published bytes.
+
+The artifact records explicitly say metadata_only / checked_executable_claims=false.
+The existing certificate sidecar still has empty regions; none is called proof.
+No North-Star capability is excluded. Remaining lifts and the key audit were not
+expanded; Grover over unmodified SQLite remains core.
+
+## Complete byte-for-byte inventory
+
+Each row compares the full object file on LLVM 18 and 23. **51/51 pairs equal**;
+**27** match a complete published golden and **24** have no paired golden for the
+lowering/resolved layout. Full per-major paths, sizes and SHA-256 values, independent
+check/run outputs, table resolutions and red probes are in verification.json
+`seventh_pass`. “Absent” is not a published-byte acceptance claim.
+
+| Object | Published full bytes | 18 vs 23 | SHA-256 (both majors) |
+|---|---|---|---|
+| `scalar/oracle-empty-output` | exact oracle-empty-output | equal | `b5755ea206e8c3607294260c17a2f01de8ac93325d89103e5856bfcc319770c3` |
+| `scalar/oracle-empty-fault` | exact oracle-empty-fault | equal | `9921c79836b9be667edaa6aa162127237ac99c5256c3973b03479cae2bd3f559` |
+| `scalar/oracle-discard-return` | exact oracle-discard-return | equal | `0217762689e4944d8d959a516b95c335d6ea688e8ccad2fd7f87f7ccaab70eb8` |
+| `scalar/atomic-nand` | exact atomic-nand | equal | `b7dca42645f46355312ed0d359f1ec72b7de899ee79b5914a5ea46f0f395af28` |
+| `scalar/pointer-as270` | exact pointer-as270 | equal | `2c731bbcbf282cfd0119bc42feb53efcf624cdf1fa60942c0a9199222a8fa6bc` |
+| `scalar/gep-index-obj` | exact gep-index-obj | equal | `364640c0f4a947a93dc7d85db13ce68eba270ed435a1e6ee950e9b2a35542bcb` |
+| `scalar/gep-index-const` | exact gep-index-const | equal | `7e465780032222ca1d36c3a37295ad4ca9a86ee3f571db69c65f760688fb30e2` |
+| `scalar/binding-out-byte` | exact binding-out-byte | equal | `94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581` |
+| `scalar/binding-clock-read` | exact binding-clock-read | equal | `ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e` |
+| `scalar/binding-block-byte` | exact binding-block-byte | equal | `a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c` |
+| `scalar/binding-console-byte` | exact binding-console-byte | equal | `c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf` |
+| `scalar/indirectbr-two-blocks` | exact indirectbr-two-blocks | equal | `92802f732ce75ad94733a3c67e97fec44a4d2cc26099c3338379218bb01b9718` |
+| `scalar/inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `scalar/add2` | exact add2 | equal | `a9660ece18422bc64557cb19f02d980339b44fa77b572e81dbc543716606f5d1` |
+| `scalar/switch5` | exact switch5 | equal | `1adefd004c93443ff7814b939dc85dd609104ada65d54e5b98398f1448208280` |
+| `scalar/fp-aggregate` | exact fp-aggregate | equal | `1b06c23f4f195a7f8b6c2cc556c8f50495ddd7c395b55c1754dc54c980b7ce5a` |
+| `scalar/c-O3-inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `descriptor-reference/inc8` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `descriptor-production/smoke/launch.bennett` | absent | equal | `54be8166989d5b58916aacdc041f25c6563f69de369a61868a57c1d47b686075` |
+| `descriptor-production/smoke/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/0/launch.bennett` | absent | equal | `d5ae5d065001cf94ab65611f58f68f89b06fc9a61aa66d29be4447229e8eeb25` |
+| `production/0/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/7/launch.bennett` | absent | equal | `c28286b6553e8898e0a46da18fa6fb026b53bb6a73f35b98f546b635a3421cbf` |
+| `production/7/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/255/launch.bennett` | absent | equal | `e982723ef9cc4dd66e82a61c1b24f62c6290dbdbc4d62a695f94f4356321f1ae` |
+| `production/255/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/published/launch.bennett` | absent | equal | `fcb11ca7194f835598ba8d2cae2133eacc628634baca2f2fc205915e7f042eb6` |
+| `production/published/oracle-0/ref.bennett` | exact inc8 | equal | `8ac243f5cfec814221a859201ac78f713dbc533ed51e6d1b9287b7a234e7c1c7` |
+| `production/abi/launch.bennett` | absent | equal | `848f2628b2b5d9c5f64428b3e4cd0f25537622ee799691a467294f8b1d5149a3` |
+| `production-shapes/binding-out-byte/launch.bennett` | absent | equal | `7b5e193670571ef6099ab43d45256e64cc5751a9a9855576dbfda8453a38a37d` |
+| `production-shapes/binding-out-byte/oracle-0/ref.bennett` | exact binding-out-byte | equal | `94642c83d654e907ea6cb34af7bc3849d06b8fc3b127f56a235f1fff934d3581` |
+| `production-shapes/binding-clock-read/launch.bennett` | absent | equal | `be97b2e3111edea3c82092bacdf521ef723c96794a5004e37f73454699f05a45` |
+| `production-shapes/binding-clock-read/oracle-0/ref.bennett` | exact binding-clock-read | equal | `ced3e13e4bc7af8325b951b93cc8b87b54437f6cbe2b8b5156074309faba8e6e` |
+| `production-shapes/binding-block-byte/launch.bennett` | absent | equal | `493f49f47c21104c3acc2804e53a5b90f4b42e43a94f850cd6ad21734804990c` |
+| `production-shapes/binding-block-byte/oracle-0/ref.bennett` | exact binding-block-byte | equal | `a0dbb16a79d34b95af199a6bf1fe3394589b8896e5556db9475460365a3d146c` |
+| `production-shapes/binding-console-byte/launch.bennett` | absent | equal | `3f557329da95e54c7fe78bebfedd24ef12c69bd127bae774d1f47160b69f3963` |
+| `production-shapes/binding-console-byte/oracle-0/ref.bennett` | exact binding-console-byte | equal | `c396e3caa70f02c3f2ef1cd26ea7b565013a6798c45fea920f50da7a303237bf` |
+| `production-shapes/mem-in/launch.bennett` | absent | equal | `9bf3598072a685bf3f89519105ad1bbf2c9339d6bad09ba4f3642a67851771c7` |
+| `production-shapes/mem-in/oracle-0/ref.bennett` | absent | equal | `9915a0b7cc0b73a87bb5a60ef9496f393df92be7bbda0a8d56d85ce2d4c09801` |
+| `production-shapes/two-regions/launch.bennett` | absent | equal | `fc93758d35d26c7d22354a460f167c7b4658e16ff59fc62eaf1aaab358ec16d8` |
+| `production-shapes/two-regions/oracle-0/ref.bennett` | absent | equal | `177dc4fb7351433086dbe19fffe4438e5ff909a3a0868cd56ebac9c30080bacf` |
+| `production-shapes/two-regions/oracle-1/ref.bennett` | absent | equal | `bca59c9f01201d288c8c62c10661fffbc95c5c3f974d31374114d297eea499ee` |
+| `production-shapes/handle-phi/launch.bennett` | absent | equal | `0f6ed34c62b4742b0df3928dbafb8426ab829fdbe5d768c590ecbf391dd235d1` |
+| `production-budgets/baseline/launch.bennett` | absent | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/baseline/oracle-0/ref.bennett` | absent | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/identity-once/launch.bennett` | absent | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/identity-once/oracle-0/ref.bennett` | absent | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/key-priority/launch.bennett` | absent | equal | `1937376b4e1f9eca806aaaa115fe0d2e95edef86030f29947371f3f5b00eddb2` |
+| `production-budgets/key-priority/oracle-0/ref.bennett` | absent | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+| `production-budgets/explicit-precedence/launch.bennett` | absent | equal | `970cd2de98b9c795e10b02b39bfe36113da562cdd485962570b93ebb63c9f242` |
+| `production-budgets/explicit-precedence/oracle-0/ref.bennett` | absent | equal | `4070d82d71b292edecf8e294ce20bde494373189375b59865bedf4c902ede83d` |
+
+---
+
+# Seventh pass implementation notes — 2026-10-31 (historical sequence)
 
 Base 32427ed. Unchanged full headless gate exits 0: both majors
 66/65/1/0/0 run/agree/deferred/blocked/diverge; cells 920/924 (18),
