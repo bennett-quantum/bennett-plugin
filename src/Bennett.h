@@ -46,6 +46,8 @@ class Analysis {
   llvm::Module &M;
   llvm::Function *Entry;
   bool changed = false;
+  bool virtualFP = false;
+  std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> fpTransfers;
   std::map<const llvm::Value *, AV> values;
   std::vector<Slot> slots;
   std::map<std::pair<const llvm::Instruction *, const llvm::Value *>, AV>
@@ -84,7 +86,12 @@ std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
 void validateResidual(llvm::Module &, bool classical = false,
                       const std::set<llvm::Function *> *variants = nullptr);
-void normaliseScalar(llvm::Function &);
+void normaliseScalar(llvm::Function &, bool wide = true);
+void normaliseFP(llvm::Function &);
+void materialiseFPBits(llvm::Function &);
+void normaliseWideFP(llvm::Function &);
+void linkArith(llvm::Module &);
+void requireSoftFloat(llvm::Function &);
 bool prepareStack(llvm::Module &, llvm::Function &, uint64_t);
 std::vector<llvm::GlobalVariable *> entryGlobals(llvm::Module &);
 void prepareEntryReplay(llvm::Module &, unsigned);

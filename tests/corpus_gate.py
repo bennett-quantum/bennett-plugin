@@ -59,6 +59,14 @@ def native(bc,major,baseline,dest):
    rc,out,err=run([exe,*map(str,inputs[i:i+64])]);code|=rc;traces.append(out)
   result[f'exit_O{level}']=code;result[f'trace_O{level}']=normalize(''.join(traces))
  return result
+def softfloat_native(bc,major,baseline,dest):
+ # Same linked integer library in both comparison builds; no hardware FP fallback.
+ linked=dest/'softfloat.bc'
+ rc,_,err=run([f'/usr/lib/llvm-{major}/bin/opt',
+  '-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),
+  '-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',bc,'-o',linked])
+ if rc:return {'error':err.strip()}
+ return native(linked,major,baseline,dest)
 def cell(task):
  case,major,pipe,baseline=task;stem=case.stem
  dest=R/'.tmp/gate'/str(major)/stem/hashlib.sha256(pipe.encode()).hexdigest()[:12];dest.mkdir(parents=True,exist_ok=True)
@@ -96,6 +104,13 @@ def cell(task):
   row['properties']['L1']=not pre.get('error') and not post.get('error') and pre.get('trace_O0')==post.get('trace_O0') and pre.get('exit_O0')==post.get('exit_O0')
   row['properties']['L5']=not post.get('error') and post.get('trace_O0')==post.get('trace_O3') and post.get('exit_O0')==post.get('exit_O3') and post.get('undefined_O0')==post.get('undefined_O3')
   row['native_error']=pre.get('error') or post.get('error')
+  if stem=='fp-rot-fastmath-reassoc':
+   softpre=softfloat_native(before,major,baseline[stem],dest/'pre')
+   softpost=softfloat_native(combined,major,baseline[stem],dest/'post')
+   row['softfloat_error']=softpre.get('error') or softpost.get('error')
+   row['missing_entry_point']=next(iter(re.findall(r'§13.1 missing entry point (__bennett_sf_\w+)',row['softfloat_error'] or '')),None)
+   row['properties']['L5']=not row['softfloat_error'] and all(softpre.get(f'trace_O{level}')==softpost.get(f'trace_O{level}')==softpost.get('trace_O0') and softpre.get(f'exit_O{level}')==softpost.get(f'exit_O{level}')==0 for level in [0,3])
+   row['native_error']=row['softfloat_error'] or row['native_error']
   row['native_exits']={f'{stage}_O{level}':d.get(f'exit_O{level}') for stage,d in [('pre',pre),('post',post)] for level in [0,3]}
   if pre.get('exit_O0',0)!=0 or post.get('exit_O0',0)!=0:
    row['properties']['L1']=False;row['properties']['L5']=False
@@ -108,8 +123,8 @@ def classify(row):
  if not failed and row.get('agree'):return 'agree'
  if row.get('case') in ['spec-sem2-adj','spec-sem2-compute'] and failed=={'L1','L5'} and row.get('native_exits')=={'pre_O0':87,'pre_O3':87,'post_O0':87,'post_O3':87}:
   return 'blocked-upstream: bp-c2i (upstream b-dialect-spec-566)'
- if row.get('case')=='fp-rot-fastmath-reassoc' and failed=={'L5'}:
-  return 'deferred: M2 (§13 FP materialisation; PLAN M2)'
+ if row.get('case')=='fp-rot-fastmath-reassoc' and failed=={'L5'} and row.get('missing_entry_point') in {'__bennett_sf_sitofp_f64','__bennett_sf_add_f64','__bennett_sf_mul_f64','__bennett_sf_div_f64'} and '§13.1 missing entry point '+row['missing_entry_point'] in (row.get('softfloat_error') or ''):
+  return 'deferred: M2 (§13.1 bennett-arith unavailable: '+row['missing_entry_point']+'; bp-xms, bp-7ni)'
  return 'diverge'
 def summarize(cells):
  bycase={name:[classify(x) for x in cells if x['case']==name] for name in {x['case'] for x in cells}}

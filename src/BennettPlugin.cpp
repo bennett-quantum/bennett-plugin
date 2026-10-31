@@ -26,6 +26,7 @@ cl::opt<std::string> Report("bennett-report");
 cl::opt<bool> DescriptorReference("bennett-descriptor-reference", cl::desc("Non-production reference objects from statically resolved marker descriptors"));
 cl::opt<bool> ValidateOnly("bennett-validate-only", cl::desc("Validate materialised L/R IR independently of normalisation"));
 cl::opt<bool> ValidateClassical("bennett-validate-classical", cl::desc("Use CC V12 host-call rules in independent validation"));
+cl::opt<bool> Comparison("bennett-comparison", cl::desc("§13.1 native comparison: normalise and require linked soft-float closure"));
 cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
 cl::opt<bool> AnalysisOnly(
     "bennett-analysis-only",
@@ -309,11 +310,14 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       validateResidual(m,ValidateClassical);
       return PreservedAnalyses::all();
     }
-    if (NormaliseOnly) {
+    if (NormaliseOnly || Comparison) {
+      linkArith(m);
       for (Function &f : m) if (!f.isDeclaration()) normaliseScalar(f);
+      if(Comparison) for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())requireSoftFloat(*g);
       errs() << "bennett: scalar normalisation test mode; full N0-N35/V1-V16 pending M2\n";
       return PreservedAnalyses::none();
     }
+    linkArith(m);
     Analysis a(m);
     a.run();
     a.checkHandles();

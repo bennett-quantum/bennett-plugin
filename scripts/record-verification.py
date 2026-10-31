@@ -55,7 +55,7 @@ def object_paths(tmp, major, scalars):
         for rel in ('launch.bennett', 'oracle-0/ref.bennett'):
             out.append((f'production/{case}/{rel}', tmp / f'production/{major}/{case}/out/top/{rel}'))
     out.append(('production/abi/launch.bennett', tmp / f'production/{major}/abi/out/abi/launch.bennett'))
-    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage', 'entry-snapshot'):
+    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage', 'entry-snapshot', 'softfloat'):
         base = tmp / f'{family}/{major}'
         for p in sorted(base.rglob('*.bennett')):
             out.append((f'{family}/{p.relative_to(base)}', p))
@@ -80,12 +80,12 @@ def main():
         assert digest(build / f'libbennett-plugin-{major}.so') == h, f'plugin {major} changed after the gate'
     for m in MAJORS:
         s = gate['summary'][str(m)]
-        assert [s[k] for k in SUMMARY_KEYS] == [66, 65, 1, 0, 0], (m, s)
+        assert s['cases_run']==66 and s['cases_agree']+s['cases_deferred']==66 and s['cases_deferred']<=1 and s['cases_blocked']==s['cases_diverge']==0, (m,s)
 
     checks, scalars = {}, {}
     for m in MAJORS:
         c = {}
-        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'region-keys', 'validation'):
+        for name in ('recognition', 'analysis-edges', 'reference-images', 'materialisation', 'softfloat', 'region-keys', 'validation'):
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}

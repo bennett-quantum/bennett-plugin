@@ -11,7 +11,7 @@ using namespace llvm;
 namespace bennett {
 // M1 scalar materialisation slice. Other rules remain explicit M2 obligations;
 // this function is not a full §12 validator or a production conformance verdict.
-void normaliseScalar(Function &f) {
+void normaliseScalar(Function &f, bool wide) {
   // N0's last lowering, invoked only when this intrinsic occurs.
   bool widenable=false;
   for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i))
@@ -101,6 +101,31 @@ void normaliseScalar(Function &f) {
       Value *v=a->getValOperand(), *n=nullptr;
       switch(a->getOperation()) {
       case AtomicRMWInst::Xchg:n=v;break;
+      case AtomicRMWInst::FAdd:n=b.CreateFAdd(old,v,"nz.v."+r);break;
+      case AtomicRMWInst::FSub:n=b.CreateFSub(old,v,"nz.v."+r);break;
+      case AtomicRMWInst::FMax:
+      case AtomicRMWInst::FMin:
+#if LLVM_VERSION_MAJOR >= 23
+      case AtomicRMWInst::FMaximum:
+      case AtomicRMWInst::FMinimum:
+      case AtomicRMWInst::FMaximumNum:
+      case AtomicRMWInst::FMinimumNum:
+#endif
+      {
+        auto op=a->getOperation();
+        auto id=op==AtomicRMWInst::FMax?Intrinsic::maxnum:op==AtomicRMWInst::FMin?Intrinsic::minnum:
+#if LLVM_VERSION_MAJOR >= 23
+          op==AtomicRMWInst::FMaximum?Intrinsic::maximum:op==AtomicRMWInst::FMinimum?Intrinsic::minimum:op==AtomicRMWInst::FMaximumNum?Intrinsic::maximumnum:Intrinsic::minimumnum;
+#else
+          Intrinsic::maxnum;
+#endif
+        #if LLVM_VERSION_MAJOR >= 23
+        auto *helper=Intrinsic::getOrInsertDeclaration(f.getParent(),id,{v->getType()});
+#else
+        auto *helper=Intrinsic::getDeclaration(f.getParent(),id,{v->getType()});
+#endif
+        n=b.CreateCall(helper,{old,v},"nz.v."+r);break;
+      }
       case AtomicRMWInst::Add:n=b.CreateAdd(old,v,"nz.v."+r);break;
       case AtomicRMWInst::Sub:n=b.CreateSub(old,v,"nz.v."+r);break;
       case AtomicRMWInst::And:n=b.CreateAnd(old,v,"nz.v."+r);break;
@@ -452,6 +477,8 @@ void normaliseScalar(Function &f) {
     IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *replacement=b.CreateCall(helper,args);replacement->takeName(c);c->replaceAllUsesWith(replacement);c->eraseFromParent();
   }
 
+  normaliseFP(f);
+  if(wide)normaliseWideFP(f);
 }
 } // namespace bennett
 

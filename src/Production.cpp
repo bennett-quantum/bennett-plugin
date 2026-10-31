@@ -239,6 +239,7 @@ struct Entry {
   }
   unsigned width(Type *t) {
     if(t->isPointerTy())return m.getDataLayout().getPointerTypeSizeInBits(t);
+    if(t->isFloatingPointTy())return t->getPrimitiveSizeInBits();
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
       return t->getIntegerBitWidth();
     unimplemented("§17.4 CC scalar carrier", 1, &f);
@@ -251,6 +252,7 @@ struct Entry {
   std::string operand(Value *v) {
     if (names.count(v))
       return names[v];
+    if(auto *c=dyn_cast<ConstantFP>(v))return operand(ConstantInt::get(c->getContext(),c->getValueAPF().bitcastToAPInt()));
     if (auto *c = dyn_cast<ConstantInt>(v)) {
       auto n = fresh("i" + std::to_string(c->getBitWidth()));
       rows.push_back(n + " = const.i" + std::to_string(c->getBitWidth()) + " " +
@@ -1218,6 +1220,8 @@ struct Entry {
           if(isa<PtrToIntInst>(cast)){auto n=fresh("i"+std::to_string(w));rows.push_back(n+" = ptrtoint.i"+std::to_string(w)+" "+x);x=n;}
           if(source!=target){auto n=fresh("i"+std::to_string(target));rows.push_back(n+std::string(source<target?" = zext.i":" = trunc.i")+std::to_string(target)+" "+x);x=n;}
           if(isa<IntToPtrInst>(cast)){auto n=fresh("ptr");rows.push_back(n+" = inttoptr "+x);x=n;}names[cast]=x;
+        } else if(auto *c=dyn_cast<BitCastInst>(&i)) {
+          names[c]=operand(c->getOperand(0));
         } else if (auto *c = dyn_cast<CastInst>(&i);
                    c && (isa<ZExtInst>(c) || isa<SExtInst>(c) ||
                          isa<TruncInst>(c))) {
@@ -1890,6 +1894,36 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
               table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
         }
   }
+  // CC arithmetic uses the same linked definitions as L and native comparison.
+  // Inline the numerical closure before the existing SSA/CFG CC lowering.
+  bool preparedFP=false;
+  for(auto &fn:m)if(!fn.isDeclaration() && a.tiers[&fn].count("CC") && !fn.hasFnAttribute("bennett.cc.softfloat")) {
+    bool needed=false;
+    for(auto &i:instructions(fn)) {
+      needed|=isa<FCmpInst>(i) || (isa<BinaryOperator>(i) && i.getType()->isFloatingPointTy());
+      if(auto *c=dyn_cast<CastInst>(&i))needed|=c->getOpcode()==Instruction::SIToFP||c->getOpcode()==Instruction::UIToFP||c->getOpcode()==Instruction::FPToSI||c->getOpcode()==Instruction::FPToUI||c->getOpcode()==Instruction::FPExt||c->getOpcode()==Instruction::FPTrunc;
+      if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())needed|=g->getName().starts_with("__bennett_sf_") || (g->isIntrinsic() && c->getType()->isFloatingPointTy());
+    }
+    if(!needed)continue;
+    fn.addFnAttr("bennett.cc.softfloat");preparedFP=true;normaliseScalar(fn);materialiseFPBits(fn);
+    // Check recursion before inlining; an unbounded expansion must never hang.
+    std::set<Function *> active,done;
+    std::function<void(Function *)> check=[&](Function *f) {
+      requireSoftFloat(*f);if(f->isDeclaration() || done.count(f))return;
+      if(!active.insert(f).second)unimplemented("§13.1 recursive CC soft-float closure",2,f);
+      normaliseScalar(*f);materialiseFPBits(*f);
+      for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g && !markers().count(g->getName().str()))check(g);
+      active.erase(f);done.insert(f);
+    };
+    for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g && g->getName().starts_with("__bennett_sf_"))check(g);
+    while(true) {
+      CallBase *site=nullptr;
+      for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && done.count(c->getCalledFunction())) {site=c;break;}
+      if(!site)break;InlineFunctionInfo info;
+      if(!InlineFunction(*site,info).isSuccess())fail("output","§13.1 CC helper inlining failed",site);
+    }
+  }
+  if(preparedFP) {Analysis prepared(m);prepared.run();lowerProduction(m,prepared,out,stack,budgetDefault,budgetFile);return;}
   bool preparedCaller=false;
   std::vector<Function *> callers;
   for(auto &fn:m)if(!fn.isDeclaration() && a.tiers[&fn].count("CC"))callers.push_back(&fn);
@@ -1934,6 +1968,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
                         {"llvm_version", LLVM_VERSION_STRING},
                         {"pipeline", "bennett"},
                         {"shape", e.shape}};
+    if(auto *id=dyn_cast_or_null<MDString>(m.getModuleFlag("bennett.arith.bitcode.sha256")))record["arith_bitcode_sha256"]=id->getString();
     if (table.enabled) {
       json::Object resolved{{"version", "0.2"}, {"defaults", tuple(table.defaults)},
         {"capacities", tuple(table.capacities)}, {"shapes", std::move(e.resolvedShapes)},
@@ -1985,6 +2020,8 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   if (ec)
     fail("output", ec.message());
   WriteBitcodeToFile(*device, bc);
+  for(auto &f:m)if(!f.isDeclaration())normaliseFP(f);
+  for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())requireSoftFloat(*g);
   raw_fd_ostream host(out.str() + "/host.bc", ec);
   if (ec)
     fail("output", ec.message());

@@ -197,7 +197,7 @@ Function *resolve(Value *v) {
     if (auto *ga = dyn_cast<GlobalAlias>(target))
       target = ga->getAliaseeObject();
     auto *g = dyn_cast<Function>(target);
-    if (!g)
+    if (!g || g->isIntrinsic())
       break;
     f = g;
   }
@@ -347,6 +347,12 @@ std::string regionKey(Function *f) {
       }
     }
   }
+  // Declaration insertion order is not closure content. N32 may discover
+  // ss_push/sf/pop in a different order from independently published output.
+  std::vector<Function *> declarations;
+  for(auto &g:*clone)if(g.isDeclaration())declarations.push_back(&g);
+  std::sort(declarations.begin(),declarations.end(),[](auto *a,auto *b){return a->getName()<b->getName();});
+  for(auto *g:declarations)clone->getFunctionList().splice(clone->end(),clone->getFunctionList(),g->getIterator());
   std::string text;
   raw_string_ostream out(text);
   clone->print(out, nullptr);
@@ -356,11 +362,7 @@ std::string regionKey(Function *f) {
 AV Analysis::get(const Value *v) {
   if (auto *c = dyn_cast<ConstantInt>(v))
     return integer(c->getValue());
-  if (isa<ConstantFP>(v)) {
-    AV a;
-    a.top = true;
-    return a;
-  }
+  if (auto *c=dyn_cast<ConstantFP>(v)) return integer(c->getValueAPF().bitcastToAPInt());
   if (isa<ConstantPointerNull>(v))
     return integer(APInt(M.getDataLayout().getPointerSizeInBits(), 0));
   if (auto *f = dyn_cast<Function>(v))
@@ -530,7 +532,7 @@ AV Analysis::load(const AV &p, Type *t) {
           if (s.filled && a.stride == 0 && s.stride == 0 &&
               a.offset >= s.offset &&
               (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
-              (t->isIntegerTy() || t->isPointerTy())) {
+              (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
             AV decoded;
             decoded.top = s.value.top;
             for (auto &x : s.value.atoms)
@@ -1085,6 +1087,33 @@ static bool longAdditiveCycle(Value *value, Value *source,
   return false;
 }
 void Analysis::step(Instruction &i) {
+  // S2 evaluates precisely the same N9/N32/N33 graph on private instructions.
+  // Operands retain source identities; host IR and its attributes stay untouched.
+  bool fp=false;
+  if(auto *r=dyn_cast<AtomicRMWInst>(&i))fp=r->getType()->isFloatingPointTy();
+  fp|=i.getOpcode()==Instruction::FNeg || isa<FCmpInst>(i) || (isa<BinaryOperator>(i) && i.getType()->isFloatingPointTy());
+  if(auto *c=dyn_cast<CastInst>(&i))fp|=c->getOpcode()==Instruction::SIToFP||c->getOpcode()==Instruction::UIToFP||c->getOpcode()==Instruction::FPToSI||c->getOpcode()==Instruction::FPToUI||c->getOpcode()==Instruction::FPExt||c->getOpcode()==Instruction::FPTrunc;
+  if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
+    auto base=Intrinsic::getBaseName(c->getIntrinsicID());
+    fp|=c->getType()->isFloatingPointTy();
+    for(auto &arg:c->args())fp|=arg->getType()->isFloatingPointTy();
+    fp|=base=="llvm.get.rounding" || base=="llvm.set.rounding" || base.ends_with(".fpenv") || base.ends_with(".fpmode");
+    fp|=base=="llvm.is.fpclass" || base.starts_with("llvm.fptosi.sat") || base.starts_with("llvm.fptoui.sat");
+  }
+  if(fp && !virtualFP) {
+    auto &slice=fpTransfers[&i];
+    if(!slice) {
+      auto *f=Function::Create(FunctionType::get(i.getType(),false),GlobalValue::InternalLinkage,"",M);
+      auto *bb=BasicBlock::Create(M.getContext(),"",f);auto *copy=i.clone();copy->setName(i.getName());copy->insertInto(bb,bb->end());
+      ReturnInst::Create(M.getContext(),i.getType()->isVoidTy()?nullptr:copy,bb);normaliseScalar(*f,false);materialiseFPBits(*f);f->removeFromParent();slice.reset(f);
+    }
+    virtualFP=true;
+    for(auto &v:instructions(*slice))if(!isa<ReturnInst>(v))step(v);
+    auto *result=cast<ReturnInst>(slice->back().getTerminator())->getReturnValue();
+    if(result) {if(i.getType()->isAggregateType())copyFields(&i,result);else changed|=values[&i].merge(get(result));}
+    for(auto *callee:edges[slice.get()])edges[i.getFunction()].insert(callee);
+    virtualFP=false;return;
+  }
   AV a;
   if (composite(i))
     return;
@@ -1336,7 +1365,9 @@ void Analysis::step(Instruction &i) {
         }
         store(top, dst, 1);
       }
-    } else if (allocation(f)) {
+    } else if (virtualFP && n=="__bennett_rt_ss_pop") {
+      // Private conversion temporary; lifetime is lexical in the virtual graph.
+    } else if (allocation(f) || (virtualFP && n=="__bennett_rt_ss_push")) {
       a = atom(Atom::Ptr, c);
       // §5.2 initial image, not immutable memory. Dynamic extent retains the
       // possible zero bytes symbolically; PT6 only uses wholly contained reads.

@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""§13 transport and published bitcode-edge tests, not a numerical library.
+
+The synthetic definitions deliberately only implement bit operations. They prove
+linkage/closure and carrier transport, never stand in for bennett-arith's arithmetic.
+"""
+import argparse, json, os, re, subprocess, shutil
+from contracts import ROOT as R
+from scalars import REF
+
+def main():
+ p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
+ d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
+ tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
+ def run(argv,env=None):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=60,env=env)
+ env=dict(os.environ);env.pop('BENNETT_ARITH_BITCODE',None)
+ def opt(body,name,flags,linked=None):
+  src=d/(name+'.ll');src.write_text(body);dest=d/name
+  e=dict(env)
+  if linked:e['BENNETT_ARITH_BITCODE']=str(linked)
+  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',*flags,src],e)
+  return z,dest
+ def check(name,ok,detail=''):rows.append(dict(name=name,ok=bool(ok),detail=detail))
+ formats=[('half','f16',16),('bfloat','bf16',16),('float','f32',32),('double','f64',64),('x86_fp80','f80',80),('fp128','f128',128),('ppc_fp128','ppcf128',128)]
+ for t,s,w in formats:
+  body=f'''define {t} @f({t} %a, {t} %b, i128 %n) {{
+ %x = sitofp i128 %n to {t}
+ %v = fadd {t} %a, %x
+ %k = fcmp une {t} %a, %b
+ %r = select i1 %k, {t} %v, {t} %b
+ ret {t} %r
+}}'''
+  z,_=opt(body,s,['-bennett-normalise-only','-S','-o','-'])
+  check('carriers-'+s,z.returncode==0 and f'@__bennett_sf_sitofp_{s}(i128 %n)' in z.stdout and f'@__bennett_sf_cmp_{s}(i{w}' in z.stdout and not re.search(r'= (fadd|sitofp|fcmp) ',z.stdout),z.stderr)
+ atomic=['fadd','fsub','fmax','fmin']+(['fmaximum','fminimum','fmaximumnum','fminimumnum'] if a.major==23 else [])
+ for op in atomic:
+  body=f'@g = internal global double 0.0\ndefine double @f(double %x) {{ %r = atomicrmw {op} ptr @g, double %x seq_cst\n ret double %r }}'
+  z,_=opt(body,op,['-bennett-normalise-only','-S','-o','-'])
+  helper={'fadd':'add','fsub':'sub','fmax':'maxnum','fmin':'minnum'}.get(op,op[1:])
+  check('N9-'+op,z.returncode==0 and '@__bennett_sf_'+helper+'_f64' in z.stdout and 'atomicrmw' not in z.stdout,z.stderr)
+ # Each carrier-call family uses the prescribed result and operand widths.
+ for op,argc in [('sqrt',1),('floor',1),('ceil',1),('trunc',1),('round',1),('roundeven',1),('rint',1),('nearbyint',1),('canonicalize',1),('minnum',2),('maxnum',2),('minimum',2),('maximum',2),('fma',3)]:
+  args=', '.join('double %x' for _ in range(argc));types=', '.join('double' for _ in range(argc))
+  body=f'declare double @llvm.{op}.f64({types})\ndefine double @f(double %x) {{ %r = call double @llvm.{op}.f64({args})\n ret double %r }}'
+  z,_=opt(body,'intrinsic-'+op,['-bennett-normalise-only','-S','-o','-'])
+  check('N32-'+op,z.returncode==0 and f'call i64 @__bennett_sf_{op}_f64' in z.stdout,z.stderr)
+ for op in ['sitofp','uitofp']:
+  for bits in [7,128,129,192]:
+   body=f'define double @f(i{bits} %n) {{ %r = {op} i{bits} %n to double\n ret double %r }}'
+   z,_=opt(body,f'{op}-{bits}',['-bennett-normalise-only','-S','-o','-'])
+   # Wide function arguments are N22 limb ABI work; exercise wide loads here.
+   if bits>128:
+    body=f'define double @f(ptr %p) {{ %n = load i{bits}, ptr %p, align 8\n %r = {op} i{bits} %n to double\n ret double %r }}'
+    z,_=opt(body,f'{op}-{bits}',['-bennett-normalise-only','-S','-o','-'])
+   check(f'N32-{op}-{bits}',z.returncode==0 and f'@__bennett_sf_{op}_f64'+('_wide' if bits>128 else '') in z.stdout and not re.search(r'= (sitofp|uitofp) ',z.stdout),z.stderr)
+ for pred in range(16):
+  names=['false','oeq','ogt','oge','olt','ole','one','ord','uno','ueq','ugt','uge','ult','ule','une','true']
+  body=f'define i1 @f(double %a,double %b) {{ %r = fcmp {names[pred]} double %a,%b\n ret i1 %r }}'
+  z,_=opt(body,'predicate-'+str(pred),['-bennett-normalise-only','-S','-o','-'])
+  check('predicate-'+str(pred),z.returncode==0 and f'i32 {pred})' in z.stdout,z.stderr)
+ for mode,num in [('tonearest',0),('downward',1),('upward',2),('towardzero',3),('tonearestaway',4),('dynamic',None)]:
+  body='declare double @llvm.experimental.constrained.fmuladd.f64(double,double,double,metadata,metadata)\ndefine double @f(double %a,double %b,double %c) { %r = call double @llvm.experimental.constrained.fmuladd.f64(double %a,double %b,double %c,metadata !"round.'+mode+'",metadata !"fpexcept.ignore")\n ret double %r }'
+  z,_=opt(body,'round-'+mode,['-bennett-normalise-only','-S','-o','-'])
+  check('constrained-unfused-'+mode,z.returncode==0 and '@__bennett_sf_mul_f64_rm' in z.stdout and '@__bennett_sf_add_f64_rm' in z.stdout and ('@__bennett_rt_fenv' in z.stdout if num is None else f'i32 {num})' in z.stdout),z.stderr)
+ body='declare void @llvm.set.rounding(i32)\ndeclare i32 @llvm.get.rounding()\ndefine i32 @f() { call void @llvm.set.rounding(i32 1)\n %r = call i32 @llvm.get.rounding()\n ret i32 %r }'
+ z,_=opt(body,'fenv',['-bennett-normalise-only','-S','-o','-'])
+ check('fenv-state',z.returncode==0 and '@__bennett_rt_fenv' in z.stdout and 'call i32 @llvm.get.rounding' not in z.stdout,z.stderr)
+ if a.major==18:
+  body='declare i16 @llvm.convert.to.fp16.f64(double)\ndeclare double @llvm.convert.from.fp16.f64(i16)\ndefine double @f(double %x) { %h = call i16 @llvm.convert.to.fp16.f64(double %x)\n %r = call double @llvm.convert.from.fp16.f64(i16 %h)\n ret double %r }'
+  z,_=opt(body,'fp16',['-bennett-normalise-only','-S','-o','-'])
+  check('fp16-conversion',z.returncode==0 and '@__bennett_sf_fptrunc_f64_f16' in z.stdout and '@__bennett_sf_fpext_f16_f64' in z.stdout,z.stderr)
+ # Bind every predicate, integer extension and introduced helper in the S2 fixpoint.
+ library='''define internal i1 @predicate(i64 %a, i64 %b, i32 %p) { %r = icmp eq i32 %p, 14
+ ret i1 %r }
+define i1 @__bennett_sf_cmp_f64(i64 %a, i64 %b, i32 %p) { %r = call i1 @predicate(i64 %a,i64 %b,i32 14)
+ ret i1 %r }
+define i64 @__bennett_sf_add_f64(i64 %a, i64 %b) { %r = xor i64 %a, %b
+ ret i64 %r }
+define i64 @__bennett_sf_sitofp_f64(i128 %a) { %r = trunc i128 %a to i64
+ ret i64 %r }
+'''
+ lib=d/'arith.ll';lib.write_text(library);bc=d/'arith.bc';z=run([tool+'llvm-as',lib,'-o',bc]);assert z.returncode==0,z.stderr
+ body='''define internal i1 @cmp(double %a, double %b) { %r = fcmp une double %a, %b
+ ret i1 %r }
+define i1 @top() { %v = call i1 @cmp(double 0.0,double 1.0)
+ ret i1 %v }
+'''
+ rep=d/'analysis.json';z,_=opt(body,'analysis',['-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output'],bc)
+ data=json.loads(rep.read_text()) if z.returncode==0 else {};values=data.get('values',[])
+ check('S2-comparison-closure',z.returncode==0 and any(v['function']=='top' and v['value']=='%v' and set(v['atoms'])=={'INT(0)','INT(1)'} and not v['top'] for v in values),z.stderr)
+ # A linked FP atomic must transport helper effects, not perform integer arithmetic on bits.
+ atomicbody='''@g = internal global double 0.0
+define i64 @top() { %old = atomicrmw fmax ptr @g, double 1.0 seq_cst
+ %v = load double, ptr @g
+ %bits = bitcast double %v to i64
+ ret i64 %bits }
+'''
+ atomiclib=d/'atomic.ll';atomiclib.write_text('define i64 @__bennett_sf_maxnum_f64(i64 %a,i64 %b) { ret i64 42 }')
+ rep=d/'atomic-analysis.json';z,_=opt(atomicbody,'atomic-analysis',['-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output'],atomiclib)
+ data=json.loads(rep.read_text()) if z.returncode==0 else {}
+ check('S2-FP-atomic',z.returncode==0 and any(v['value']=='%bits' and set(v['atoms'])=={'INT(0)','INT(42)'} and not v['top'] for v in data.get('values',[])),z.stderr)
+ # Native comparison requires actual definitions (missing, corrupt and incomplete edges fail loudly).
+ z,_=opt(body,'missing',['-bennett-comparison','-disable-output'])
+ check('missing-entry',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr and 'BENNETT_ARITH_BITCODE' in z.stderr,z.stderr)
+ z,_=opt(body,'bad-path',['-bennett-comparison','-disable-output'],d/'absent.bc')
+ check('missing-bitcode-file',z.returncode!=0 and '§13.1 BENNETT_ARITH_BITCODE' in z.stderr,z.stderr)
+ z,_=opt(body,'incomplete',['-bennett-comparison','-disable-output'],atomiclib)
+ check('incomplete-bitcode',z.returncode!=0 and 'missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)
+ comparison=d/'comparison.bc';z,_=opt(body,'comparison',['-bennett-comparison','-o',str(comparison)],bc)
+ check('comparison-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  e=dict(env,BENNETT_ARITH_BITCODE=str(bc))
+  again=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',comparison,'-disable-output'],e)
+  check('comparison-relink-idempotent',again.returncode==0,again.stderr)
+ if z.returncode==0:
+  for level in (0,3):
+   src=d/'main.c';src.write_text('extern _Bool top(void); int main(void) { return top()!=1; }')
+   exe=d/f'compare-O{level}';z=run([tool+'clang',f'-O{level}',comparison,src,'-o',exe]);check(f'comparison-O{level}',z.returncode==0 and run([exe]).returncode==0,z.stderr)
+ # Production L closure via a real descriptor and CC launch; helper body change changes the key.
+ production='''define internal i1 @region(i64 %x) { %a = bitcast i64 %x to double
+ %r = fcmp une double %a, 0.0
+ ret i1 %r }
+define void @top() {
+ %d = alloca [64 x i8], align 8
+ %q = call ptr @__bennett_qalloc(i64 0,i64 64)
+ %t = call ptr @__bennett_qalloc(i64 0,i64 1)
+ %f = call ptr @__bennett_qalloc(i64 0,i64 4)
+ STORES
+ call void @__bennett_oracle(ptr @region,ptr null,ptr %d)
+ call void @__bennett_oracle(ptr @region,ptr null,ptr %d)
+ call void @__bennett_qfree(ptr %f)
+ call void @__bennett_qfree(ptr %t)
+ call void @__bennett_qfree(ptr %q)
+ ret void }
+declare ptr @__bennett_qalloc(i64,i64)
+declare void @__bennett_qfree(ptr)
+declare void @__bennett_oracle(ptr,ptr,ptr)
+'''
+ fields=[(0,'i32','2'),(4,'i32','1'),(8,'i32','0'),(12,'i32','0'),(16,'ptr','%t'),(24,'ptr','%f'),(32,'i32','1'),(36,'i32','0'),(40,'ptr','%q'),(48,'i64','0'),(56,'i64','0')]
+ production=production.replace('STORES','\n'.join(f'%p{j} = getelementptr i8, ptr %d, i64 {off}\n store {ty} {v}, ptr %p{j}' for j,(off,ty,v) in enumerate(fields)))
+ out=d/'production';z,_=opt(production,'production-input',['-bennett-out='+str(out),'-bennett-budget-default=1000,0,256,16,0','-disable-output'],bc)
+ check('production-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  obj=out/'top/launch.bennett';z=run([REF,'check',obj]);check('production-check',z.returncode==0,z.stdout+z.stderr)
+  z=run([REF,'run-program',obj,'top','--args','1000,1000','--budget','100000,0,256,16']);check('production-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
+  check('helper-transitive-closure','lproc @L3' in (out/'top/oracle-0/ref.bennett').read_text())
+ # Direct CC FP arithmetic also consumes that library before SSA/CFG lowering.
+ ccbody='''define i1 @top(i64 %x) { %q = call ptr @__bennett_qalloc(i64 0,i64 1)
+ %a = bitcast i64 %x to double
+ %r = fcmp une double %a,0.0
+ call void @__bennett_qfree(ptr %q)
+ ret i1 %r }
+declare ptr @__bennett_qalloc(i64,i64)
+declare void @__bennett_qfree(ptr)
+'''
+ out=d/'cc';z,_=opt(ccbody,'cc-input',['-bennett-out='+str(out),'-disable-output'],bc)
+ check('CC-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  obj=out/'top/launch.bennett';z=run([REF,'check',obj]);check('CC-check',z.returncode==0,z.stdout+z.stderr)
+  z=run([REF,'run-program',obj,'top','--args','0','--budget','100000,0,0,0'])
+  check('CC-execute',z.returncode==0 and json.loads(z.stdout).get('results')==[{'type':'i1','value':'1'}],z.stdout+z.stderr)
+ # Missing production helpers are unavailability, never an unknown host call or a trap object.
+ z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
+ check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)
+ result=dict(major=a.major,cases=len(rows),passed=sum(r['ok'] for r in rows),results=rows)
+ (R/f'.tmp/softfloat-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return result['passed']!=result['cases']
+if __name__=='__main__':raise SystemExit(main())

@@ -451,7 +451,7 @@ struct Scalar {
           lines.push_back("lift.store.i"+std::to_string(w)+" "+p+" "+v);continue;
         }
         if (isa<AllocaInst>(i)) unimplemented("§17.3 shadow stack",2,&i);
-        if (i.getType()->isFPOrFPVectorTy())
+        if (i.getType()->isFPOrFPVectorTy() && !isa<BitCastInst>(i) && !isa<SelectInst>(i))
           unimplemented("§13 soft-float", 2, &i);
         std::string row;
         if (auto *c = dyn_cast<ICmpInst>(&i)) {
@@ -601,6 +601,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack, unsigned autoSnapshot) {
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
   if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));
+  for(auto &g:m)if(!g.isDeclaration())normaliseFP(g);
   bool singleFrame=prepareStack(m,f,sstack);
   if(autoSnapshot) {
     // CC assembly storage has no L users and is not part of caller memory.
@@ -609,7 +610,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     prepareEntryReplay(m,autoSnapshot);
   }
   // Materialise every linked member before computing candidates and read dependencies.
-  for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
+  for (Function &g:m) if(!g.isDeclaration()) {normaliseScalar(g);materialiseFPBits(g);}
   // The command/descriptor-selected internal oracle is an invocation entry,
   // even when the input module has no host marker referring to it. PT11 must
   // seed its parameters before the same fixpoint computes indirect domains.
@@ -617,7 +618,9 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   std::vector<Function *> closure;
   std::map<Function *,std::string> functions;
   std::function<void(Function *)> collect=[&](Function *g) {
-    if(!g || g->isDeclaration() || functions.count(g)) return;
+    if(!g) return;
+    requireSoftFloat(*g);
+    if(g->isDeclaration() || functions.count(g)) return;
     functions[g]="L"+std::to_string(functions.size()+1);closure.push_back(g);
     for(Instruction &i:instructions(g)) if(auto *c=dyn_cast<CallBase>(&i)) {
       if(auto *target=c->getCalledFunction()) collect(target);
