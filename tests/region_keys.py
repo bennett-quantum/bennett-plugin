@@ -111,6 +111,9 @@ dead_data="""@mtab = internal global [4 x ptr] zeroinitializer
 define internal ptr @unrelated() { ret ptr getelementptr ([4 x ptr], ptr @mtab, i64 0, i64 2) }
 """
 closure_checks['dead_constant_data_excluded']=closure_key(plain)==closure_key(plain+dead_data)
+# The published wide witness has two roots: verify the runtime-bearing count
+# root as well as the first (overflow) root audited in the fixture loop.
+closure_checks['wide_count_materialised_closure']=closure_key(pairs['in']['n-wide-intrinsics'],'count192')==closure_key(pairs['out']['n-wide-intrinsics'],'count192')
 if not a.all_fixtures: checks.update(closure_checks)
 result={'major':a.major,'checks':checks,'cases':len(checks),'passed':sum(checks.values()),'diagnostic':x.stderr,'published_closures':details,'closure_checks':closure_checks}
 (R/f'.tmp/{"region-key-audit" if a.all_fixtures else "region-keys"}-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
