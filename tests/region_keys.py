@@ -35,6 +35,12 @@ keys=[r['candidates'][0]['key'] for r in json.loads(report.read_text())['regions
 checks={'flags':len(keys)==7 and keys[0]==keys[1]==keys[5]==keys[6],'freeze':len(keys)==7 and keys[2]==keys[3],
         'rstep_preserved':len(keys)==7 and keys[3]!=keys[4],
         'host_preserved':x.returncode==0 and 'add nsw' in out.read_text() and 'freeze i8' in out.read_text()}
+# N22 ABI replacement must preserve tracking handles even after strip removes
+# every local function name. Region identity must never look functions up by name.
+stripped_report=d/'stripped.json'
+stripped=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=strip,bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(stripped_report),'-disable-output',str(source)],capture_output=True,text=True)
+stripped_keys=[r['candidates'][0]['key'] for r in json.loads(stripped_report.read_text())['regions']] if stripped.returncode==0 else []
+checks['stripped_function_identity']=stripped.returncode==0 and stripped_keys==keys
 # Compare source closures against independently published materialised closures.
 # An absent transform is a failure; equality of two raw source keys is no witness.
 spec=dialect_text()
