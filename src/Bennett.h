@@ -86,6 +86,8 @@ void validateResidual(llvm::Module &, bool classical = false,
                       const std::set<llvm::Function *> *variants = nullptr);
 void normaliseScalar(llvm::Function &);
 bool prepareStack(llvm::Module &, llvm::Function &, uint64_t);
+std::vector<llvm::GlobalVariable *> entryGlobals(llvm::Module &);
+void prepareEntryReplay(llvm::Module &, unsigned);
 void lowerScalar(llvm::Module &, llvm::Function &, llvm::StringRef desc,
-                 llvm::StringRef out, unsigned stackCells, uint64_t heapCapacity = 0, int projection = -1, std::map<std::string,std::string> *globalNames = nullptr, uint64_t sstack = 0);
+                 llvm::StringRef out, unsigned stackCells, uint64_t heapCapacity = 0, int projection = -1, std::map<std::string,std::string> *globalNames = nullptr, uint64_t sstack = 0, unsigned autoSnapshot = 0);
 } // namespace bennett

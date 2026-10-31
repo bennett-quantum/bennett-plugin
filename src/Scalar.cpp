@@ -598,9 +598,16 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
   image(g.getInitializer(),0);return toHex(ArrayRef<uint8_t>(bytes),true);
 }
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
-                 unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack) {
+                 unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack, unsigned autoSnapshot) {
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
+  if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));
   bool singleFrame=prepareStack(m,f,sstack);
+  if(autoSnapshot) {
+    // CC assembly storage has no L users and is not part of caller memory.
+    SmallVector<GlobalVariable *> scratch;for(auto &g:m.globals())if(g.getMetadata("bennett.snapshot.scratch"))scratch.push_back(&g);
+    for(auto *g:scratch) {if(!g->use_empty())fail("output","CC snapshot scratch escaped into L",g);g->eraseFromParent();}
+    prepareEntryReplay(m,autoSnapshot);
+  }
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
   // The command/descriptor-selected internal oracle is an invocation entry,
@@ -627,7 +634,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   auto flag=[&](StringRef name,uint64_t fallback) {auto *md=m.getModuleFlag(name);return md?cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue():fallback;};
   sstack=flag("bennett.sstack",sstack);
   unsigned snapshot=flag("bennett.entry.snapshot",0);
-  bool initialise=flag("bennett.ss.init",0);
+  bool initialise=flag("bennett.ss.init",0) || flag("bennett.entry.stack",0);
   if(snapshot) collect(m.getFunction("__bennett_rt_entry_replay"));
   for(auto &g:m)for(auto &i:instructions(g))if(auto *c=dyn_cast<CallBase>(&i))if(c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_rt_ss_push")initialise=true;
   if(initialise)collect(m.getFunction("__bennett_rt_ss_init"));
@@ -709,7 +716,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   if(!snapshot) for(auto &a:f.args())if(a.getType()->isPointerTy() && !privateArguments.count(&a) && memoryUse(&a))
     unimplemented("§8.5 caller pointer snapshot transfer",2,&a);
   // The closure, rather than just its root, owns writes to private globals.
-  for(Function &g:m) if(!functions.count(&g) && !g.hasFnAttribute("bennett.stack.internal"))
+  for(Function &g:m) if(!snapshot && !functions.count(&g) && !g.hasFnAttribute("bennett.stack.internal"))
     for(Instruction &i:instructions(g)) if(auto *st=dyn_cast<StoreInst>(&i))
       if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
         unimplemented("§8.5 caller snapshot transfer",2,&i);

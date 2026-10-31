@@ -554,7 +554,7 @@ void normaliseStack(Function &f) {
     IRBuilder<> b(c);SmallVector<Value *> args(c->args());auto *r=b.CreateCall(target,args);r->takeName(c);c->replaceAllUsesWith(r);c->eraseFromParent();
   }
   SmallVector<AllocaInst *> allocas;
-  for(auto &i:instructions(f))if(auto *a=dyn_cast<AllocaInst>(&i))allocas.push_back(a);
+  for(auto &i:instructions(f))if(auto *a=dyn_cast<AllocaInst>(&i);a && !a->getMetadata("bennett.cc.descriptor"))allocas.push_back(a);
   if(allocas.empty())return;
   auto &m=*f.getParent();auto &ctx=f.getContext();auto *i64=Type::getInt64Ty(ctx);auto *ptr=PointerType::getUnqual(ctx);
   uint64_t size=0,alignment=1;std::map<AllocaInst *,uint64_t> offsets;
@@ -595,7 +595,7 @@ bool prepareStack(Module &m,Function &root,uint64_t capacity) {
   for(auto *f:closure)normaliseStack(*f);
   bool needed=false;
   for(auto *f:closure)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())needed|=g->getName()=="__bennett_rt_ss_push";
-  if(!needed)return false;
+  if(!needed && !m.getModuleFlag("bennett.entry.stack"))return false;
   auto *init=m.getFunction("__bennett_rt_ss_init");
   bool singleFrame=init && !init->isDeclaration() && proveSingleFrame(m,root,capacity);
   if(!init || init->isDeclaration()) {
