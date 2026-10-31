@@ -55,7 +55,7 @@ def object_paths(tmp, major, scalars):
         for rel in ('launch.bennett', 'oracle-0/ref.bennett'):
             out.append((f'production/{case}/{rel}', tmp / f'production/{major}/{case}/out/top/{rel}'))
     out.append(('production/abi/launch.bennett', tmp / f'production/{major}/abi/out/abi/launch.bennett'))
-    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage'):
+    for family in ('production-shapes', 'production-budgets', 'production-dispatch', 'production-environments', 'production-lifts', 'shadow-stack', 'budget-stage', 'entry-snapshot'):
         base = tmp / f'{family}/{major}'
         for p in sorted(base.rglob('*.bennett')):
             out.append((f'{family}/{p.relative_to(base)}', p))
@@ -101,6 +101,11 @@ def main():
         for fam in ('dispatch', 'environments', 'shapes', 'budgets', 'records', 'lifts'):
             c[f'production-{fam}'] = check_rows(read(f'production-{fam}-{m}.json')['cases'])
             assert c[f'production-{fam}']['cases'] == c[f'production-{fam}']['ok'], (fam, m)
+        snapshot = read(f'entry-snapshot-{m}.json')
+        assert snapshot['cases'] and all(r.get('ok') and r.get('check') for r in snapshot['cases'])
+        c['entry-snapshot'] = check_rows(snapshot['cases'])
+        c['entry-snapshot']['isa_ref'] = snapshot['isa_ref']
+        c['entry-snapshot']['isa_ref_sha256'] = snapshot['isa_ref_sha256']
         ss = read(f'shadow-stack-{m}.json')
         assert all(r.get('check') and r.get('ok') for r in ss['cases'])
         c['shadow-stack'] = check_rows(ss['cases'])

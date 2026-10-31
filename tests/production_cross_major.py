@@ -3,7 +3,7 @@
 import hashlib,json
 from contracts import ROOT as R
 pairs=[]
-for family in ['production-dispatch','production-environments']:
+for family in ['production-dispatch','production-environments','entry-snapshot']:
  left=R/f'.tmp/{family}/18';right=R/f'.tmp/{family}/23'
  files={p.relative_to(left) for p in left.rglob('*.bennett')}
  assert files and files=={p.relative_to(right) for p in right.rglob('*.bennett')},family

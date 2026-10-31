@@ -34,6 +34,13 @@ for major in 18 23; do
   python3 "$root/tests/shadow_stack.py" --major "$major"
   python3 "$root/tests/production_lifts.py" --major "$major" --case entry-replay-byte --case rung4-mini --case rung8-mini --case listsum --case shadow-n24
 done
+# Independent snapshot executions are CPU-heavy; their artifacts are major-local.
+python3 "$root/tests/entry_snapshot.py" --major 18 &
+snapshot18=$!
+python3 "$root/tests/entry_snapshot.py" --major 23 &
+snapshot23=$!
+wait "$snapshot18"
+wait "$snapshot23"
 python3 "$root/tests/production_cross_major.py"
 python3 "$root/tests/prior_objects.py"
 python3 "$root/tests/corpus_gate.py"
