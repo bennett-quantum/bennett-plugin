@@ -364,7 +364,7 @@ struct Scalar {
           dest(names[l],w);lines.push_back(names[l]+" = lift.load.i"+std::to_string(w)+" "+p);continue;
         }
         if (auto *st = dyn_cast<StoreInst>(&i)) {
-          auto p=value(st->getPointerOperand()),v=value(st->getValueOperand());
+          auto v=value(st->getValueOperand()),p=value(st->getPointerOperand());
           unsigned w=width(st->getValueOperand()->getType());
           if(w%8)unimplemented("§12 N22 nonbyte store",2,st);
           lines.push_back("lift.boundscheck "+p+" "+std::to_string(w/8));
@@ -490,6 +490,21 @@ struct Scalar {
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells) {
   Scalar s{m, f};
+  std::string d = desc.str(), device;
+  uint64_t deviceSize = 0, heapLimit = 0;
+  auto deviceStart = d.find(";dev=");
+  if (deviceStart != std::string::npos) {
+    auto deviceEnd = d.find(';', deviceStart + 1);
+    device = d.substr(deviceStart + 5, deviceEnd - deviceStart - 5);
+    d.erase(deviceStart, deviceEnd == std::string::npos ? std::string::npos : deviceEnd - deviceStart);
+  }
+  std::smatch dev;
+  if (!device.empty()) {
+    if (!std::regex_match(device, dev, std::regex(R"((CLOCK|BLOCK|CONSOLE)\(([0-9]+)\))")))
+      unimplemented("§8.3 device binding combination", 2, &f);
+    deviceSize = std::stoull(dev[2]);
+    device = dev[1];
+  }
   std::set<const GlobalVariable *> used;
   std::set<const Value *> seen;
   std::function<void(const Value *)> visit = [&](const Value *v) {
@@ -501,12 +516,44 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if(auto *u=dyn_cast<User>(v))for(Value *a:u->operands())visit(a);
   };
   for(Instruction &i:instructions(f))for(Value *v:i.operands())visit(v);
+  auto deviceGlobal = [&](StringRef suffix) -> GlobalVariable * {
+    auto *g = m.getGlobalVariable("__bennett_dev_" + suffix.str(), true);
+    if (!g) fail("shape", ("missing materialised device state: " + suffix).str(), &f);
+    used.insert(g);
+    return g;
+  };
+  if (device == "CLOCK") deviceGlobal("clock_c");
+  if (device == "BLOCK") { deviceGlobal("block_base"); deviceGlobal("block_nsect"); }
+  if (device == "CONSOLE") {
+    deviceGlobal("console_buf"); deviceGlobal("console_L"); deviceGlobal("console_n");
+    heapLimit = deviceSize;
+  }
+  // The entry dependency decision precedes private allocation (§16.2). A
+  // pointer supplied by OUT or read from this invocation's model buffer does
+  // not name caller memory. An arbitrary ARG/loaded pointer still needs replay.
+  std::set<const Argument *> privateArguments;
+  std::regex bindingPattern(R"((IN|ARG|OUT)\([^)]*\))");
+  unsigned bindingIndex = 0;
+  for (std::sregex_iterator it(d.begin(),d.end(),bindingPattern),end;it!=end;++it,++bindingIndex)
+    if ((*it)[1] == "OUT" && bindingIndex < f.arg_size()) privateArguments.insert(f.getArg(bindingIndex));
+  auto privatePointer = [&](Value *p) {
+    auto *root = getUnderlyingObject(p);
+    if (auto *a = dyn_cast<Argument>(root)) return privateArguments.count(a) != 0;
+    if (auto *load = dyn_cast<LoadInst>(root)) {
+      auto *g = dyn_cast<GlobalVariable>(getUnderlyingObject(load->getPointerOperand()));
+      return g && ((device == "BLOCK" && g->getName() == "__bennett_dev_block_base") ||
+                   (device == "CONSOLE" && g->getName() == "__bennett_dev_console_buf"));
+    }
+    return false;
+  };
   for(Instruction &i:instructions(f)) {
     Value *p=nullptr;
     if(auto *l=dyn_cast<LoadInst>(&i))p=l->getPointerOperand();
     if(auto *st=dyn_cast<StoreInst>(&i))p=st->getPointerOperand();
-    if(p && !isa<GlobalVariable>(getUnderlyingObject(p)))
-      unimplemented("§8.5 entry-state replay / §17.3 shadow-stack memory",2,&i);
+    if(p && !isa<GlobalVariable>(getUnderlyingObject(p))) {
+      if (!privatePointer(p))
+        unimplemented("§8.5 entry-state replay / §17.3 shadow-stack memory",2,&i);
+    }
   }
   // A mutable global written outside this closure needs caller-entry replay.
   // Until M2 that dependency must fail, rather than silently reset its bytes.
@@ -518,7 +565,6 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     }
   unsigned gn=1;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
   unsigned ret = s.width(f.getReturnType());
-  std::string d = desc.str();
   auto semi = d.find(';');
   std::string bindings = d.substr(0, semi);
   std::string target = semi == std::string::npos ? "" : d.substr(semi + 1);
@@ -533,10 +579,41 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   }
   if (tgt == 0 || tgt > 128)
     unimplemented("§8.6 wide outputs", 2, &f);
-  std::regex pat(R"((IN|ARG)\((\d+)(?:,(zext|sext))?\))");
+  std::regex pat(R"((IN|ARG|OUT)\((\d+)(?:,(zext|sext))?\))");
   std::sregex_iterator it(bindings.begin(), bindings.end(), pat), end;
   std::vector<std::string> ins, args, invoke, insWidths, paramWidths, argTypes,
-      wrapperRegs, wrapperRows;
+      wrapperRegs, wrapperRows, mems, memSigs;
+  unsigned dn = 0;
+  auto prologue = [&](std::string row) {
+    auto n = "d" + std::to_string(dn++);
+    wrapperRegs.push_back(n + ":reg[64]");
+    wrapperRows.push_back(n + " = " + row);
+    return n;
+  };
+  auto devStore = [&](StringRef suffix, std::string value) {
+    auto p = prologue("lift.addr @" + s.globals[deviceGlobal(suffix)]);
+    wrapperRows.push_back("lift.boundscheck " + p + " 8");
+    wrapperRows.push_back("lift.store.i64 " + p + " " + value);
+  };
+  std::string buffer;
+  uint64_t bufferSize = 0;
+  if (device == "CLOCK") {
+    auto c = prologue("lift.const.i64 " + std::to_string(deviceSize));
+    devStore("clock_c", c);
+  } else if (device == "BLOCK") {
+    if (deviceSize > 54) fail("shape", "BLOCK extent exceeds address space");
+    mems.push_back("k0:region[" + std::to_string(deviceSize + 9) + ",8] in");
+    memSigs.push_back("{\"A\":" + std::to_string(deviceSize + 9) + ",\"W\":8,\"role\":\"in\"}");
+    auto p = prologue("lift.addr @k0"); devStore("block_base", p);
+    auto n = prologue("lift.const.i64 " + std::to_string(uint64_t(1) << deviceSize));
+    devStore("block_nsect", n);
+  } else if (device == "CONSOLE") {
+    auto n = prologue("lift.const.i64 " + std::to_string(deviceSize));
+    devStore("console_L", n);
+    buffer = prologue("lift.alloc " + n); devStore("console_buf", buffer);
+    bufferSize = deviceSize;
+    auto z = prologue("lift.const.i64 0"); devStore("console_n", z);
+  }
   unsigned idx = 0, inCount = 0, argCount = 0;
   std::string reconstructed;
   for (; it != end; ++it) {
@@ -563,6 +640,15 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
         n = loc;
       }
       invoke.push_back(n);
+    } else if ((*it)[1] == "OUT") {
+      if (!f.getArg(idx)->getType()->isPointerTy()) fail("shape", "OUT requires a pointer parameter");
+      if (!buffer.empty()) unimplemented("§8.6 common multi-output delivery", 2, &f);
+      auto c = "c" + std::to_string(idx), loc = "w" + std::to_string(idx);
+      wrapperRegs.push_back(c + ":reg[64]");
+      wrapperRows.push_back(c + " = lift.const.i64 " + std::to_string(w));
+      wrapperRegs.push_back(loc + ":reg[64]");
+      wrapperRows.push_back(loc + " = lift.alloc " + c);
+      invoke.push_back(loc); buffer = loc; bufferSize = w; heapLimit += w;
     } else {
       if (w != param)
         fail("shape", "ARG carrier width mismatch");
@@ -585,12 +671,20 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     wrapperRegs.push_back("p0:reg[1]");
     wrapperRows.push_back("p0 = lift.const.i1 0");
     wrapperRows.push_back("lift.retval p0");
+  } else if (!buffer.empty()) {
+    if (!f.getReturnType()->isVoidTy() || bufferSize * 8 != tgt)
+      unimplemented("§8.6 common multi-slice delivery", 2, &f);
+    if (tgt % 8) fail("shape", "non-byte buffer delivery");
+    wrapperRegs.push_back("t0:reg[" + std::to_string(tgt) + "]");
+    wrapperRows.push_back("lift.boundscheck " + buffer + " " + std::to_string(tgt / 8));
+    wrapperRows.push_back("t0 = lift.load.i" + std::to_string(tgt) + " " + buffer);
+    wrapperRows.push_back("lift.retval t0");
   } else if (tgt != ret)
     unimplemented("§8.2 target extension/truncation", 2, &f);
   else
     wrapperRows.push_back("lift.retval r");
   std::string wrapper = "oracle @ref (" + join(ins) + ") (tgt:wire[" +
-                        std::to_string(tgt) + "]) (fault:wire[4]) () (" +
+                        std::to_string(tgt) + "]) (fault:wire[4]) (" + join(mems) + ") (" +
                         join(args) + ")\nregs { " + join(wrapperRegs) +
                         " }\n^entry():\n" + join(wrapperRows, "\n");
   std::string lsig = "{\"abi\":\"0.8\",\"kind\":\"lproc\",\"params\":[" +
@@ -599,7 +693,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   std::string osig =
       "{\"abi\":\"0.8\",\"args\":[" + join(argTypes, ",") +
       "],\"fault\":4,\"in\":[" + join(insWidths, ",") +
-      "],\"kind\":\"oracle\",\"mem\":[],\"tgt\":" + std::to_string(tgt) +
+      "],\"kind\":\"oracle\",\"mem\":[" + join(memSigs, ",") + "],\"tgt\":" + std::to_string(tgt) +
       ",\"tier\":\"q\"}";
   unsigned sc = 0;
   while ((uint64_t(1) << sc) < stackCells)
@@ -636,8 +730,18 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     base+=size;
   }
   uint64_t heap=alignTo(base,uint64_t(4096));unsigned h=0,at=0;
-  while((uint64_t(1)<<h)<heap)++h;
-  while((uint64_t(1)<<at)<data.size())++at;
+  uint64_t endAddress = heap + heapLimit;
+  std::string regionLayout, regionHashLeaves;
+  if (device == "BLOCK") {
+    uint64_t size = uint64_t(1) << (deviceSize + 9);
+    uint64_t regionBase = alignTo(endAddress, size);
+    auto leaf = "{\"base\":" + std::to_string(regionBase) + "}";
+    regionLayout = "\"k0\":" + leaf;
+    regionHashLeaves = "layout interface_regions.ref.k0 " + leaf + "\n";
+    endAddress = regionBase + size;
+  }
+  while((uint64_t(1)<<h)<endAddress)++h;
+  while((uint64_t(1)<<at)<data.size()+mems.size()+heapLimit)++at;
   std::string images,globalLayout,globalHashLeaves,dataSection,refs;
   for(auto &e:data) {
     images+="data "+e.first+" "+e.second+"\n";
@@ -655,15 +759,28 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     canonicalL+=lproc.substr(last,it->position()-last)+"@"+dataHashes[n];last=it->position()+it->length();
   }
   canonicalL+=lproc.substr(last);
-  std::string lh=sha(prefix+lsig+"\n"+canonicalL+"\n"+images+globalHashLeaves+refs);
-  std::string canonical=wrapper;auto pos=canonical.find("@L1",canonical.find('\n'));canonical.replace(pos,3,"@"+lh);
+  std::string lImages, lLeaves;
+  for (auto &n : referenced) {
+    lImages += "data " + n + " " + data[n] + "\n";
+    lLeaves += "layout globals." + n + " " + globalLeaves[n] + "\n";
+  }
+  std::string lh=sha(prefix+lsig+"\n"+canonicalL+"\n"+lImages+lLeaves+refs);
+  std::string canonical, wrapperRefs; last = 0; referenced.clear();
+  std::regex wrapperToken(R"(@(L1|G[0-9]+)\b)");
+  for (std::sregex_iterator it(wrapper.begin(),wrapper.end(),wrapperToken),end;it!=end;++it) {
+    auto n = it->str().substr(1), hash = n == "L1" ? lh : dataHashes[n];
+    if (referenced.insert(n).second) wrapperRefs += hash + "\n";
+    canonical += wrapper.substr(last,it->position()-last) + "@" + hash;
+    last = it->position()+it->length();
+  }
+  canonical += wrapper.substr(last);
   std::string leaves="layout A_tab "+std::to_string(at)+"\nlayout H "+std::to_string(h)+"\nlayout S_cells "+std::to_string(sc)+"\n"+globalHashLeaves+
-    "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max 0\nlayout null_size 4096\nlayout ptr_width "+std::to_string(pw)+"\n";
-  std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+lh+"\n");
+    "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max "+std::to_string(heapLimit)+"\n"+regionHashLeaves+"layout null_size 4096\nlayout ptr_width "+std::to_string(pw)+"\n";
+  std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+wrapperRefs);
   std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"},\"1\":{\"interface_hash\":\""+lh+"\",\"kind\":\"lproc\",\"name\":\"L1\",\"signature\":"+lsig+"}";
   unsigned si=2;for(auto &e:data)symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+dataHashes[e.first]+"\",\"kind\":\"data\",\"name\":\""+e.first+"\",\"signature\":"+dataSigs[e.first]+"}";
   symbols+="}";
-  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":0,\"interface_regions\":{\"ref\":{}},\"null_size\":4096,\"ptr_width\":"+std::to_string(pw)+"}";
+  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":4096,\"ptr_width\":"+std::to_string(pw)+"}";
   if (auto ec = sys::fs::create_directories(out))
     fail("output", ec.message());
   SmallString<256> path(out);

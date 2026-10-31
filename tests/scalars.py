@@ -20,7 +20,7 @@ def main():
   fields={k:v.strip(chr(34)) for k,v in re.findall(r'([\w]+)=([^ ]+)',tag)};name=fields['lift']
   if a.case and name not in a.case:continue
   # Enumerate every published lift, including explicitly unavailable mechanics.
-  supported=name in ['oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks']
+  supported=name in ['binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte','oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks']
   dest=R/f'.tmp/scalars/{a.major}/{name}';dest.mkdir(parents=True,exist_ok=True)
   primitives={'__bennett_nz_fault':'void @__bennett_nz_fault(i64)','__bennett_nz_alloc':'ptr @__bennett_nz_alloc(i64)','__bennett_nz_free':'void @__bennett_nz_free(ptr)'}
   for n,sig in primitives.items():
@@ -49,6 +49,7 @@ def main():
    budget,code,payload,steps=expected.groups();inp=re.search(r'input=([^ ]*)',line)[1]
    argv=[REF,'run-oracle',obj,'ref','--input',inp,'--budget',budget]
    for v in re.findall(r'arg=([^ ]+)',line):argv+=['--arg',v]
+   for v in re.findall(r'mem=([^ ]+)',line):argv+=['--mem',v.replace(':','=',1)]
    z=run(argv);text=z.stdout+z.stderr
    try:
     data=json.loads(z.stdout);ok=all(str(data[k])==v for k,v in [('code',code),('payload',payload),('steps',steps)])
