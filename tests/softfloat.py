@@ -192,23 +192,18 @@ declare void @__bennett_qfree(ptr)
   for level in (0,3):
    exe=d/f'real-O{level}';z=run([tool+'clang',f'-O{level}',realbc,main,'-o',exe],realenv)
    check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
- # Real published production: LLVM18's next producer is flattened aggregate rows.
+ # Real published production on both majors includes flattened aggregate rows.
  # Major-local probes are recorded separately from the byte-identical object suite.
  realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)
  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv)
- if a.major==18:
-  expected='§16.4 scalar row' in z.stderr and 'extractvalue { i64, i64 }' in z.stderr
-  check('published-production-next-rule',z.returncode!=0 and expected and not list(realout.rglob('*.bennett')),z.stderr)
-  rows[-1]['expected_unimplemented']=True
-  rows[-1]['determining_sentence']='§16.4: insertvalue/extractvalue use lift.mov of the depth-first flattened field locations; aggregate call results are unpacked field by field (bp-1us).'
- else:
-  check('published-production-link',z.returncode==0,z.stderr)
-  if z.returncode==0:
-   obj=realout/'top/oracle-0/ref.bennett';z=run([REF,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
-   for value in [0,1,0x3ff0000000000000,0x7ff0000000000000,0x7ff8000000000000]:
-    z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
-    data=json.loads(z.stdout) if z.returncode==0 else {}
-    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
+ check('published-production-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  obj=realout/'top/oracle-0/ref.bennett';z=run([REF,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
+  for value in [0,1,0x3ff0000000000000,0x7ff0000000000000,0x7ff8000000000000]:
+   z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
+   data=json.loads(z.stdout) if z.returncode==0 else {}
+   check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
+  if a.major==23:
    # The direct CC path has a concrete, separately owned recursive producer.
    # This is a known refusal, never a claim of CC numerical conformance.
    ccdir=realout/'direct-cc'

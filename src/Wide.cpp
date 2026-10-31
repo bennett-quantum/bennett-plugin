@@ -9,6 +9,28 @@ Value *n22Packing(Value *v) {
   return v;
 }
 static bool wide(Type *t) {return t->isIntegerTy() && t->getIntegerBitWidth()>128;}
+// Resolve full nested paths through N22/N25 adapter aggregates, without
+// folding source arithmetic or losing the true width of a partial limb.
+static Value *aggregateProjection(Value *v,ArrayRef<unsigned> path) {
+  if(path.empty())return v;
+  if(auto *c=dyn_cast<Constant>(v)) {
+    for(unsigned n:path) {c=c->getAggregateElement(n);if(!c)return nullptr;}
+    return c;
+  }
+  if(auto *e=dyn_cast<ExtractValueInst>(v)) {
+    SmallVector<unsigned> combined(e->getIndices());combined.append(path.begin(),path.end());
+    return aggregateProjection(e->getAggregateOperand(),combined);
+  }
+  if(auto *in=dyn_cast<InsertValueInst>(v)) {
+    auto indices=in->getIndices();unsigned common=std::min(path.size(),indices.size());
+    if(std::equal(path.begin(),path.begin()+common,indices.begin())) {
+      if(indices.size()<=path.size())return aggregateProjection(in->getInsertedValueOperand(),path.drop_front(indices.size()));
+      return nullptr; // The selected subtree itself contains a changed field.
+    }
+    return aggregateProjection(in->getAggregateOperand(),path);
+  }
+  return nullptr;
+}
 #include "WideRuntime.inc"
 // N22 values are SSA tuples, never a reconstructed wide scalar. Recursive
 // lookup permits forward block order; phi shells break loop-carried cycles.
@@ -16,7 +38,42 @@ void normaliseWideFP(Function &f) {
   auto &m=*f.getParent();auto &ctx=f.getContext();
   std::map<Value *,SmallVector<Value *>> parts;
   SmallVector<Instruction *> dead,work;
+  std::function<bool(Type *)> hasWide=[&](Type *t) {if(wide(t))return true;if(auto *s=dyn_cast<StructType>(t)) {for(auto *e:s->elements())if(hasWide(e))return true;}if(auto *a=dyn_cast<ArrayType>(t))return hasWide(a->getElementType());return false;};
   bool aggregateMemory=false;
+  // Wide fields cross aggregate control-flow nodes as independent scalar
+  // fields before N22 splits those scalars into limbs. The shells preserve
+  // loop-carried phis; full paths retain nested arrays and true top widths.
+  for(auto &i:instructions(f))work.push_back(&i);
+  for(auto *i:work)if(i->getType()->isAggregateType() && hasWide(i->getType()) &&
+      (isa<PHINode>(i)||isa<SelectInst>(i)||isa<FreezeInst>(i))) {
+    std::vector<std::pair<Type *,SmallVector<unsigned>>> fields;
+    std::function<void(Type *,SmallVector<unsigned>)> visit=[&](Type *t,SmallVector<unsigned> path) {
+      if(t->isAggregateType()) {
+        unsigned n=t->isStructTy()?cast<StructType>(t)->getNumElements():cast<ArrayType>(t)->getNumElements();
+        for(unsigned k=0;k<n;++k) {auto next=path;next.push_back(k);visit(t->isStructTy()?cast<StructType>(t)->getElementType(k):t->getArrayElementType(),next);}
+      } else fields.push_back({t,path});
+    };visit(i->getType(),{});
+    auto *phi=dyn_cast<PHINode>(i);IRBuilder<NoFolder> b(phi?&*i->getParent()->getFirstInsertionPt():i);
+    Value *aggregate=Constant::getNullValue(i->getType());unsigned n=0;
+    for(auto &field:fields) {
+      auto name="nz.f"+std::to_string(n++)+"."+i->getName().str();Value *value;
+      if(phi) {
+        auto *part=PHINode::Create(field.first,phi->getNumIncomingValues(),name,phi);
+        for(unsigned k=0;k<phi->getNumIncomingValues();++k) {
+          auto *block=phi->getIncomingBlock(k);IRBuilder<> edge(block->getTerminator());
+          part->addIncoming(edge.CreateExtractValue(phi->getIncomingValue(k),field.second),block);
+        }
+        value=part;
+      } else if(auto *select=dyn_cast<SelectInst>(i)) {
+        auto *left=b.CreateExtractValue(select->getTrueValue(),field.second);
+        auto *right=b.CreateExtractValue(select->getFalseValue(),field.second);
+        value=b.CreateSelect(select->getCondition(),left,right,name);
+      } else value=b.CreateFreeze(b.CreateExtractValue(i->getOperand(0),field.second),name);
+      aggregate=b.CreateInsertValue(aggregate,value,field.second);
+    }
+    i->replaceAllUsesWith(aggregate);i->eraseFromParent();
+  }
+  work.clear();
   // Aggregate transport follows DataLayout offsets, including nested arrays.
   for(auto &i:instructions(f))work.push_back(&i);
   for(auto *i:work) {
@@ -44,18 +101,13 @@ void normaliseWideFP(Function &f) {
     auto *v=access(t,l?l->getPointerOperand():s->getPointerOperand(),s?s->getValueOperand():nullptr,0);
     if(l)l->replaceAllUsesWith(v);i->eraseFromParent();
   }
-  std::function<bool(Type *)> hasWide=[&](Type *t) {if(wide(t))return true;if(auto *s=dyn_cast<StructType>(t)) {for(auto *e:s->elements())if(hasWide(e))return true;}if(auto *a=dyn_cast<ArrayType>(t))return hasWide(a->getElementType());return false;};
+
   bool wideAggregate=false;
   // Resolve projections of freshly scalarised aggregate loads and N27 limb tuples.
   for(auto &i:instructions(f))if(auto *e=dyn_cast<ExtractValueInst>(&i)) {
     if(!aggregateMemory && !hasWide(e->getAggregateOperand()->getType()))continue;
     wideAggregate=true;
-    Value *v=e->getAggregateOperand();
-    while(auto *in=dyn_cast<InsertValueInst>(v)) {
-      if(in->getIndices()==e->getIndices()) {e->replaceAllUsesWith(in->getInsertedValueOperand());break;}
-      if(in->getIndices()[0]==e->getIndices()[0])break;
-      v=in->getAggregateOperand();
-    }
+    if(auto *value=aggregateProjection(e->getAggregateOperand(),e->getIndices()))e->replaceAllUsesWith(value);
   }
   bool cleanup=aggregateMemory||wideAggregate;while(cleanup) {SmallVector<Instruction *> erase;for(auto &i:instructions(f))if(i.use_empty() && (isa<ExtractValueInst>(i)||isa<InsertValueInst>(i)))erase.push_back(&i);for(auto *i:erase)i->eraseFromParent();cleanup=!erase.empty();}
   // Byte-rounded accesses also include the slots introduced below.
@@ -100,21 +152,14 @@ void normaliseWideFP(Function &f) {
     } else if(auto *s=dyn_cast<SelectInst>(i)) {
       auto a=split(s->getTrueValue()),c=split(s->getFalseValue());
       for(unsigned k=0;k<count;++k)out.push_back(b.CreateSelect(s->getCondition(),a[k],c[k],name("m",k)));
+    } else if(isa<FreezeInst>(i)) {
+      auto a=split(i->getOperand(0));for(unsigned k=0;k<count;++k)out.push_back(b.CreateFreeze(a[k],name("m",k)));
     } else if(auto *p=dyn_cast<PtrToIntInst>(i)) {
       auto pw=m.getDataLayout().getPointerTypeSizeInBits(p->getOperand(0)->getType());
       auto *value=fold.CreatePtrToInt(p->getOperand(0),b.getIntNTy(pw));
       for(unsigned k=0;k<count;++k)out.push_back(slice(value,64*k,std::min(64u,n-64*k),fold));
     } else if(auto *e=dyn_cast<ExtractValueInst>(i)) {
-      Value *v=e->getAggregateOperand();
-      while(auto *in=dyn_cast<InsertValueInst>(v)) {
-        if(in->getIndices()==e->getIndices()) {out=split(in->getInsertedValueOperand());break;}
-        if(in->getIndices()[0]==e->getIndices()[0])break;
-        v=in->getAggregateOperand();
-      }
-      if(out.empty())if(auto *c=dyn_cast<Constant>(v)) {
-        for(unsigned index:e->getIndices())c=c->getAggregateElement(index);
-        out=split(c);
-      }
+      if(auto *value=aggregateProjection(e->getAggregateOperand(),e->getIndices()))out=split(value);
       if(out.empty())unimplemented("§12.7 N22 aggregate projection",2,i);
     } else if(isa<ZExtInst>(i)||isa<SExtInst>(i)||isa<TruncInst>(i)) {
       auto *src=i->getOperand(0);unsigned sw=src->getType()->getIntegerBitWidth();
@@ -223,6 +268,12 @@ Function *normaliseWideABI(Module &m,Function *root) {
     if(auto *a=dyn_cast<ArrayType>(t)) {auto *e=shape(a->getElementType());if(e!=a->getElementType())return ArrayType::get(e,a->getNumElements());}
     return t;
   };
+  std::function<uint64_t(Type *)> payload=[&](Type *t)->uint64_t {
+    if(auto *st=dyn_cast<StructType>(t)) {uint64_t n=0;for(auto *e:st->elements())n+=payload(e);return n;}
+    if(auto *at=dyn_cast<ArrayType>(t))return at->getNumElements()*payload(at->getElementType());
+    return t->isVoidTy()?0:m.getDataLayout().getTypeSizeInBits(t).getKnownMinValue();
+  };
+  auto demoted=[&](Type *t) {return shape(t)->isAggregateType() && payload(shape(t))>128;};
   // Temporary adapter expressions are consumed by N22, not left at the ABI.
   std::function<Value *(IRBuilder<> &,Value *,Type *,bool)> adapt=[&](IRBuilder<> &b,Value *v,Type *old,bool unpack)->Value * {
     Type *to=unpack?old:shape(old);if(shape(old)==old)return v;
@@ -240,23 +291,26 @@ Function *normaliseWideABI(Module &m,Function *root) {
   SmallVector<Function *> work;for(auto &f:m)if(!f.isIntrinsic())work.push_back(&f);
   std::map<Function *,Function *> changed;
   for(auto *f:work) {
-    SmallVector<Type *> params;bool change=shape(f->getReturnType())!=f->getReturnType();
+    SmallVector<Type *> params;bool hidden=demoted(f->getReturnType());bool change=hidden || shape(f->getReturnType())!=f->getReturnType();
+    if(hidden)params.push_back(PointerType::get(ctx,0));
     for(auto &a:f->args()) {auto *t=a.getType();change|=shape(t)!=t;if(wide(t))for(auto *e:cast<StructType>(shape(t))->elements())params.push_back(e);else params.push_back(shape(t));}
     if(!change)continue;
-    auto *nf=Function::Create(FunctionType::get(shape(f->getReturnType()),params,f->isVarArg()),f->getLinkage(),f->getAddressSpace(),"",&m);nf->takeName(f);f->setName(nf->getName()+".n22.old");nf->setCallingConv(f->getCallingConv());
+    auto *nf=Function::Create(FunctionType::get(hidden?Type::getVoidTy(ctx):shape(f->getReturnType()),params,f->isVarArg()),f->getLinkage(),f->getAddressSpace(),"",&m);nf->takeName(f);f->setName(nf->getName()+".n22.old");nf->setCallingConv(f->getCallingConv());
     nf->copyAttributesFrom(f);nf->copyMetadata(f,0);
     SmallVector<AttributeSet> attrs;
+    if(hidden)attrs.push_back(AttributeSet());
     for(auto &a:f->args()) {
       if(wide(a.getType()))attrs.append((a.getType()->getIntegerBitWidth()+63)/64,AttributeSet());
       else attrs.push_back(shape(a.getType())==a.getType()?f->getAttributes().getParamAttrs(a.getArgNo()):AttributeSet());
     }
-    nf->setAttributes(AttributeList::get(ctx,f->getAttributes().getFnAttrs(),shape(f->getReturnType())==f->getReturnType()?f->getAttributes().getRetAttrs():AttributeSet(),attrs));changed[f]=nf;
+    nf->setAttributes(AttributeList::get(ctx,f->getAttributes().getFnAttrs(),!hidden && shape(f->getReturnType())==f->getReturnType()?f->getAttributes().getRetAttrs():AttributeSet(),attrs));changed[f]=nf;
   }
   if(changed.empty())return root;
   std::set<Function *> touched;
   for(auto [f,nf]:changed)if(!f->isDeclaration()) {
     touched.insert(nf);
-    nf->splice(nf->end(),f);IRBuilder<> b(&*nf->getEntryBlock().getFirstInsertionPt());unsigned index=0;
+    nf->splice(nf->end(),f);IRBuilder<> b(&*nf->getEntryBlock().getFirstInsertionPt());bool hidden=demoted(f->getReturnType());unsigned index=hidden?1:0;
+    if(hidden)nf->getArg(0)->setName("nz.ret");
     for(auto &a:f->args()) {
       Value *v;
       if(wide(a.getType())) {Value *tuple=Constant::getNullValue(shape(a.getType()));unsigned n=(a.getType()->getIntegerBitWidth()+63)/64;for(unsigned k=0;k<n;++k){auto *e=nf->getArg(index++);e->setName("nz.m"+std::to_string(k)+"."+a.getName());tuple=b.CreateInsertValue(tuple,e,{k});}v=adapt(b,tuple,a.getType(),true);}
@@ -264,36 +318,43 @@ Function *normaliseWideABI(Module &m,Function *root) {
       a.replaceAllUsesWith(v);
     }
     SmallVector<ReturnInst *> returns;for(auto &i:instructions(nf))if(auto *r=dyn_cast<ReturnInst>(&i);r && r->getReturnValue())returns.push_back(r);
-    for(auto *r:returns) {b.SetInsertPoint(r);b.CreateRet(adapt(b,r->getReturnValue(),f->getReturnType(),false));r->eraseFromParent();}
+    for(auto *r:returns) {
+      b.SetInsertPoint(r);auto *value=adapt(b,r->getReturnValue(),f->getReturnType(),false);
+      if(hidden) {b.CreateStore(value,nf->getArg(0));b.CreateRetVoid();}else b.CreateRet(value);
+      r->eraseFromParent();
+    }
   }
   // Calls use their original FunctionType even for aliases/indirect pointers.
   SmallVector<CallInst *> calls;for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallInst>(&i))calls.push_back(c);
   for(auto *c:calls) {
-    auto *ft=c->getFunctionType();bool change=shape(ft->getReturnType())!=ft->getReturnType();for(auto *t:ft->params())change|=shape(t)!=t;if(!change || (c->getCalledFunction() && c->getCalledFunction()->isIntrinsic()))continue;
+    auto *ft=c->getFunctionType();bool hidden=demoted(ft->getReturnType());bool change=hidden || shape(ft->getReturnType())!=ft->getReturnType();for(auto *t:ft->params())change|=shape(t)!=t;if(!change || (c->getCalledFunction() && c->getCalledFunction()->isIntrinsic()))continue;
     touched.insert(c->getFunction());
     IRBuilder<> b(c);SmallVector<Value *> args;SmallVector<Type *> types;
+    AllocaInst *returnSlot=nullptr;
+    if(hidden) {
+      IRBuilder<> entry(&*c->getFunction()->getEntryBlock().getFirstInsertionPt());
+      returnSlot=entry.CreateAlloca(shape(ft->getReturnType()),nullptr,"nz.ret."+c->getName());
+      args.push_back(returnSlot);
+    }
     for(auto &u:c->args()) {auto *v=u.get();auto *t=v->getType();auto *e=adapt(b,v,t,false);if(wide(t))for(unsigned k=0;k<(t->getIntegerBitWidth()+63)/64;++k)args.push_back(b.CreateExtractValue(e,{k}));else args.push_back(e);}
     for(auto *v:args)types.push_back(v->getType());auto *callee=c->getCalledOperand();if(auto *g=dyn_cast<Function>(callee);changed.count(g))callee=changed[g];
-    auto *nc=b.CreateCall(FunctionType::get(shape(ft->getReturnType()),types,ft->isVarArg()),callee,args);nc->setCallingConv(c->getCallingConv());nc->copyMetadata(*c);
+    auto *nc=b.CreateCall(FunctionType::get(hidden?Type::getVoidTy(ctx):shape(ft->getReturnType()),types,ft->isVarArg()),callee,args);nc->setCallingConv(c->getCallingConv());nc->copyMetadata(*c);
     SmallVector<AttributeSet> attrs;
+    if(hidden)attrs.push_back(AttributeSet());
     for(unsigned j=0;j<c->arg_size();++j) {
       auto *t=c->getArgOperand(j)->getType();
       if(wide(t))attrs.append((t->getIntegerBitWidth()+63)/64,AttributeSet());
       else attrs.push_back(shape(t)==t?c->getAttributes().getParamAttrs(j):AttributeSet());
     }
-    nc->setAttributes(AttributeList::get(ctx,c->getAttributes().getFnAttrs(),shape(c->getType())==c->getType()?c->getAttributes().getRetAttrs():AttributeSet(),attrs));
-    if(!c->getType()->isVoidTy()) {auto *v=adapt(b,nc,c->getType(),true);v->takeName(c);c->replaceAllUsesWith(v);}c->eraseFromParent();
+    nc->setAttributes(AttributeList::get(ctx,c->getAttributes().getFnAttrs(),!hidden && shape(c->getType())==c->getType()?c->getAttributes().getRetAttrs():AttributeSet(),attrs));
+    if(!c->getType()->isVoidTy()) {auto *result=hidden?b.CreateLoad(shape(c->getType()),returnSlot):static_cast<Value *>(nc);auto *v=adapt(b,result,c->getType(),true);v->takeName(c);c->replaceAllUsesWith(v);}c->eraseFromParent();
   }
   for(auto [f,nf]:changed) {if(root==f)root=nf;f->replaceAllUsesWith(nf);f->eraseFromParent();}
   // Fold adapter insert/extract chains without optimising source arithmetic.
   for(auto &f:m)if(touched.count(&f) && !f.isDeclaration()) {
     SmallVector<ExtractValueInst *> extracts;for(auto &i:instructions(f))if(auto *e=dyn_cast<ExtractValueInst>(&i))extracts.push_back(e);
     for(auto *e:extracts) {
-      Value *v=e->getAggregateOperand();auto indices=e->getIndices();
-      while(auto *in=dyn_cast<InsertValueInst>(v)) {
-        if(in->getIndices()==indices) {e->replaceAllUsesWith(in->getInsertedValueOperand());break;}
-        if(in->getIndices()[0]==indices[0])break;v=in->getAggregateOperand();
-      }
+      if(auto *value=aggregateProjection(e->getAggregateOperand(),e->getIndices()))e->replaceAllUsesWith(value);
     }
     bool more=true;while(more) {more=false;SmallVector<Instruction *> dead;for(auto &i:instructions(f))if(i.use_empty() && (isa<ExtractValueInst>(i)||isa<InsertValueInst>(i)))dead.push_back(&i);for(auto *i:dead)i->eraseFromParent();more=!dead.empty();}
   }

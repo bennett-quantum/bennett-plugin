@@ -347,6 +347,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       ValueToValueMapTy map;
       auto materialised = CloneModule(m, map);
       auto *mf = cast<Function>(map[f]);
+      mf=normaliseWideABI(*materialised,mf);
       normaliseScalar(*mf);
       lowerScalar(*materialised, *mf, Shape, Output, StackCells, HeapBytes);
       std::error_code ec;
@@ -400,7 +401,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
                 } else unimplemented("§8.4 MEM_IN/OUT/INOUT descriptor dispatch",2,c);
               }
               shape+=";tgt="+(discard?std::string("null"):std::to_string(tgt));
-              ValueToValueMapTy map;auto clone=CloneModule(m,map);auto *mf=cast<Function>(map[f]);normaliseScalar(*mf);
+              ValueToValueMapTy map;auto clone=CloneModule(m,map);auto *mf=cast<Function>(map[f]);mf=normaliseWideABI(*clone,mf);normaliseScalar(*mf);
               lowerScalar(*clone,*mf,shape,Output+"/oracle-"+std::to_string(objects++),StackCells);
             }
           }

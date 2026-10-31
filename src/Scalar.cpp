@@ -59,12 +59,52 @@ struct Scalar {
       return 1;
     if (t->isFloatingPointTy())
       return t->getPrimitiveSizeInBits();
-    if (auto *st = dyn_cast<StructType>(t)) {
-      unsigned n = 0;
-      for (Type *field : st->elements()) n += width(field);
-      if (n && n <= 128) return n;
+    if(t->isAggregateType()) {
+      unsigned n=0;for(auto &field:fields(t))n+=width(field.type);
+      if(n && n<=128)return n;
     }
     unimplemented("§12.6/§12.7 vector/aggregate/wide scalar", 2, &f);
+  }
+  struct Field {std::vector<unsigned> path;Type *type;};
+  std::vector<Field> fields(Type *type) {
+    std::vector<Field> result;
+    std::function<void(Type *,std::vector<unsigned>)> visit=[&](Type *t,std::vector<unsigned> path) {
+      if(t->isAggregateType()) {
+        unsigned n=t->isStructTy()?cast<StructType>(t)->getNumElements():cast<ArrayType>(t)->getNumElements();
+        for(unsigned k=0;k<n;++k) {auto next=path;next.push_back(k);visit(t->isStructTy()?cast<StructType>(t)->getElementType(k):t->getArrayElementType(),next);}
+      } else result.push_back({path,t});
+    };visit(type,{});return result;
+  }
+  std::map<const Value *,std::vector<std::string>> fieldAliases;
+  static bool prefix(ArrayRef<unsigned> path,ArrayRef<unsigned> start) {
+    return path.size()>=start.size() && std::equal(start.begin(),start.end(),path.begin());
+  }
+  std::string fieldName(Value *v,unsigned n) {
+    if(auto *c=dyn_cast<Constant>(v)) {
+      auto layout=fields(v->getType());
+      for(unsigned index:layout[n].path)c=c->getAggregateElement(index);
+      return value(c);
+    }
+    if(auto it=fieldAliases.find(v);it!=fieldAliases.end())return it->second[n];
+    if(auto *insert=dyn_cast<InsertValueInst>(v))
+      if(!prefix(fields(v->getType())[n].path,insert->getIndices()))return fieldName(insert->getAggregateOperand(),n);
+    return names.at(v)+(v->getType()->isAggregateType()?"_"+std::to_string(n):"");
+  }
+  std::vector<std::pair<std::string,unsigned>> locations(Value *v) {
+    std::vector<std::pair<std::string,unsigned>> result;unsigned n=0;
+    for(auto &field:fields(v->getType()))result.push_back({fieldName(v,n++),width(field.type)});
+    return result;
+  }
+  void unpack(Value *v,const std::string &packed) {
+    unsigned offset=0,total=width(v->getType()),n=0;
+    for(auto &field:fields(v->getType())) {
+      auto part=packed;unsigned w=width(field.type);
+      if(offset) {auto c=constant(APInt(total,offset));part=temp(total,"lift.lshr "+part+" "+c);}
+      auto output=names.at(v)+"_"+std::to_string(n++);
+      if(w!=total) {dest(output,w);lines.push_back(output+" = lift.trunc.i"+std::to_string(w)+" "+part);}
+      else {fieldAliases[v]={part};}
+      offset+=w;
+    }
   }
   void dest(std::string n, unsigned w) {
     regs.push_back(n + ":reg[" + std::to_string(w) + "]");
@@ -208,9 +248,8 @@ struct Scalar {
     auto moves = [&](BasicBlock *from, BasicBlock *to) {
       std::vector<std::string> dst, src;
       for (PHINode &phi : to->phis()) {
-        dst.push_back(names[&phi]);
-        src.push_back(value(phi.getIncomingValueForBlock(from)));
-        dest(names[&phi], width(phi.getType()));
+        auto incoming=locations(phi.getIncomingValueForBlock(from));unsigned n=0;
+        for(auto &part:incoming) {auto name=fieldName(&phi,n++);dst.push_back(name);src.push_back(part.first);dest(name,part.second);}
       }
       if (!dst.empty())
         lines.push_back("(" + join(dst) + ") = lift.parmov (" + join(src) +
@@ -336,6 +375,38 @@ struct Scalar {
           }
           continue;
         }
+        if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
+          auto original=locations(insert->getAggregateOperand());
+          auto added=locations(insert->getInsertedValueOperand());
+          std::vector<std::string> aliases;unsigned j=0,n=0;
+          for(auto &field:fields(i.getType())) {
+            if(prefix(field.path,insert->getIndices())) {
+              auto output=names[&i]+"_"+std::to_string(n);dest(output,width(field.type));
+              lines.push_back(output+" = lift.mov "+added[j++].first);aliases.push_back(output);
+            } else aliases.push_back(original[n].first);
+            ++n;
+          }
+          fieldAliases[&i]=std::move(aliases);continue;
+        }
+        if(auto *extract=dyn_cast<ExtractValueInst>(&i)) {
+          auto input=locations(extract->getAggregateOperand());unsigned j=0,n=0;
+          for(auto &field:fields(extract->getAggregateOperand()->getType())) {
+            if(prefix(field.path,extract->getIndices())) {
+              auto output=names[&i]+(i.getType()->isAggregateType()?"_"+std::to_string(j):"");
+              dest(output,width(field.type));lines.push_back(output+" = lift.mov "+input[n].first);++j;
+            }
+            ++n;
+          }
+          continue;
+        }
+        if(i.getType()->isAggregateType() && (isa<SelectInst>(i)||isa<FreezeInst>(i))) {
+          auto *select=dyn_cast<SelectInst>(&i);auto condition=select?value(select->getCondition()):"";
+          auto left=locations(select?select->getTrueValue():i.getOperand(0));
+          auto right=select?locations(select->getFalseValue()):left;
+          for(unsigned n=0;n<left.size();++n) {auto output=fieldName(&i,n);dest(output,left[n].second);
+            lines.push_back(output+(select?" = lift.select "+condition+" "+left[n].first+" "+right[n].first:" = lift.mov "+left[n].first));}
+          continue;
+        }
         if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
           gep(cast<GEPOperator>(g), names[&i]);
           continue;
@@ -345,17 +416,7 @@ struct Scalar {
           std::string v = "r";
           if (rv && rv->getType()->isAggregateType()) {
             // §16.4: evaluate all flattened fields first, then pack without padding.
-            std::vector<std::pair<std::string,unsigned>> parts;
-            std::function<void(Constant *)> flatten = [&](Constant *c) {
-              if (auto *st = dyn_cast<StructType>(c->getType())) {
-                for (unsigned k = 0; k < st->getNumElements(); ++k) flatten(c->getAggregateElement(k));
-              } else if (auto *at = dyn_cast<ArrayType>(c->getType())) {
-                for (unsigned k = 0; k < at->getNumElements(); ++k) flatten(c->getAggregateElement(k));
-              } else parts.emplace_back(value(c),width(c->getType()));
-            };
-            auto *aggregate = dyn_cast<Constant>(rv);
-            if (!aggregate) unimplemented("§16.4 nonconstant aggregate return",2,r);
-            flatten(aggregate); unsigned packed = width(rv->getType()), offset = 0;
+            auto parts=locations(rv); unsigned packed = width(rv->getType()), offset = 0;
             for (auto &part : parts) {
               auto n = part.first;
               if (part.second != packed) n = temp(packed,"lift.zext.i"+std::to_string(packed)+" "+n);
@@ -383,7 +444,7 @@ struct Scalar {
           auto *g = call->getCalledFunction();
           if(!g)g=resolve(call->getCalledOperand());
           std::vector<std::string> args;
-          for (Value *v : call->args()) args.push_back(value(v));
+          for (Value *v : call->args())for(auto &part:locations(v))args.push_back(part.first);
           auto name = g ? g->getName() : StringRef();
           if (name == "__bennett_nz_alloc") {
             dest(names[call],width(call->getType()));
@@ -392,9 +453,10 @@ struct Scalar {
           if (name == "__bennett_nz_free") {lines.push_back("lift.free "+args[0]);continue;}
           auto result = names[call];
           if (call->getType()->isVoidTy()) {result="t"+std::to_string(temps++);dest(result,1);}
+          else if(call->getType()->isAggregateType()) {result="t"+std::to_string(temps++);dest(result,width(call->getType()));}
           else dest(result,width(call->getType()));
           if (g && functions.count(g)) {
-            lines.push_back(result+" = lift.call @"+functions[g]+" ("+join(args)+")");continue;
+            lines.push_back(result+" = lift.call @"+functions[g]+" ("+join(args)+")");if(call->getType()->isAggregateType())unpack(call,result);continue;
           }
           if (!g && analysis) {
             auto candidates=analysis->candidates(call->getCalledOperand(),call->getFunctionType());
@@ -433,7 +495,7 @@ struct Scalar {
               lines.push_back(result+" = lift.call @"+functions.at(sorted[k])+" ("+join(args)+")");
               lines.push_back("qjump "+prefix+"r");
             }
-            lines.push_back(prefix+"d():");lines.push_back("fault 4");lines.push_back(prefix+"r():");continue;
+            lines.push_back(prefix+"d():");lines.push_back("fault 4");lines.push_back(prefix+"r():");if(call->getType()->isAggregateType())unpack(call,result);continue;
           }
           unimplemented("§14 calls (missing linked definition)", 2, call);
         }
@@ -557,9 +619,7 @@ struct Scalar {
     }
     regs = finalRegs;
     std::vector<std::string> params;
-    for (Argument &a : f.args())
-      params.push_back(names[&a] + ":reg[" +
-                       std::to_string(width(a.getType())) + "]");
+    for(Argument &a:f.args())for(auto &part:locations(&a))params.push_back(part.first+":reg["+std::to_string(part.second)+"]");
     std::string b = "lproc @" + functions.at(&f) + " (" + join(params) + ") (r:reg[" +
                     std::to_string(width(f.getReturnType())) + "]) () () ()\n";
     if (!regs.empty())
@@ -880,7 +940,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   for(auto *g:closure) {
     Scalar member{m,*g};member.globals=s.globals;member.functions=functions;member.analysis=&analysis;
     auto name=functions[g];bodies[name]=member.body();
-    std::vector<std::string> widths;for(auto &a:g->args())widths.push_back(std::to_string(member.width(a.getType())));
+    std::vector<std::string> widths;for(auto &a:g->args())for(auto &field:member.fields(a.getType()))widths.push_back(std::to_string(member.width(field.type)));
     signatures[name]="{\"abi\":\"0.8\",\"kind\":\"lproc\",\"params\":["+join(widths,",")+"],\"result\":"+std::to_string(member.width(g->getReturnType()))+",\"tier\":\"q\"}";
     if(!lproc.empty())lproc+="\n";lproc+=bodies[name];
   }

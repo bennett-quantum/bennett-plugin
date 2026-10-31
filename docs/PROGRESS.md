@@ -6,7 +6,7 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 closed after its full gate; bp-1us next**. Both runtime-linked analyses reach S1–S5;
+(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 closed; bp-1us aggregate rows implemented, full gate running**. Both runtime-linked analyses reach S1–S5;
 linked production next stops at §17.4 `malloc` (bp-tav). Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:

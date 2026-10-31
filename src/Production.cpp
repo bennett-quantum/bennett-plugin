@@ -750,6 +750,7 @@ struct Entry {
     ValueToValueMapTy vm;
     auto clone = CloneModule(m, vm);
     auto *cf = cast<Function>(vm[callee]);
+    cf=normaliseWideABI(*clone,cf);
     normaliseScalar(*cf);
     auto path = out + "/oracle-" + std::to_string(references.size());
     auto capacities = table.capacities;
@@ -766,6 +767,7 @@ struct Entry {
       ValueToValueMapTy finalMap;
       auto finalModule = CloneModule(m, finalMap);
       auto *finalFunction = cast<Function>(finalMap[callee]);
+      finalFunction=normaliseWideABI(*finalModule,finalFunction);
       normaliseScalar(*finalFunction);
       globalNames.clear();
       lowerScalar(*finalModule, *finalFunction, current, path, capacities[2],
@@ -2012,6 +2014,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
     hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject());
   }
+  normaliseWideABI(*device);
   for (Function &f : *device)
     if (!f.isDeclaration() && a.tiers[m.getFunction(f.getName())].count("L"))
       normaliseScalar(f);
