@@ -209,6 +209,9 @@ declare void @__bennett_qfree(ptr)
     z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
     data=json.loads(z.stdout) if z.returncode==0 else {}
     check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
+   launch=realout/'top/launch.bennett'
+   z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'])
+   check('published-production-CC-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)

@@ -89,7 +89,9 @@ def main():
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
-            if name=='softfloat':c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
+            if name=='softfloat':
+                c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
+                c[name]['published_production']=[r for r in j['results'] if r['name'].startswith('published-production')]
         audit = read(f'key-audit-{m}.json')
         assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
         c['full-key-audit'] = {k: audit[k] for k in ('cases', 'matched', 'unmatched', 'accounted', 'unaccounted')}
