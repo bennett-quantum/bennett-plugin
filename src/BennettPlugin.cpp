@@ -25,6 +25,7 @@ cl::opt<std::string> BudgetDefault("bennett-budget-default",cl::init("1048576,10
 cl::opt<std::string> Report("bennett-report");
 cl::opt<bool> DescriptorReference("bennett-descriptor-reference", cl::desc("Non-production reference objects from statically resolved marker descriptors"));
 cl::opt<bool> ValidateOnly("bennett-validate-only", cl::desc("Validate materialised L/R IR independently of normalisation"));
+cl::opt<bool> ValidateClassical("bennett-validate-classical", cl::desc("Use CC V12 host-call rules in independent validation"));
 cl::opt<bool> NormaliseOnly("bennett-normalise-only", cl::desc("Test-only M1 scalar N-rule materialisation; no conformance verdict"));
 cl::opt<bool> AnalysisOnly(
     "bennett-analysis-only",
@@ -305,7 +306,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     recognise(m);
     checkVersion(m);
     if (ValidateOnly) {
-      validateResidual(m);
+      validateResidual(m,ValidateClassical);
       return PreservedAnalyses::all();
     }
     if (NormaliseOnly) {

@@ -1046,6 +1046,13 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   auto parsedSymbols=json::parse(symbols);if(!parsedSymbols)fail("output",toString(parsedSymbols.takeError()));
   symbols=canonicalJSON(*parsedSymbols);
   std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":"+std::to_string(nullSize)+",\"ptr_width\":"+std::to_string(pw)+"}";
+  // Every successfully materialised L closure is independently read before
+  // publishing an object. This is after all producers and object construction,
+  // so unimplemented source transforms retain their own capability diagnostic.
+  // H functions in the private whole-program module are not L variants.
+  std::set<Function *> variants(closure.begin(),closure.end());
+  validateResidual(m,false,&variants);
+  errs()<<"bennett: residual validator accepted L closure ("<<variants.size()<<" functions)\n";
   if (auto ec = sys::fs::create_directories(out))
     fail("output", ec.message());
   SmallString<256> path(out);

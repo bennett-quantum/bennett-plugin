@@ -6,7 +6,7 @@ using namespace llvm;
 namespace bennett {
 // A reader of materialised IR, deliberately separate from the producer. Neither
 // annotations from the producer nor runtime-looking names exempt an instruction.
-void validateResidual(Module &m, bool classical) {
+void validateResidual(Module &m, bool classical, const std::set<Function *> *variants) {
   auto reject=[](StringRef rule,const Value *v) {fail("BD-E-RESIDUAL",("§12.4 "+rule).str(),v);};
   const std::set<std::string> attrs={
     "noundef","nonnull","range","align","dereferenceable","dereferenceable_or_null",
@@ -41,7 +41,7 @@ void validateResidual(Module &m, bool classical) {
 #include "ResidualIntrinsics.inc"
   };
   auto hasFP=[](Type *t) {return t->isFPOrFPVectorTy();};
-  for(Function &f:m)if(!f.isDeclaration()) {
+  for(Function &f:m)if(!f.isDeclaration() && (!variants || variants->count(&f))) {
     checkAttrs(f.getAttributes(),&f);if(f.hasPersonalityFn())reject("V3",&f);checkType(f.getReturnType(),&f);
     for(Argument &a:f.args())checkType(a.getType(),&a);
     for(Instruction &i:instructions(f)) {
