@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Record the latest gate pass into docs/verification.json.
 
-The file keeps only the latest pass in full. When a new pass name is recorded, the
-previous latest pass is reduced to a short summary under `previous_passes`
-(pass name, date, gate counts, object pairs, commits; at most ten lines each).
+The file keeps only the latest pass.
 Full history: `git log -p docs/verification.json`.
 
 Evidence comes from a completed gate run: <root>/.tmp/*.json written by tests/*.py and
@@ -64,15 +62,6 @@ def object_paths(tmp, major, scalars):
     return out
 
 
-def summarise(latest):
-    """Reduce a full latest pass to the <= 10 line previous_passes entry."""
-    pairs = latest['object_pairs']
-    return {'pass': latest['name'], 'date': latest['date'],
-            'gate_run_agree_deferred_blocked_diverge': latest['gate']['corpus']['18'].split(' ')[0],
-            'object_pairs': f"{pairs['count']} cross-major byte-identical, {pairs['published_matches']} equal published fixtures",
-            'commits': ','.join(latest['commits']), 'code_head': latest['code_head'][:7]}
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--pass', dest='name', required=True, help='pass name, e.g. ninth')
@@ -80,7 +69,6 @@ def main():
     ap.add_argument('--commits', required=True, help='comma-separated landed commits')
     ap.add_argument('--gate-exit', type=int, required=True)
     ap.add_argument('--root', type=Path, default=R, help='tree whose .tmp/ and build/ the gate used')
-    ap.add_argument('--seed-previous', type=Path, help='JSON list of previous_passes when the file has none')
     a = ap.parse_args()
     assert a.gate_exit == 0, 'refusing to record a failed gate'
     tmp, build = a.root / '.tmp', a.root / 'build'
@@ -138,21 +126,17 @@ def main():
             assert r.returncode == 0, (name, r.stderr)
 
     path = R / 'docs/verification.json'
-    previous = []
-    if path.exists():
-        old = json.loads(path.read_text())
-        previous = old.get('previous_passes', [])
-        if 'latest_pass' in old and old['latest_pass']['name'] != a.name:
-            previous.append(summarise(old['latest_pass']))
-    if not previous and a.seed_previous:
-        previous = json.loads(a.seed_previous.read_text())
+    baseline = json.loads(path.read_text()).get('latest_pass', {}).get('object_pairs', {}).get('rows', []) if path.exists() else []
+    current = {r['object']: r for r in rows}
+    for old in baseline:
+        assert old['object'] in current and old['sha256'] == current[old['object']]['sha256'], f"previously recorded object changed: {old['object']}"
     head = subprocess.check_output(['git', '-C', str(a.root), 'rev-parse', 'HEAD'], text=True).strip()
     latest = {
         'name': a.name, 'date': a.date, 'commits': a.commits.split(','), 'code_head': head,
         'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
         'dialect': '0.2.10', 'dialect_commit': PIN, 'isa': '0.8',
         'plugin_sha256': gate['plugin_sha256'],
-        'gate': {'command': 'scripts/pre-push', 'exit': a.gate_exit, 'accepted_contract_drift': False,
+        'gate': {'command': 'scripts/gate', 'exit': a.gate_exit, 'accepted_contract_drift': False,
                  'contract_head_drift': gate['contract_head_drift'], 'contract_worktree_drift': gate['contract_worktree_drift'],
                  'corpus': gate_counts(gate['summary']),
                  'non_agreeing': [{k: r[k] for k in ('case', 'major', 'pipeline', 'classification')}
@@ -160,11 +144,11 @@ def main():
         'checks': checks, 'scalars': scalars,
         'object_pairs': {'count': len(rows), 'byte_identical': True,
                          'published_matches': sum(bool(r['published_golden']) for r in rows),
-                         'production_cross_major_pairs': cross['pairs'], 'rows': rows},
+                         'production_cross_major_pairs': cross['pairs'], 'preserved_previous_objects': len(baseline), 'rows': rows},
     }
-    path.write_text(json.dumps({'schema': 2, 'latest_pass': latest, 'previous_passes': previous}, indent=2) + '\n')
+    path.write_text(json.dumps({'schema': 2, 'latest_pass': latest}, indent=2) + '\n')
     print(f"recorded pass {a.name}: {len(rows)} object pairs, {latest['object_pairs']['published_matches']} published matches, "
-          f"{len(previous)} previous passes")
+          "latest pass only")
 
 
 if __name__ == '__main__':
