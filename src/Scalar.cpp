@@ -35,6 +35,8 @@ struct Scalar {
   std::vector<std::string> regs, lines;
   unsigned constants = 0, temps = 0, expressions = 0;
   std::map<const GlobalVariable *, std::string> globals;
+  std::map<Function *, std::string> functions;
+  Analysis *analysis = nullptr;
   unsigned width(Type *t) {
     if (t->isIntegerTy() && t->getIntegerBitWidth() <= 128)
       return t->getIntegerBitWidth();
@@ -355,7 +357,61 @@ struct Scalar {
             lines.push_back("fault " + number(c->getValue()));
             break;
           }
-          unimplemented("§14 calls", 2, call);
+          auto *g = resolve(call->getCalledOperand());
+          std::vector<std::string> args;
+          for (Value *v : call->args()) args.push_back(value(v));
+          auto name = g ? g->getName() : StringRef();
+          if (name == "__bennett_nz_alloc") {
+            dest(names[call],width(call->getType()));
+            lines.push_back(names[call]+" = lift.alloc "+args[0]); continue;
+          }
+          if (name == "__bennett_nz_free") {lines.push_back("lift.free "+args[0]);continue;}
+          auto result = names[call];
+          if (call->getType()->isVoidTy()) {result="t"+std::to_string(temps++);dest(result,1);}
+          else dest(result,width(call->getType()));
+          if (g && functions.count(g)) {
+            lines.push_back(result+" = lift.call @"+functions[g]+" ("+join(args)+")");continue;
+          }
+          if (!g && analysis) {
+            auto candidates=analysis->candidates(call->getCalledOperand(),call->getFunctionType());
+            std::vector<Function *> sorted(candidates.begin(),candidates.end());
+            auto address=[](Function *f) -> uint64_t {
+              auto *md=f->getMetadata("bennett.address");
+              if (!md) unimplemented("§19.5 comparison function addresses",4,f);
+              return cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();
+            };
+            std::sort(sorted.begin(),sorted.end(),[&](auto *a,auto *b){return address(a)<address(b);});
+            auto callee=value(call->getCalledOperand());
+            unsigned ordinal=1;for (Instruction &prev:bb) {if (&prev==call) break;if(auto *c=dyn_cast<CallBase>(&prev)) if(!resolve(c->getCalledOperand())) ++ordinal;}
+            auto prefix=blockName(&bb)+".q"+std::to_string(ordinal);
+            unsigned serial=0;
+            std::function<void(int,int)> tree=[&](int lo,int hi) {
+              if(hi<lo) {lines.push_back("qjump "+prefix+"d");return;}
+              if(hi-lo+1<=3) {
+                for(int k=lo;k<=hi;++k) {
+                  auto c=constant(APInt(width(call->getCalledOperand()->getType()),address(sorted[k])));
+                  auto t=temp(1,"lift.icmp.eq "+callee+" "+c);
+                  auto next=k<hi?blockName(&bb)+".s"+std::to_string(++serial):prefix+"d";
+                  lines.push_back("qbranch "+t+" "+prefix+"c"+std::to_string(k)+" "+next);
+                  if(k<hi) lines.push_back(next+"():");
+                }
+              } else {
+                int mid=(lo+hi)/2;
+                auto c=constant(APInt(width(call->getCalledOperand()->getType()),address(sorted[mid])));
+                auto t=temp(1,"lift.icmp.ult "+callee+" "+c);
+                auto l=blockName(&bb)+".s"+std::to_string(++serial),r=blockName(&bb)+".s"+std::to_string(++serial);
+                lines.push_back("qbranch "+t+" "+l+" "+r);lines.push_back(l+"():");tree(lo,mid-1);lines.push_back(r+"():");tree(mid,hi);
+              }
+            };
+            tree(0,int(sorted.size())-1);
+            for(unsigned k=0;k<sorted.size();++k) {
+              lines.push_back(prefix+"c"+std::to_string(k)+"():");
+              lines.push_back(result+" = lift.call @"+functions.at(sorted[k])+" ("+join(args)+")");
+              lines.push_back("qjump "+prefix+"r");
+            }
+            lines.push_back(prefix+"d():");lines.push_back("fault 4");lines.push_back(prefix+"r():");continue;
+          }
+          unimplemented("§14 calls (missing linked definition)", 2, call);
         }
         if (auto *l = dyn_cast<LoadInst>(&i)) {
           unsigned w = width(l->getType());
@@ -479,7 +535,7 @@ struct Scalar {
     for (Argument &a : f.args())
       params.push_back(names[&a] + ":reg[" +
                        std::to_string(width(a.getType())) + "]");
-    std::string b = "lproc @L1 (" + join(params) + ") (r:reg[" +
+    std::string b = "lproc @" + functions.at(&f) + " (" + join(params) + ") (r:reg[" +
                     std::to_string(width(f.getReturnType())) + "]) () () ()\n";
     if (!regs.empty())
       b += "regs { " + join(regs) + " }\n";
@@ -506,6 +562,7 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
       auto pw=dl.getPointerSizeInBits(t->getPointerAddressSpace());APInt offset(pw,0);
       auto *root=c->stripAndAccumulateConstantOffsets(dl,offset,true);
       if(auto *target=dyn_cast<GlobalVariable>(root);target && bases.count(target))bits=APInt(pw,bases.at(target))+offset;
+      else if(auto *f=dyn_cast<Function>(root);f && f->getMetadata("bennett.address")) bits=cast<ConstantInt>(cast<ConstantAsMetadata>(f->getMetadata("bennett.address")->getOperand(0))->getValue())->getValue().zextOrTrunc(pw)+offset;
       else if(auto *ce=dyn_cast<ConstantExpr>(c);ce && ce->getOpcode()==Instruction::IntToPtr && isa<ConstantInt>(ce->getOperand(0)))bits=cast<ConstantInt>(ce->getOperand(0))->getValue().zextOrTrunc(pw);
       else unimplemented("§19.5 global pointer relocation target",1,c);
     } else unimplemented("§19.5 vector data image",2,c);
@@ -517,9 +574,29 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
 }
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames) {
-  Scalar s{m, f};
+  // Materialise every linked member before computing candidates and read dependencies.
+  for (Function &g:m) if(!g.isDeclaration()) normaliseScalar(g);
+  Analysis analysis(m); analysis.run();
+  std::vector<Function *> closure;
+  std::map<Function *,std::string> functions;
+  std::function<void(Function *)> collect=[&](Function *g) {
+    if(!g || g->isDeclaration() || functions.count(g)) return;
+    functions[g]="L"+std::to_string(functions.size()+1);closure.push_back(g);
+    for(Instruction &i:instructions(g)) if(auto *c=dyn_cast<CallBase>(&i)) {
+      if(auto *target=resolve(c->getCalledOperand())) collect(target);
+      else {
+        auto targets=analysis.candidates(c->getCalledOperand(),c->getFunctionType());
+        std::vector<Function *> sorted(targets.begin(),targets.end());
+        std::sort(sorted.begin(),sorted.end(),[](auto *a,auto *b) {
+          auto address=[](Function *f) {auto *md=f->getMetadata("bennett.address");if(!md) unimplemented("§19.5 comparison function addresses",4,f);return cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();};return address(a)<address(b);
+        });for(auto *target:sorted) collect(target);
+      }
+    }
+  };collect(&f);
+  Scalar s{m, f}; s.functions=functions;s.analysis=&analysis;
   std::string d = desc.str(), device;
   uint64_t deviceSize = 0, heapLimit = heapCapacity;
+  if (StringRef(d).starts_with("dev=")) d=";"+d;
   auto deviceStart = d.find(";dev=");
   if (deviceStart != std::string::npos) {
     auto deviceEnd = d.find(';', deviceStart + 1);
@@ -547,7 +624,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     if (isa<Function>(v)) return;
     if(auto *u=dyn_cast<User>(v))for(Value *a:u->operands())visit(a);
   };
-  for(Instruction &i:instructions(f))for(Value *v:i.operands())visit(v);
+  for(auto *g:closure) for(Instruction &i:instructions(g))for(Value *v:i.operands())visit(v);
   auto deviceGlobal = [&](StringRef suffix) -> GlobalVariable * {
     auto *g = m.getGlobalVariable("__bennett_dev_" + suffix.str(), true);
     if (!g) g = new GlobalVariable(m, Type::getInt64Ty(m.getContext()),false,GlobalValue::InternalLinkage,
@@ -586,23 +663,11 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     }
     return false;
   };
-  for(Instruction &i:instructions(f)) {
-    Value *p=nullptr;
-    if(auto *l=dyn_cast<LoadInst>(&i))p=l->getPointerOperand();
-    if(auto *st=dyn_cast<StoreInst>(&i))p=st->getPointerOperand();
-    if(p && !isa<GlobalVariable>(getUnderlyingObject(p))) {
-      if (!privatePointer(p))
-        unimplemented("§8.5 entry-state replay / §17.3 shadow-stack memory",2,&i);
-    }
-  }
-  // A mutable global written outside this closure needs caller-entry replay.
-  // Until M2 that dependency must fail, rather than silently reset its bytes.
-  for(Function &g:m)if(&g!=&f)
-    for(Instruction &i:instructions(g)) {
-      if(auto *st=dyn_cast<StoreInst>(&i))
-        if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
-          unimplemented("§8.5 mutable global entry-state replay",2,&i);
-    }
+  // The closure, rather than just its root, owns writes to private globals.
+  for(Function &g:m) if(!functions.count(&g))
+    for(Instruction &i:instructions(g)) if(auto *st=dyn_cast<StoreInst>(&i))
+      if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
+        unimplemented("§8.5 caller snapshot transfer",2,&i);
   unsigned gn=1;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
   if (globalNames) for (auto &g : s.globals) (*globalNames)[g.second] = scalarGlobalKey(*g.first);
   unsigned ret = s.width(f.getReturnType());
@@ -652,7 +717,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     memSigs.push_back("{\"A\":" + std::to_string(deviceSize) + ",\"W\":8,\"role\":\"in\"}");
     auto p = prologue("lift.addr @e0"); devStore("entropy_base", p);
     auto n = prologue("lift.const.i64 " + std::to_string(uint64_t(1) << deviceSize)); devStore("entropy_size", n);
-    auto z = prologue("lift.const.i64 0"); devStore("entropy_pos", z);
+
   } else if (device == "BLOCK") {
     if (deviceSize > 54) fail("shape", "BLOCK extent exceeds address space");
     mems.push_back("k0:region[" + std::to_string(deviceSize + 9) + ",8] in");
@@ -734,7 +799,15 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   bool returnDiscard = discard;
   if (discard)
     tgt = 1;
-  std::string lproc = s.body();
+  std::map<std::string,std::string> bodies, signatures;
+  std::string lproc;
+  for(auto *g:closure) {
+    Scalar member{m,*g};member.globals=s.globals;member.functions=functions;member.analysis=&analysis;
+    auto name=functions[g];bodies[name]=member.body();
+    std::vector<std::string> widths;for(auto &a:g->args())widths.push_back(std::to_string(member.width(a.getType())));
+    signatures[name]="{\"abi\":\"0.8\",\"kind\":\"lproc\",\"params\":["+join(widths,",")+"],\"result\":"+std::to_string(member.width(g->getReturnType()))+",\"tier\":\"q\"}";
+    if(!lproc.empty())lproc+="\n";lproc+=bodies[name];
+  }
   wrapperRegs.push_back("r:reg[" + std::to_string(ret) + "]");
   wrapperRows.push_back("r = lift.call @L1 (" + join(invoke) + ")");
   if (projection >= 0) {
@@ -781,8 +854,16 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     wrapperRows.push_back("lift.boundscheck " + buffer + " " + std::to_string(tgt / 8));
     wrapperRows.push_back("t0 = lift.load.i" + std::to_string(tgt) + " " + buffer);
     wrapperRows.push_back("lift.retval t0");
-  } else if (tgt != ret)
-    unimplemented("§8.2 target extension/truncation", 2, &f);
+  } else if (tgt != ret) {
+    if(tgt<ret) {
+      wrapperRegs.push_back("c0:reg["+std::to_string(ret)+"]");wrapperRows.push_back("c0 = lift.const.i"+std::to_string(ret)+" "+std::to_string(tgt));
+      wrapperRegs.push_back("t0:reg["+std::to_string(ret)+"]");wrapperRows.push_back("t0 = lift.lshr r c0");
+      wrapperRegs.push_back("c1:reg["+std::to_string(ret)+"]");wrapperRows.push_back("c1 = lift.const.i"+std::to_string(ret)+" 0");
+      wrapperRegs.push_back("t1:reg[1]");wrapperRows.push_back("t1 = lift.icmp.ne t0 c1");wrapperRows.push_back("lift.faultif t1 4");
+    }
+    auto n=tgt<ret?"t2":"t0";wrapperRegs.push_back(std::string(n)+":reg["+std::to_string(tgt)+"]");
+    wrapperRows.push_back(std::string(n)+" = lift."+(tgt<ret?"trunc":"zext")+".i"+std::to_string(tgt)+" r");wrapperRows.push_back(std::string("lift.retval ")+n);
+  }
   else
     wrapperRows.push_back("lift.retval r");
   std::string wrapper = "oracle @ref (" + join(ins) + ") (tgt:wire[" +
@@ -846,25 +927,47 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     globalHashLeaves+="layout globals."+e.first+" "+globalLeaves[e.first]+"\n";
     dataSection+=e.first+" "+e.second+"\n";
   }
-  // Symbol references contribute hashes in first-reference order, independently
-  // of lexicographic data/layout leaf order.
-  std::string canonicalL;std::set<std::string> referenced;
-  std::regex token(R"(@G[0-9]+\b)");size_t last=0;
-  for(std::sregex_iterator it(lproc.begin(),lproc.end(),token),end;it!=end;++it) {
-    std::string n=it->str().substr(1);if(referenced.insert(n).second)refs+=dataHashes[n]+"\n";
-    canonicalL+=lproc.substr(last,it->position()-last)+"@"+dataHashes[n];last=it->position()+it->length();
+  // Hash the complete call graph in SCC dependency order (ISA §9.2).
+  std::map<std::string,std::string> hashes=dataHashes;
+  std::map<std::string,std::set<std::string>> edges;
+  std::regex symbolToken(R"(@([LG][0-9]+)\b)");
+  for(auto &b:bodies) {
+    auto rest=b.second.substr(b.second.find('\n')+1);
+    for(std::sregex_iterator it(rest.begin(),rest.end(),symbolToken),end;it!=end;++it)
+      if(bodies.count((*it)[1]))edges[b.first].insert((*it)[1]);
   }
-  canonicalL+=lproc.substr(last);
-  std::string lImages, lLeaves;
-  for (auto &n : referenced) {
-    lImages += "data " + n + " " + data[n] + "\n";
-    lLeaves += "layout globals." + n + " " + globalLeaves[n] + "\n";
-  }
-  std::string lh=sha(prefix+lsig+"\n"+canonicalL+"\n"+lImages+lLeaves+refs);
-  std::string canonical, wrapperRefs; last = 0; referenced.clear();
-  std::regex wrapperToken(R"(@(L1|G[0-9]+)\b)");
+  auto reaches=[&](std::string from,std::string to) {
+    std::set<std::string> seen;std::function<bool(std::string)> walk=[&](std::string n) {if(n==to)return true;if(!seen.insert(n).second)return false;for(auto &v:edges[n])if(walk(v))return true;return false;};return walk(from);
+  };
+  std::function<void(std::string)> hashMember=[&](std::string n) {
+    if(hashes.count(n))return;
+    std::vector<std::string> group;
+    for(auto &b:bodies)if(reaches(n,b.first)&&reaches(b.first,n))group.push_back(b.first);
+    bool cyclic=group.size()>1 || edges[n].count(n);
+    std::set<std::string> members(group.begin(),group.end());
+    for(auto &g:group)for(auto &e:edges[g])if(!members.count(e))hashMember(e);
+    std::string envelopes;
+    for(auto &g:group) {
+      auto newline=bodies[g].find('\n');auto rest=bodies[g].substr(newline+1);
+      std::string canonical=bodies[g].substr(0,newline+1),refs;size_t last=0;std::set<std::string> referenced;
+      for(std::sregex_iterator it(rest.begin(),rest.end(),symbolToken),end;it!=end;++it) {
+        auto v=(*it)[1].str();std::string replacement;
+        if(cyclic && members.count(v)) replacement="$"+std::to_string(std::find(group.begin(),group.end(),v)-group.begin());
+        else {replacement=hashes.at(v);if(referenced.insert(v).second)refs+=replacement+"\n";}
+        canonical+=rest.substr(last,it->position()-last)+"@"+replacement;last=it->position()+it->length();
+      }
+      canonical+=rest.substr(last);std::string images,leaves;
+      for(auto &v:data)if(referenced.count(v.first)) {images+="data "+v.first+" "+v.second+"\n";leaves+="layout globals."+v.first+" "+globalLeaves[v.first]+"\n";}
+      envelopes+=prefix+signatures[g]+"\n"+canonical+"\n"+images+leaves+refs;
+    }
+    auto h=sha(envelopes);
+    for(unsigned i=0;i<group.size();++i)hashes[group[i]]=cyclic?sha(h+":"+std::to_string(i)):h;
+  };
+  for(auto &b:bodies)hashMember(b.first);
+  std::string canonical, wrapperRefs; size_t last = 0; std::set<std::string> referenced;
+  std::regex wrapperToken(R"(@(L[0-9]+|G[0-9]+)\b)");
   for (std::sregex_iterator it(wrapper.begin(),wrapper.end(),wrapperToken),end;it!=end;++it) {
-    auto n = it->str().substr(1), hash = n == "L1" ? lh : dataHashes[n];
+    auto n = it->str().substr(1), hash = hashes.at(n);
     if (referenced.insert(n).second) wrapperRefs += hash + "\n";
     canonical += wrapper.substr(last,it->position()-last) + "@" + hash;
     last = it->position()+it->length();
@@ -873,8 +976,10 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   std::string leaves="layout A_tab "+std::to_string(at)+"\nlayout H "+std::to_string(h)+"\nlayout S_cells "+std::to_string(sc)+"\n"+globalHashLeaves+
     "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max "+std::to_string(heapLimit)+"\n"+regionHashLeaves+"layout null_size 4096\nlayout ptr_width "+std::to_string(pw)+"\n";
   std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+wrapperRefs);
-  std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"},\"1\":{\"interface_hash\":\""+lh+"\",\"kind\":\"lproc\",\"name\":\"L1\",\"signature\":"+lsig+"}";
-  unsigned si=2;for(auto &e:data)symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+dataHashes[e.first]+"\",\"kind\":\"data\",\"name\":\""+e.first+"\",\"signature\":"+dataSigs[e.first]+"}";
+  std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"}";
+  unsigned si=1;
+  for(auto *g:closure) {auto n=functions[g];symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+hashes[n]+"\",\"kind\":\"lproc\",\"name\":\""+n+"\",\"signature\":"+signatures[n]+"}";}
+  for(auto &e:data)symbols+=",\""+std::to_string(si++)+"\":{\"interface_hash\":\""+dataHashes[e.first]+"\",\"kind\":\"data\",\"name\":\""+e.first+"\",\"signature\":"+dataSigs[e.first]+"}";
   symbols+="}";
   std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":4096,\"ptr_width\":"+std::to_string(pw)+"}";
   if (auto ec = sys::fs::create_directories(out))

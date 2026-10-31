@@ -20,16 +20,20 @@ def main():
   fields={k:v.strip(chr(34)) for k,v in re.findall(r'([\w]+)=([^ ]+)',tag)};name=fields['lift']
   if a.case and name not in a.case:continue
   # Enumerate every published lift, including explicitly unavailable mechanics.
-  supported=name in ['binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte','oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks']
+  supported=name in ['binding-out-byte','binding-clock-read','binding-block-byte','binding-console-byte','oracle-empty-output','oracle-empty-fault','oracle-discard-return','pointer-as270','gep-index-obj','gep-index-const','inc8','add2','switch5','fp-aggregate','atomic-nand','indirectbr-two-blocks','entry-replay-byte','rung4-mini','rung8-mini','listsum']
   dest=R/f'.tmp/scalars/{a.major}/{name}';dest.mkdir(parents=True,exist_ok=True)
   primitives={'__bennett_nz_fault':'void @__bennett_nz_fault(i64)','__bennett_nz_alloc':'ptr @__bennett_nz_alloc(i64)','__bennett_nz_free':'void @__bennett_nz_free(ptr)'}
   for n,sig in primitives.items():
    if '@'+n in body and not re.search(r'(?:define|declare) [^\n]*@'+n+r'\(',body):body+='\ndeclare '+sig+'\n'
+  # Published comparison-link addresses are driver input, never inferred from names.
+  for j,(fn,addr) in enumerate(re.findall(r'function @([^ ]+) A=0x([a-fA-F0-9]+)',maps.get(name,''))):
+   body=re.sub(r'(define [^\n]*@'+re.escape(fn)+r'\([^\n]*?\)) \{',r'\1 !bennett.address !'+str(900+j)+' {',body)
+   body+='\n!'+str(900+j)+' = !{i64 '+str(int(addr,16))+'}\n'
   src=dest/'input.ll';src.write_text(body)
   stack=re.search(r'stack (?:max |max=|)(\d+)',maps.get(name,''))
   if not stack:stack=re.search(r'stack\s+(\d+)',maps.get(name,''))
   cells=int(stack[1]) if stack else 32
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+fields['desc'],'-bennett-scalar-stack='+str(cells),'-bennett-out='+str(dest),'-disable-output',str(src)]
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+re.sub(r'MEM_IN\((\d+)\)',lambda m:'MEM_IN('+str(1<<int(m[1]))+')',fields['desc']),'-bennett-scalar-stack='+str(cells),'-bennett-scalar-heap='+str(int(re.search(r'heap_limit_max=(\d+)',maps.get(name,''))[1]) if re.search(r'heap_limit_max=(\d+)',maps.get(name,'')) else 0),'-bennett-out='+str(dest),'-disable-output',str(src)]
   (dest/'ref.bennett').unlink(missing_ok=True)
   x=run(cmd);row={'name':name,'lowered':x.returncode==0}
   if x.returncode:

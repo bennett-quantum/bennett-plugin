@@ -38,6 +38,7 @@ cl::opt<std::string> Oracle("bennett-oracle");
 cl::opt<std::string>
     Shape("bennett-scalar-shape",
           cl::desc("Scalar test shape, e.g. IN(8,zext),IN(8,zext);tgt=9"));
+cl::opt<uint64_t> HeapBytes("bennett-scalar-heap", cl::init(0));
 cl::opt<unsigned> StackCells("bennett-scalar-stack", cl::init(32));
 } // namespace
 namespace bennett {
@@ -334,7 +335,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       auto materialised = CloneModule(m, map);
       auto *mf = cast<Function>(map[f]);
       normaliseScalar(*mf);
-      lowerScalar(*materialised, *mf, Shape, Output, StackCells);
+      lowerScalar(*materialised, *mf, Shape, Output, StackCells, HeapBytes);
       std::error_code ec;
       raw_fd_ostream bc(Output + "/materialised.bc", ec);
       if (ec) fail("output", ec.message());
