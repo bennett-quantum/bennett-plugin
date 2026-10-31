@@ -1,3 +1,57 @@
+# Third pass — 2026-10-31 (M1c, in progress)
+
+Accepted contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**;
+ISA **0.8**. Round-8 freeze receipt: spec SHA-256
+`d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206`.
+The sibling worktree is draft 0.2.11; it is not the accepted compatibility unit.
+The drift gate checks the accepted-release registry and pinned blob digest, and
+reports working draft/HEAD differences separately. Cases, header, opaque harness
+and runtime now come from one immutable commit, with a pin-specific baseline cache.
+
+## Observed behavioural changes from 0.2.7
+
+- §5.2/PT1/PT6: alloca and allocation-site zero initial images survive stores.
+  `pt6-zero-stack` and `pt6-zero-heap` now give raw/idx `{0,1}`, widths `{1,3}`;
+  the old analysis omitted zero (and opaque `free` incorrectly tainted heap bytes).
+- PT8: clipped byte-image copies carry zero into a nonzero-initialised global;
+  `pt8-zero-copy` now gives the same `{0,1}` / `{1,3}` domains. Full interval
+  stores still union with these initial bytes.
+- PT3: equal geometry copies lanes; changed geometry packs/resegments bit patterns
+  in DataLayout order. The earlier pass already passed byte-lane 257/256/unpack3;
+  this pass fixes sub-byte bit positions and constant-expression bitcasts and
+  checks Cartesian lane alternatives (257/258/513/514), little and big endian.
+- PT10/N15: out-of-range dynamic extraction contributes zero; published lane-zero
+  width domain changes from `{2,4}` to `{1,2,4}`.
+- PT4/PT5: the new wide-wrap witness exposed an APInt assertion on a 2^64
+  displacement. Low pointer-width modular displacement now retains the table
+  candidate instead of crashing. General represented-address images remain M1.
+- map 0.2.9/§16.3: globals are 1-based; atomic-nand's G0 becomes G1. Object
+  and closure hashes change, while its payload 63/code0/16 steps stays equal.
+- Zero initial images also reach descriptor allocas. Reference emission uses an
+  independent local reaching-store proof at the call rather than deleting zeros
+  from normative S2 domains; ambiguous paths retain explicit unimplemented errors.
+- The pinned harness now selects ABI 0.2 for spec-sem2-adj/compute; both former
+  exit-87 upstream blockers execute successfully and become agreements. Historical
+  ABI-v0 cases remain unchanged. No EXPECT line was edited.
+- N33 own-format libm carrier corrections are part of the pin; arithmetic/helper
+  closure materialisation remains explicit M2 work, not claimed implemented here.
+
+## Before/after evidence
+
+Stable 07f942c sources were rebuilt in `.tmp/before-build`; both majors reproduced
+66 run / 63 agree / 1 deferred / 2 blocked / 0 diverge; the old pin-drift gate
+exited 1. A first overlapping build/gate attempt was invalidated by the existing
+plugin-digest guard and discarded; only the isolated rerun supplies these totals.
+The first accepted 0.2.10 corpus run is 66/65/1/0/0 on each major (exit 0).
+New domain assertions were red 4/7 then published recognition passed 73/73 (18)
+and 74/74 (23). Constant-expression packing was independently red 1/8.
+
+**M1 remains open.** No general audit, full materialised keys or production launch
+completion is claimed by these checks. The earlier pass record follows for history;
+its pin, runtime blocker, CMake and G0 statements are superseded by this section.
+
+---
+
 # Progress — 2026-10-30 (M1b)
 
 **M1 remains incomplete.** Epic bp-a41 and its implementation tasks remain open.

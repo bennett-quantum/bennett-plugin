@@ -486,7 +486,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
         if(auto *v=dyn_cast<GlobalVariable>(getUnderlyingObject(st->getPointerOperand()));v && used.count(v))
           unimplemented("§8.5 mutable global entry-state replay",2,&i);
     }
-  unsigned gn=0;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
+  unsigned gn=1;for(GlobalVariable &g:m.globals())if(used.count(&g))s.globals[&g]="G"+std::to_string(gn++);
   unsigned ret = s.width(f.getReturnType());
   std::string d = desc.str();
   auto semi = d.find(';');

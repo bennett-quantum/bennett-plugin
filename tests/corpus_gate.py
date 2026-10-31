@@ -11,12 +11,12 @@ separately and printed on EVERY run with its milestone/bead; never agreement.
 Only the evidenced property failures below may be classified unavailable;
 additional failures, plugin errors, changed exits and missing checks exit 1.
 """
-import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys
+import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys,tarfile,io
 from pathlib import Path
 from contracts import drift
 R=Path(__file__).resolve().parents[1]
 CORPUS=R.parent/'bennett-dialect-spec/corpus/legality'
-PIN='95c3cd332f5f72c07fd5f2515f328deaa40c08b9'
+PIN='023f5a771a814270634db3be9cfde88ded69f975'
 def run(args,timeout=30):
  try:
   x=subprocess.run(list(map(str,args)),capture_output=True,text=True,errors="replace",timeout=timeout)
@@ -25,10 +25,14 @@ def run(args,timeout=30):
 def pipelines(major):
  return [*[f'default<O{i}>' for i in range(4)],*(['default<Os>','default<Oz>'] if major==18 else []),'lto-pre-link<O3>','lto<O3>','thinlto-pre-link<O3>','thinlto<O3>','default<O3>,default<O3>,default<O3>','strip','strip-nondebug','mergefunc']
 def bootstrap():
- dst=R/'.tmp/blackbox/corpus/legality'
- for folder in ['harness','runtime','cases','controls']:shutil.copytree(CORPUS/folder,dst/folder,dirs_exist_ok=True)
- for file in ['markers.h','toolchains.toml']:shutil.copy2(CORPUS/file,dst/file)
- (dst.parent.parent/'spec').mkdir(exist_ok=True);shutil.copy2(CORPUS.parent.parent/'spec/bennett_markers.h',dst.parent.parent/'spec/bennett_markers.h')
+ snapshot=R/'.tmp/blackbox'/PIN
+ dst=snapshot/'corpus/legality'
+ if not dst.exists():
+  snapshot.mkdir(parents=True,exist_ok=True)
+  # Copy and execute the published harness opaquely at the SAME immutable pin
+  # as cases and headers; never import/inspect its implementation.
+  archive=subprocess.check_output(['git','-C',str(CORPUS.parent.parent),'archive',PIN,'corpus/legality','spec/bennett_markers.h'])
+  with tarfile.open(fileobj=io.BytesIO(archive)) as tar:tar.extractall(snapshot,filter='data')
  # A versioned baseline is a black-box artefact, not a substitute for plugin checks.
  result=dst/'results/raw/baseline.json'
  if not result.exists():
@@ -65,7 +69,7 @@ def cell(task):
   src=dest/'input.ll';rc,_,err=run([tool/'clang','-O0','-Xclang','-disable-O0-optnone','-emit-llvm','-S',case,'-o',src])
   if rc:row['diagnostic']=err;row['properties']['L1']='frontend failed';return row
  combined=dest/'combined.bc';report=dest/'analysis.json'
- rc,out,err=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes='+pipe+',bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(report),src,'-o',combined],timeout=60)
+ rc,out,err=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes='+pipe+',bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(report),src,'-o',combined],timeout=60)
  row['plugin_exit']=rc;row['diagnostic']=err[-1800:]
  if stem=='c-pure-attr-wrapper' and rc and 'BD-E-EFFECT-LIE' in err:
   row['properties']['L2']=True;row['agree']=True;row['expected_diagnostic']='§3.8 source-effect lie (EXPECT: probe)';return row
@@ -81,7 +85,7 @@ def cell(task):
  # Region keys must be name-independent; compare mergefunc twins in the same
  # materialised module. Cross-pipeline semantic identity still needs full map.
  stable=dest/'stable.json'
- rc2,_,err2=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(stable),combined,'-disable-output'])
+ rc2,_,err2=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(stable),combined,'-disable-output'])
  def identities(d):return [(r['marker'],r['operand'],sorted({c['key'] for c in r['candidates']})) for r in d['regions']]
  row['properties']['L4']=False if rc2 else identities(data)==identities(json.loads(stable.read_text()))
  row['identity_scope']='content identity under plugin; stock-pipeline equivalence pending full materialisation' 
@@ -121,7 +125,7 @@ def main():
  for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os.environ.pop(key,None)
  (R/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(R/'.tmp')
  current=run(['git','-C',CORPUS.parent.parent,'rev-parse','HEAD'])[1].strip()
- if current!=PIN:print('dialect pin drift: HEAD '+current+'; executing pinned fixtures '+PIN,file=sys.stderr)
+ if drift():print('accepted dialect contract drift; executing pinned fixtures '+PIN,file=sys.stderr)
  plugin_hashes={str(m):hashlib.sha256((R/f'build/libbennett-plugin-{m}.so').read_bytes()).hexdigest() for m in (a.major or [18,23])}
  baseline=bootstrap()
  # Read fixture blobs only; never copy/import a sibling checker implementation.
@@ -150,8 +154,8 @@ def main():
    statuses={classify(x) for x in casecells}-{'agree'}
    if statuses:print(f"LLVM {m} {name}: {', '.join(sorted(statuses))}",flush=True)
  for row in rows:row['classification']=classify(row)
- result={'plugin_sha256':plugin_hashes,'contract_head':current,'contract_head_drift':current!=PIN,'contract_worktree_drift':drift(),'dialect_commit':PIN,'scope':'clang C + opt envelope; rustc/Julia/front-end LTO pending','summary':summary,'cells':rows}
+ result={'plugin_sha256':plugin_hashes,'contract_head':current,'contract_head_drift':current!=PIN,'contract_worktree_drift':(CORPUS.parent.parent/'spec/Bennett-Dialect-Spec.md').read_text()!=__import__('contracts').dialect_text(),'accepted_contract_drift':drift(),'dialect_commit':PIN,'scope':'clang C + opt envelope; rustc/Julia/front-end LTO pending','summary':summary,'cells':rows}
  assert all(hashlib.sha256((R/f'build/libbennett-plugin-{m}.so').read_bytes()).hexdigest()==h for m,h in plugin_hashes.items()),'plugin changed during gate'
  (R/'.tmp/corpus-gate.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(summary,indent=2))
- return current!=PIN or drift() or any(classify(x)=='diverge' for x in rows)
+ return drift() or any(classify(x)=='diverge' for x in rows)
 if __name__=='__main__':raise SystemExit(main())

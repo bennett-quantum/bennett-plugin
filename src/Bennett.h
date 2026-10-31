@@ -50,6 +50,7 @@ class Analysis {
   std::map<std::pair<const llvm::Value *, Path>, AV> fields;
   AV field(const llvm::Value *, const Path &);
   void setField(const llvm::Value *, const Path &, const AV &);
+  AV bitcast(const llvm::Value *, llvm::Type *, const Path &);
   void copyFields(const llvm::Value *, const llvm::Value *);
   bool composite(llvm::Instruction &);
   std::map<llvm::Function *, std::set<llvm::Function *>> edges;
@@ -63,6 +64,7 @@ public:
   explicit Analysis(llvm::Module &m) : M(m) {}
   AV get(const llvm::Value *);
   AV read(llvm::Value *, uint64_t, llvm::Type *);
+  AV readAt(llvm::CallBase &, llvm::Value *, uint64_t, llvm::Type *);
   std::set<llvm::Function *> candidates(llvm::Value *,
                                         llvm::FunctionType *type = nullptr);
   std::map<llvm::Function *, std::set<std::string>> tiers;

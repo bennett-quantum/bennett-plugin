@@ -242,6 +242,8 @@ AV Analysis::get(const Value *v) {
   if (auto *g = dyn_cast<GlobalAlias>(v))
     return get(g->getAliasee());
   if (auto *c = dyn_cast<ConstantExpr>(v)) {
+    if (c->getOpcode()==Instruction::BitCast)
+      return bitcast(c->getOperand(0),c->getType(),{});
     if (c->isCast()) {
       auto a = get(c->getOperand(0));
       if (c->getOpcode() == Instruction::IntToPtr && !a.roots())
@@ -332,6 +334,49 @@ AV Analysis::read(Value *base, uint64_t offset, Type *t) {
   for(auto x:p.atoms) {if(x.kind==Atom::Ptr)x.offset+=offset;shifted.atoms.insert(x);}
   return load(shifted,t);
 }
+// A local straight-line reaching store is an independent proof of the actual
+// descriptor field at this call. It does not change the normative S2 solution.
+AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
+  auto address=get(base);
+  if(address.top || address.atoms.size()!=1) return read(base,offset,type);
+  auto p=*address.atoms.begin();
+  if(p.kind!=Atom::Ptr || p.stride || !isa<AllocaInst>(p.object)) return read(base,offset,type);
+  p.offset+=offset;
+  uint64_t bytes=M.getDataLayout().getTypeStoreSize(type).getKnownMinValue();
+  for(auto it=call.getIterator();it!=call.getParent()->begin();) {
+    Instruction &i=*--it;
+    if(auto *st=dyn_cast<StoreInst>(&i)) {
+      auto dst=get(st->getPointerOperand());
+      for(auto &d:dst.atoms) if(d.kind==Atom::Ptr && (!d.object || d.object==p.object)) {
+        Slot written{d.object,d.offset,d.stride,M.getDataLayout().getTypeStoreSize(st->getValueOperand()->getType()).getKnownMinValue(),{},false};
+        if(!d.object || overlaps(p,written,bytes)) {
+          if(!dst.top && dst.atoms.size()==1 && !d.stride && d.offset==p.offset && written.bytes==bytes)
+            return get(st->getValueOperand());
+          return read(base,offset,type);
+        }
+      }
+      if(dst.top) return read(base,offset,type);
+    } else if(auto *c=dyn_cast<CallBase>(&i)) {
+      if(auto *intrinsic=dyn_cast<IntrinsicInst>(c)) {
+        auto id=intrinsic->getIntrinsicID();
+        if(id==Intrinsic::lifetime_start || id==Intrinsic::lifetime_end) continue;
+      }
+      if(auto *mem=dyn_cast<MemIntrinsic>(c)) {
+        auto dst=get(mem->getDest()); auto *length=dyn_cast<ConstantInt>(mem->getLength());
+        bool disjoint=!dst.top && length;
+        for(auto &d:dst.atoms) if(d.kind==Atom::Ptr) {
+          Slot written{d.object,d.offset,d.stride,length ? length->getLimitedValue() : 1,{},false};
+          if(!d.object || overlaps(p,written,bytes)) disjoint=false;
+        }
+        if(disjoint) continue;
+      }
+      // Any call could clobber an escaped local. Only cross calls before the
+      // reaching store when no relevant field has yet been proven.
+      return read(base,offset,type);
+    }
+  }
+  return read(base,offset,type);
+}
 AV Analysis::load(const AV &p, Type *t) {
   AV r;
   uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
@@ -348,12 +393,12 @@ AV Analysis::load(const AV &p, Type *t) {
           if (s.filled && a.stride == 0 && s.stride == 0 &&
               a.offset >= s.offset &&
               a.offset + (int64_t)size <= s.offset + (int64_t)s.bytes &&
-              t->isIntegerTy()) {
+              (t->isIntegerTy() || t->isPointerTy())) {
             AV decoded;
             decoded.top = s.value.top;
             for (auto &x : s.value.atoms)
               if (x.kind == Atom::Int) {
-                APInt bits(t->getIntegerBitWidth(), 0);
+                APInt bits(M.getDataLayout().getTypeSizeInBits(t).getKnownMinValue(), 0);
                 for (unsigned b = 0; b < size; ++b)
                   bits |= x.integer.zextOrTrunc(bits.getBitWidth()).shl(b * 8);
                 decoded.merge(integer(bits));
@@ -539,6 +584,8 @@ static std::vector<Leaf> leaves(Type *t, const DataLayout &dl) {
 AV Analysis::field(const Value *v, const Path &path) {
   if (path.empty())
     return get(v);
+  if (auto *expr=dyn_cast<ConstantExpr>(v);expr && expr->getOpcode()==Instruction::BitCast)
+    return bitcast(expr->getOperand(0),expr->getType(),path);
   if (auto *c = dyn_cast<Constant>(v)) {
     Constant *cur = const_cast<Constant *>(c);
     for (unsigned n : path) {
@@ -564,24 +611,29 @@ void Analysis::copyFields(const Value *dst, const Value *src) {
   for (auto &l : leaves(dst->getType(), M.getDataLayout()))
     setField(dst, l.path, field(src, l.path));
 }
-bool Analysis::composite(Instruction &i) {
-  const auto &dl = M.getDataLayout();
-  if (auto *c = dyn_cast<BitCastInst>(&i)) {
-    auto src = leaves(c->getOperand(0)->getType(), dl), dst = leaves(c->getType(), dl);
-    unsigned total = dl.getTypeSizeInBits(c->getType()).getFixedValue();
+AV Analysis::bitcast(const Value *source, Type *destination, const Path &path) {
+  const auto &dl=M.getDataLayout();
+    auto src = leaves(source->getType(), dl), dst = leaves(destination, dl);
+    if (src.size()==dst.size() && dl.getTypeSizeInBits(src[0].type)==dl.getTypeSizeInBits(dst[0].type)) {
+      for(unsigned k=0;k<src.size();++k) if(dst[k].path==path) return field(source,src[k].path);
+    }
+    unsigned total = dl.getTypeSizeInBits(destination).getKnownMinValue();
     // Bitcast vector lanes are packed, with endian-dependent bit order.
-    for (auto &d : dst) {
+    for (unsigned di=0;di<dst.size();++di) {
+      auto &d=dst[di];
+      if(d.path!=path) continue;
       unsigned dw = dl.getTypeSizeInBits(d.type).getFixedValue();
-      unsigned db = dl.isLittleEndian() ? d.offset * 8 : total - d.offset * 8 - dw;
+      unsigned db = dl.isLittleEndian() ? di * dw : total - di * dw - dw;
       AV result; std::set<APInt, bool(*)(const APInt &, const APInt &)> bits(
           [](const APInt &a, const APInt &b) { return a.ult(b); });
       bits.insert(APInt(dw, 0));
-      for (auto &l : src) {
+      for (unsigned si=0;si<src.size();++si) {
+        auto &l=src[si];
         unsigned sw = dl.getTypeSizeInBits(l.type).getFixedValue();
-        unsigned sb = dl.isLittleEndian() ? l.offset * 8 : total - l.offset * 8 - sw;
+        unsigned sb = dl.isLittleEndian() ? si * sw : total - si * sw - sw;
         unsigned lo = std::max(sb, db), hi = std::min(sb + sw, db + dw);
         if (lo >= hi) continue;
-        AV v = field(c->getOperand(0), l.path);
+        AV v = field(source, l.path);
         result.top |= v.top;
         std::vector<APInt> parts;
         for (auto &x : v.atoms) {
@@ -602,8 +654,30 @@ bool Analysis::composite(Instruction &i) {
         if (bits.size() > 4096) { result.top = true; bits.clear(); }
       }
       if (!result.top) for (auto &x : bits) result.merge(integer(x));
-      setField(&i, d.path, result);
+      return result;
     }
+  llvm_unreachable("invalid bitcast lane path");
+}
+bool Analysis::composite(Instruction &i) {
+  const auto &dl = M.getDataLayout();
+  if (auto *c = dyn_cast<BitCastInst>(&i)) {
+    for (auto &leaf:leaves(c->getType(),dl))
+      setField(c,leaf.path,bitcast(c->getOperand(0),c->getType(),leaf.path));
+    return true;
+  }
+  if(auto *cmp=dyn_cast<AtomicCmpXchgInst>(&i)) {
+    auto old=load(get(cmp->getPointerOperand()),cmp->getCompareOperand()->getType());
+    auto expected=get(cmp->getCompareOperand()); AV success;
+    if(old.top || expected.top) {success.merge(integer(APInt(1,0)));success.merge(integer(APInt(1,1)));}
+    for(auto &x:old.atoms) for(auto &y:expected.atoms) {
+      if(x.kind==Atom::Int && y.kind==Atom::Int)
+        success.merge(integer(APInt(1,x.integer==y.integer)));
+      else {success.merge(integer(APInt(1,0)));success.merge(integer(APInt(1,1)));}
+    }
+    setField(cmp,{0},old);setField(cmp,{1},success);
+    // Exactly PT3 over N9's select in accepted 0.2.10 (flow insensitive).
+    AV next=old;next.merge(get(cmp->getNewValOperand()));
+    store(next,get(cmp->getPointerOperand()),dl.getTypeStoreSize(cmp->getCompareOperand()->getType()).getKnownMinValue());
     return true;
   }
   if (auto *e = dyn_cast<ExtractValueInst>(&i)) {
@@ -639,6 +713,9 @@ bool Analysis::composite(Instruction &i) {
       if (possible)
         setField(&i, {}, field(e->getVectorOperand(), {k}));
     }
+    bool outside = idx.top && (APInt::getMaxValue(e->getIndexOperand()->getType()->getIntegerBitWidth()).uge(vt->getNumElements()));
+    for(auto &x:idx.atoms) if(x.kind==Atom::Int) outside |= x.integer.uge(vt->getNumElements());
+    if(outside) setField(&i,{},integer(APInt(dl.getTypeSizeInBits(i.getType()).getKnownMinValue(),0)));
     return true;
   }
   if (auto *e = dyn_cast<InsertElementInst>(&i)) {
@@ -724,20 +801,6 @@ bool Analysis::composite(Instruction &i) {
     copyFields(&i, i.getOperand(0));
     return true;
   }
-  if (auto *c = dyn_cast<BitCastInst>(&i)) {
-    auto src = leaves(c->getOperand(0)->getType(), dl),
-         dst = leaves(c->getType(), dl);
-    if (src.size() == dst.size()) {
-      for (unsigned k = 0; k < src.size(); ++k)
-        if (dl.getTypeSizeInBits(src[k].type) !=
-            dl.getTypeSizeInBits(dst[k].type))
-          unimplemented("§5 PT10 vector bit resegmentation", 1, c);
-      for (unsigned k = 0; k < src.size(); ++k)
-        setField(&i, dst[k].path, field(c->getOperand(0), src[k].path));
-      return true;
-    }
-    unimplemented("§5 PT10 vector bit resegmentation", 1, c);
-  }
   if (isa<LandingPadInst>(i)) {
     for (auto &l : leaves(i.getType(), dl)) {
       AV a;
@@ -804,8 +867,16 @@ void Analysis::step(Instruction &i) {
         next.merge(integer(n));
       }
     store(next, get(rmw->getPointerOperand()), M.getDataLayout().getTypeStoreSize(rmw->getType()).getFixedValue());
-  } else if (isa<AllocaInst>(i))
+  } else if (auto *alloc = dyn_cast<AllocaInst>(&i)) {
     a = atom(Atom::Ptr, &i);
+    auto counts = get(alloc->getArraySize());
+    uint64_t bytes = 0;
+    for (auto &x : counts.atoms) if (x.kind == Atom::Int)
+      bytes = std::max(bytes, x.integer.getLimitedValue((1ULL << 60)) *
+          M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue());
+    if (counts.top) bytes = 1ULL << 60; // symbolic possible allocated bytes
+    if (bytes) store(integer(APInt(8,0)), a, bytes, true);
+  }
   else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
     auto base = get(g->getPointerOperand());
     unsigned bits = M.getDataLayout().getIndexTypeSizeInBits(g->getType());
@@ -919,7 +990,11 @@ void Analysis::step(Instruction &i) {
           if (p.kind == Atom::Ptr && p.object == s.object)
             for (auto &d : dst.atoms)
               if (d.kind == Atom::Ptr) {
-                if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
+                if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
+                  int64_t lo=std::max(p.offset,s.offset);
+                  int64_t hi=std::min(p.offset+(int64_t)len->getZExtValue(),s.offset+(int64_t)s.bytes);
+                  if(hi>lo) store(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);
+                } else if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
                     s.offset >= p.offset &&
                     s.offset + (int64_t)s.bytes <=
                         p.offset + (int64_t)len->getZExtValue())
@@ -955,6 +1030,26 @@ void Analysis::step(Instruction &i) {
       }
     } else if (allocation(f)) {
       a = atom(Atom::Ptr, c);
+      // §5.2 initial image, not immutable memory. Dynamic extent retains the
+      // possible zero bytes symbolically; PT6 only uses wholly contained reads.
+      unsigned sizeArg = n == "calloc" || n == "aligned_alloc" || n == "realloc" ? 1 : 0;
+      if (n == "posix_memalign") sizeArg = 2;
+      uint64_t extent = 1ULL << 60;
+      if (sizeArg < c->arg_size()) {
+        auto sizes = get(c->getArgOperand(sizeArg));
+        if (!sizes.top && !sizes.atoms.empty()) {
+          extent=0;
+          for (auto &v:sizes.atoms) if(v.kind==Atom::Int)
+            extent=std::max(extent,v.integer.getLimitedValue(1ULL<<60));
+          if(n=="calloc") {
+            auto count=get(c->getArgOperand(0));
+            uint64_t maxCount=count.top ? 1ULL<<60 : 0;
+            for(auto &v:count.atoms) if(v.kind==Atom::Int) maxCount=std::max(maxCount,v.integer.getLimitedValue(1ULL<<60));
+            extent=extent && maxCount>(1ULL<<60)/extent ? 1ULL<<60 : extent*maxCount;
+          }
+        }
+      }
+      if (extent) store(integer(APInt(8,0)), a, extent, true);
       if (n == "posix_memalign") {
         store(a, get(c->getArgOperand(0)), M.getDataLayout().getPointerSize());
         a.top = true;
@@ -964,7 +1059,7 @@ void Analysis::step(Instruction &i) {
     else if (!f) {
       for (auto *g : candidates(c->getCalledOperand(), c->getFunctionType()))
         bind(*c, g);
-    } else if (!markers().count(n.str()) && !f->isIntrinsic()) {
+    } else if (!markers().count(n.str()) && !f->isIntrinsic() && n != "free" && n != "__bennett_nz_free") {
       a.top = true;
       std::set<const Value *> reachable;
       for (Value *v : c->args())
@@ -1093,7 +1188,7 @@ void Analysis::step(Instruction &i) {
             if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
                                         i.getOpcode() == Instruction::Sub))
               p.offset += (i.getOpcode() == Instruction::Add ? 1 : -1) *
-                          w.integer.getSExtValue();
+                          w.integer.sextOrTrunc(64).getSExtValue();
             else
               p.stride = -1;
             a.atoms.insert(p);
@@ -1509,7 +1604,7 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.7"},
+  return json::Object{{"dialect", "0.2.10"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"functions", std::move(funcs)},

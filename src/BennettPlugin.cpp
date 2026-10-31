@@ -253,11 +253,11 @@ static void recognise(Module &m) {
   // Effect lies use the full S2 call graph later, including region edges.
 }
 static void checkVersion(Module &m) {
-  if (Dialect != "0.2.7" || ISA != "0.8")
-    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.7 / ISA 0.8");
+  if (Dialect != "0.2.10" || ISA != "0.8")
+    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.10 / ISA 0.8");
   if (auto *md = m.getModuleFlag("bennett.dialect")) {
     auto *s = dyn_cast<MDString>(md);
-    if (!s || s->getString() != "0.2.7")
+    if (!s || s->getString() != "0.2.10")
       fail("BD-E-VERSION", "§19.9 module flag");
   }
 }
@@ -354,7 +354,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
             auto *h=StructType::get(m.getContext(),{u32,u32,u32,u32,ptr,ptr});
             auto *b=StructType::get(m.getContext(),{u32,u32,ptr,Type::getInt64Ty(m.getContext()),Type::getInt64Ty(m.getContext())});
             auto *hl=m.getDataLayout().getStructLayout(h),*bl=m.getDataLayout().getStructLayout(b);
-            auto field=[&](uint64_t off,Type *t) {return a.read(desc,off,t);};
+            auto field=[&](uint64_t off,Type *t) {return a.readAt(*c,desc,off,t);};
             if(integer(field(0,u32))!=2 || integer(field(12,u32))!=0 || integer(field(8,u32))!=0)
               unimplemented("§8.1/§8.3 descriptor header/device dispatch",2,c);
             unsigned params=integer(field(4,u32));
@@ -414,7 +414,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
 };
 } // namespace bennett
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.7;isa-0.8",
+  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.10;isa-0.8",
           [](PassBuilder &pb) {
             pb.registerPipelineParsingCallback(
                 [](StringRef n, ModulePassManager &pm,

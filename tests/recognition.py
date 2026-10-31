@@ -24,7 +24,7 @@ def main():
  with tempfile.TemporaryDirectory(dir=R/'.tmp') as t:
   for name,body,want in cases:
    f=Path(t)/(name+'.ll'); f.write_text(body); report=Path(t)/'report.json'
-   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.7','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
+   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
    try:x=subprocess.run(cmd,capture_output=True,text=True,errors="replace",timeout=60)
    except subprocess.TimeoutExpired:
     failures.append((name,want,124,'timeout'));continue
@@ -34,6 +34,10 @@ def main():
     if name=='pt6-byte-width':ok=any(v['value']=='%n' and v['atoms']==['INT(257)'] and not v['top'] for v in data['values'])
     if name in ['pt5-range','pt5-range-load']:ok=any(v['value']=='%w' and set(v['atoms'])=={'INT(1)','INT(3)'} and not v['top'] for v in data['values'])
     if name=='pt2-wrap':ok=any(v['value']=='%p' and v['atoms']==['PTR(@tab,0,0)'] and not v['top'] for v in data['values']) and [c['name'] for c in data['regions'][0]['candidates']]==['body']
+    if name in ['pt6-zero-stack','pt6-zero-heap','pt8-zero-copy']:
+     ok=all(any(v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data['values']) for val,atoms in [('%raw',{'INT(0)','INT(1)'}),('%width',{'INT(1)','INT(3)'})])
+    for n,val,atoms in [('pt3-pack257','%bits',{'INT(257)'}),('pt3-pack256','%b',{'INT(256)'}),('pt3-unpack','%b',{'INT(3)'}),('pt10-lane-zero','%width',{'INT(1)','INT(2)','INT(4)'})]:
+     if name==n:ok=any(v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data['values'])
     if name=='pt6-subrange':ok=any(v['value']=='%n' and v['top'] for v in data['values'])
    if not ok: failures.append((name,want,x.returncode,x.stderr[-1500:]))
  print(json.dumps({'major':a.major,'cases':len(cases),'passed':len(cases)-len(failures),'failures':failures},indent=2))

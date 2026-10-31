@@ -1,8 +1,8 @@
 status = "milestone-1-in-progress"
-dialect = "0.2.7"
+dialect = "0.2.10"
 isa = "0.8"
 [specs]
-"bennett-dialect-spec" = "0.2.7"
+"bennett-dialect-spec" = "0.2.10"
 "bennett-isa-spec" = "0.8"
 [commits]
-"bennett-dialect-spec" = "95c3cd332f5f72c07fd5f2515f328deaa40c08b9"
+"bennett-dialect-spec" = "023f5a771a814270634db3be9cfde88ded69f975"
