@@ -2,6 +2,7 @@
 """N27 semantics, runtime closure, and wide-slot transport against Python integers."""
 import argparse,ctypes,json,os,random,re,subprocess
 from contracts import ROOT as R
+from scalars import REF
 p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
 d=R/f'.tmp/integer-intrinsics/{a.major}';d.mkdir(parents=True,exist_ok=True);tool=f'/usr/lib/llvm-{a.major}/bin/';rows=[]
 def run(args):
@@ -89,4 +90,27 @@ for n in [7,65,129,192,257,512]:
   if pid==0:getattr(lib,f'f{n}_'+op.replace('.','_'))(buf(1,n),buf(0,n),buf(0,n),buf(0,n));os._exit(0)
   assert os.waitstatus_to_exitcode(os.waitpid(pid,0)[1])==5,(n,op)
  rows.append(f'{n}/fault5')
+# Production must contain and execute the count-slot body, overflow and saturation.
+prod=d/'production.ll';prod.write_text('''declare i192 @llvm.ctlz.i192(i192,i1)
+declare i192 @llvm.uadd.sat.i192(i192,i192)
+declare {i192,i1} @llvm.uadd.with.overflow.i192(i192,i192)
+define internal i1 @n27prod(ptr %p) { %a = load i192,ptr %p,align 1
+ %n = call i192 @llvm.ctlz.i192(i192 %a,i1 false)
+ %s = call i192 @llvm.uadd.sat.i192(i192 %a,i192 1)
+ %pair = call {i192,i1} @llvm.uadd.with.overflow.i192(i192 %a,i192 1)
+ %flag = extractvalue {i192,i1} %pair,1
+ %c = icmp eq i192 %n,191
+ %v = icmp eq i192 %s,2
+ %both = and i1 %c,%v
+ %no = xor i1 %flag,true
+ %r = and i1 %both,%no
+ ret i1 %r }
+!llvm.module.flags = !{!0}
+!0 = !{i32 1, !"bennett.sstack", i64 256}''')
+obj=d/'production';run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=n27prod','-bennett-scalar-shape=MEM_IN(32);tgt=1','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(obj),'-disable-output',prod])
+run([REF,'check',obj/'ref.bennett'])
+for x in [0,1,(1<<192)-1]:
+ data=json.loads(run([REF,'run-oracle',obj/'ref.bennett','ref','--input','','--mem','m0='+x.to_bytes(32,'little').hex(),'--budget','1000000,4096,4096,256']).stdout)
+ assert data['code']==0 and data['payload']==int(x==1),data
+rows.append('production-count-slot-overflow-saturation')
 result=dict(major=a.major,cases=len(rows),passed=len(rows),results=rows);(R/f'.tmp/integer-intrinsics-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
