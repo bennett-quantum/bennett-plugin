@@ -41,3 +41,20 @@ The directory contains `llvm18/bennett-arith.bc` and `llvm23/bennett-arith.bc`.
 The gate and the plugin still check the SHA-256 values in `SPEC_VERSIONS.toml`;
 this relocates those artifacts and does not adopt a newer publication.
 `BENNETT_ARITH_BITCODE` remains the explicit unpinned ABI-test library override.
+
+Whole-program R mode is selected with `--bennett-tier=reversible --bennett-entry=main`.
+At the pinned ISA 0.8 it emits artifacts and returns **3**, with `BD-B-ISA7` in
+`main/blockers.json` (§1.6/§11.5). Generic traps at exhausted source-step counters
+are blocker fallbacks, not typed-fault conformance. Successful R paths retain the
+ISA device tape and whole-run reversal history. The launch requests `bennett.argv`;
+the current supported reply is a packed little-endian argc:i32 followed by two
+pointer-width fields, with unused argv/envp null. Entries using argv/envp storage
+fail explicitly under bp-ivy; full argument-byte marshalling remains unfinished.
+
+This mode is **not full rung-3 closure**. The probes cover console/reset, nested
+exit propagation, indirect callbacks, reached/unreached assembly traps and the
+pre-effect/return budget boundaries. The full published-musl hello is also probed:
+LLVM18 stops at vector fshl scalarisation (bp-ozp); LLVM23 emits LLVM-verified R
+artifacts, but the exploratory executor run faults before console output (bp-ivy).
+The complete startup/normal-return exit path, argument storage and runtime-budget
+plumbing remain bp-ivy obligations. No new corpus deferral or ISA repin is implied.

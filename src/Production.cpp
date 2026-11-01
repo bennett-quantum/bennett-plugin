@@ -7,6 +7,7 @@
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Intrinsics.h"
@@ -199,7 +200,8 @@ struct Entry {
   bool rTier = false;
   bool argvService = false;
   std::set<std::string> effectModels;
-  std::string diskImage;
+  std::string diskImage, diskDataKey;
+  json::Array asmPoints;
   GlobalVariable *rSteps = nullptr, *rEH = nullptr;
   void rReturn() {
     for(auto &p:localMemory)rows.push_back("free "+p);
@@ -1224,6 +1226,28 @@ struct Entry {
         }
         if (auto *c = dyn_cast<CallBase>(&i)) {
           auto *g = resolve(c->getCalledOperand());
+          if(!g && rTier && !c->isInlineAsm()) {
+            auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
+            auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
+            std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
+            for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
+              if(ccNames->count(candidate))candidates[functionAddress(candidate)]=candidate;
+            for(auto &candidate:candidates)keys.push_back(candidate.first);
+            std::vector<std::string> args;for(auto &arg:c->args()) {auto vs=operands(arg);args.insert(args.end(),vs.begin(),vs.end());}
+            auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
+            auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
+            compareTree(value,pw,keys,[&](uint64_t key) {
+              auto call="call @"+ccNames->at(candidates.at(key))+(args.empty()?"":" "+join(args," "));
+              std::vector<std::string> values;
+              if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
+              rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
+              propagateExit();rows.push_back("br ^"+done+"("+join(values)+")");
+            },bad);
+            rows.push_back("^"+bad+"():");rows.push_back("trap");
+            std::vector<std::string> bindings;
+            if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
+            rows.push_back("^"+done+"("+join(bindings)+"):");usesCCCalls=true;continue;
+          }
           if (!g)
             unimplemented("§17.4 indirect CC call", 1, c);
           auto n = g->getName();
@@ -1239,6 +1263,12 @@ struct Entry {
             rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));continue;
           }
           if (n == "__bennett_nz_fault") {
+            if(auto *asmMD=c->getMetadata("bennett.asm")) {
+              std::string block;unsigned ordinal=0;
+              for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
+              asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
+                {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
+            }
             // Newly materialised allocator closures report the explicit code
             // through §11.5 before trapping. The payload is private storage,
             // not an extra logical heap allocation on a failing path.
@@ -1504,6 +1534,21 @@ std::string linkReferences(Entry &e) {
   std::map<std::string,uint64_t> bases,sizes;
   std::set<std::string> used=e.ccGlobals;
   for (auto &names:e.referenceGlobals) for (auto &n:names) used.insert(n.second);
+  if(e.argvService) {
+    std::set<const Value *> visited;
+    std::function<void(const Value *)> include=[&](const Value *v) {
+      if(!visited.insert(v).second)return;
+      if(auto *g=dyn_cast<GlobalVariable>(v)) {used.insert(scalarGlobalKey(*g));e.ccGlobals.insert(scalarGlobalKey(*g));if(g->hasInitializer())include(g->getInitializer());return;}
+      if(isa<Function>(v))return;
+      if(auto *constant=dyn_cast<Constant>(v))for(auto &operand:constant->operands())include(operand);
+    };
+    for(auto &g:e.m.globals())if(used.count(scalarGlobalKey(g)))include(&g);
+    // The shared image and the indirect compare trees use the same addresses.
+    for(auto &f:e.m) {
+      auto address=e.functionAddress(&f);
+      f.setMetadata("bennett.address",MDNode::get(e.m.getContext(),ConstantAsMetadata::get(ConstantInt::get(e.m.getDataLayout().getIntPtrType(e.m.getContext()),address))));
+    }
+  }
   uint64_t base=4096;
   for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
     auto key=scalarGlobalKey(g),name="G"+std::to_string(globalSymbols.size()+1);
@@ -1590,6 +1635,7 @@ std::string linkReferences(Entry &e) {
   }
   json::Object layout{{"A_tab",tab},{"H",h},{"S_cells",int64_t(stack)},{"globals",std::move(globals)},
     {"heap_base",int64_t(heap)},{"heap_limit_max",int64_t(heapLimit)},{"interface_regions",std::move(interfaces)},{"null_size",4096},{"ptr_width",pw}};
+  if(!e.diskDataKey.empty())layout["block_image"]=globalSymbols.at(e.diskDataKey);
   std::map<std::string,std::string> allLeaves;
   for(auto &v:layout) {
     if(v.first=="globals") for(auto &g:*v.second.getAsObject()) allLeaves["globals."+g.first.str()]=jcs(g.second);
@@ -1702,7 +1748,7 @@ std::string launchObject(Entry &e, json::Object &record,
     if(e.argvService) {
       auto *models=devices.getAsObject()->getObject("models");
       for(auto &model:e.effectModels)(*models)[model]=json::Object{{"version","0.8"}};
-      if(!e.diskImage.empty())(*models)["block"]=json::Object{{"version","0.8"}};
+      if(!e.diskDataKey.empty())(*models)["block"]=json::Object{{"version","0.8"}};
     }
     sections["devices"]=jcs(devices);
   }
@@ -2068,6 +2114,21 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
   auto *id = b.CreateLoad(i64, run);
   status(b.CreateCall(api("bennett_wait", i32, {ptr, i64, ptr, ptr}),
                       {p, id, result, request}));
+  if(record.getString("mode")=="reversible") {
+    // §19.2's one launch request. Entries needing argv/envp byte storage
+    // remain an explicit bp-ivy mechanic, rather than passing host pointers.
+    auto *req=b.CreateLoad(ptr,request);require(b.CreateIsNotNull(req));
+    auto *service=b.CreateCall(api("bennett_request_service",ptr,{ptr}),{req});
+    auto *same=b.CreateCall(api("strcmp",i32,{ptr,ptr}),{service,string("bennett.argv")});require(b.CreateICmpEQ(same,b.getInt32(0)));
+    auto *replyType=ArrayType::get(b.getInt8Ty(),4+2*m.getDataLayout().getPointerSize());auto *reply=slot(replyType);
+    b.CreateStore(ConstantAggregateZero::get(replyType),reply);
+    Value *argc=f.arg_empty()?(Value *)b.getInt32(0):f.getArg(0);
+    if(!m.getDataLayout().isLittleEndian())argc=b.CreateCall(intrinsic(Intrinsic::bswap,{i32}),{argc});
+    b.CreateStore(argc,reply);
+    status(b.CreateCall(api("bennett_reply",i32,{ptr,i64,ptr,size}),{p,id,reply,ConstantInt::get(size,replyType->getNumElements())}));
+    b.CreateCall(api("bennett_request_free",b.getVoidTy(),{ptr}),{req});
+    status(b.CreateCall(api("bennett_wait",i32,{ptr,i64,ptr,ptr}),{p,id,result,request}));
+  }
   require(b.CreateIsNull(b.CreateLoad(ptr, request)));
   auto *res = b.CreateLoad(ptr, result);
   require(b.CreateIsNotNull(res));

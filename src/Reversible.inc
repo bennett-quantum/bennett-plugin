@@ -1,3 +1,22 @@
+// §15.2 rows without an IR replacement trap only when reached.
+static void normaliseRAsm(Function &f, json::Array &coverage) {
+  SmallVector<CallInst *> sites;
+  for(auto &i:instructions(f))if(auto *c=dyn_cast<CallInst>(&i);c && c->isInlineAsm())sites.push_back(c);
+  for(auto *c:sites) {
+    auto *assembly=cast<InlineAsm>(c->getCalledOperand());
+    auto text=std::regex_replace(StringRef(assembly->getAsmString()).str(),std::regex("[;\\s]+")," ");text=StringRef(text).trim().str();
+    bool erased=c->getType()->isVoidTy() && (text.empty() || text=="pause" || text=="nop");
+    coverage.push_back(json::Object{{"function",f.getName()},{"asm",text},{"constraints",assembly->getConstraintString()},
+      {"source","dialect-0.2.10:N15"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
+    if(!erased) {
+      IRBuilder<> b(c);auto fault=f.getParent()->getOrInsertFunction("__bennett_nz_fault",b.getVoidTy(),b.getInt64Ty());
+      auto *trap=b.CreateCall(fault,{b.getInt64(8)});
+      trap->setMetadata("bennett.asm",MDNode::get(f.getContext(),MDString::get(f.getContext(),"§15.2 asm "+text+" constraints "+StringRef(assembly->getConstraintString()).str())));
+      if(!c->getType()->isVoidTy())c->replaceAllUsesWith(Constant::getNullValue(c->getType()));
+    }
+    c->eraseFromParent();
+  }
+}
 // §19.2 whole-program mode uses the same scalar ABI and memory linker as CC.
 // R bodies differ in effects, history, mandatory counters and exit propagation.
 void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceEntry,
@@ -6,6 +25,8 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   sourceAnalysis.releaseTransferGraphs();
   auto device=CloneModule(source);auto &m=*device;
   auto entryName=sourceEntry.getName().str();auto *root=m.getFunction(entryName);
+  for(auto &arg:root->args())if(arg.getArgNo()>0 && !arg.use_empty())
+    unimplemented("§19.2 argv/envp byte storage in R launch (bp-ivy)",4,&arg);
   SmallVector<StringRef> components;budgetDefault.split(components,',');
   std::vector<uint64_t> defaults;
   for(auto c:components) {uint64_t n;if(c.getAsInteger(10,n))fail("input","§9.2 budget default");defaults.push_back(n);}
@@ -22,10 +43,21 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   prepareStack(m,*root,table.capacities[4]);
   materialiseStackRuntime(m,table.capacities[4]);
   auto *init=m.getFunction("__bennett_rt_ss_init");
+  json::Array asmCoverage;
   std::vector<Function *> closure{root,init};std::set<Function *> seen;
+  std::set<Value *> addresses;
+  std::function<void(Value *)> address=[&](Value *v) {
+    if(!addresses.insert(v).second)return;
+    if(auto *f=resolve(v);f && !f->isDeclaration()) {if(!seen.count(f))closure.push_back(f);return;}
+    if(auto *g=dyn_cast<GlobalVariable>(v)) {if(g->hasInitializer())address(g->getInitializer());return;}
+    if(auto *constant=dyn_cast<Constant>(v))for(auto &operand:constant->operands())address(operand);
+  };
   for(unsigned k=0;k<closure.size();++k) {
     auto *f=closure[k];if(!f || !seen.insert(f).second)continue;
-    normaliseScalar(*f);materialiseFPBits(*f);
+    normaliseRAsm(*f,asmCoverage);normaliseScalar(*f);materialiseFPBits(*f);
+    for(auto &i:instructions(*f))if(auto *call=dyn_cast<IntrinsicInst>(&i);call && call->getType()->isVectorTy())
+      unimplemented("§12 N21/N27 vector intrinsic lane materialisation",2,call);
+    for(auto &i:instructions(*f))for(auto &v:i.operands())address(v);
     for(auto &i:instructions(*f))if(auto *c=dyn_cast<CallBase>(&i)) {
       auto *g=resolve(c->getCalledOperand());
       if(g) {materialiseIntegerRuntime(*g);materialiseMemoryRuntime(*g);if(!g->isDeclaration() && !markers().count(g->getName().str()) && !seen.count(g))closure.push_back(g);}
@@ -38,15 +70,22 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   std::error_code ec;if((ec=sys::fs::create_directories(out)))fail("output",ec.message());
   std::string dir=out.str()+"/"+entryName;if((ec=sys::fs::create_directories(dir)))fail("output",ec.message());
   Entry e{m,a,*launch,dir,stack,table};e.argvService=true;e.usesCCCalls=true;e.ccHeapBytes=table.capacities[1];
-  if(!disk.empty())e.diskImage=read(disk);
+  if(!disk.empty()) {
+    e.diskImage=read(disk);auto *image=ConstantDataArray::getString(m.getContext(),e.diskImage,false);
+    auto *global=new GlobalVariable(m,image->getType(),true,GlobalValue::InternalLinkage,image,"__bennett_rt_disk_image");
+    e.diskDataKey=scalarGlobalKey(*global);e.ccGlobals.insert(e.diskDataKey);
+  }
   std::map<Function *,std::string> names;unsigned ordinal=0;
   for(auto *f:closure)names[f]="R"+std::to_string(ordinal++);
   e.ccNames=&names;
+  auto *argv=new GlobalVariable(m,ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize()),false,
+      GlobalValue::InternalLinkage,ConstantAggregateZero::get(ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize())),"__bennett_rt_argv");
   auto *eh=m.getGlobalVariable("__bennett_rt_eh",true);
   for(auto *f:closure) {
     Entry callee{m,a,*f,dir,stack,table};callee.ccNames=&names;callee.rTier=f!=init;
     callee.rSteps=steps;callee.rEH=eh;callee.lower();
     e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+    for(auto &point:callee.asmPoints)e.asmPoints.push_back(std::move(point));
     e.effectModels.insert(callee.effectModels.begin(),callee.effectModels.end());
     e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);
     json::Array pt,rt;for(auto &t:callee.paramTypes)pt.push_back(t);for(auto &t:callee.resultTypes)rt.push_back(t);
@@ -57,8 +96,6 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   e.rows={"^entry():"};
   // argv service reply: little-endian (argc:i32, argv:P, envp:P), packed.
   // The host populates the pointed-to argument storage in device memory.
-  auto *argv=new GlobalVariable(m,ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize()),false,
-      GlobalValue::InternalLinkage,ConstantAggregateZero::get(ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize())),"__bennett_rt_argv");
   auto argp=e.operand(argv),length=e.number(4+2*m.getDataLayout().getPointerSize());
   e.emit("i64","hostcall bennett.argv "+argp+" "+length);
   e.rows.push_back("call @"+names.at(init)+" "+e.number(table.capacities[4]));
@@ -79,7 +116,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   }
   e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
   json::Object record{{"dialect","0.2.10"},{"isa","0.8"},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
-    {"mode","reversible"},{"verdict","blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])}};
+    {"mode","reversible"},{"verdict","blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
   json::Object cert{{"versions",json::Object{{"isa","0.8"},{"cert","0.8"}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
   auto object=launchObject(e,record,cert);write(dir+"/launch.bennett",object);
@@ -87,7 +124,18 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   cert["producer"]=json::Object{{"name","bennett-plugin"},{"version","0.2.10+build."+hash(build)},
     {"materialisation",json::Object{{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},{"normaliser_version","0.2.8"}}}};
   write(dir+"/certificate.json",jcs(json::Value(std::move(cert)))+"\n");
-  auto coverage=jcs(json::Value(completeCoverage(object)))+"\n";write(dir+"/coverage.json",coverage);write(dir+"/all-coverage.json",coverage);
+  auto report=completeCoverage(object);auto sections=objectSections(object);auto symbols=parse(sections.at("symbols"));
+  for(auto &point:e.asmPoints) {
+    auto *p=point.getAsObject();StringRef identity;
+    for(auto &symbol:*symbols.getAsObject())if(symbol.second.getAsObject()->getString("name")==p->getString("symbol"))identity=*symbol.second.getAsObject()->getString("interface_hash");
+    for(auto &entry:*report.getArray("entries")) {
+      auto *entryObject=entry.getAsObject();auto *at=entryObject->getArray("point");
+      if((*at)[0].getAsString()==identity && (*at)[1].getAsString()==p->getString("block") && (*at)[2].getAsInteger()==p->getInteger("ordinal")) {
+        (*entryObject)["source"]="dialect-0.2.10:N15";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
+      }
+    }
+  }
+  auto coverage=jcs(json::Value(std::move(report)))+"\n";write(dir+"/coverage.json",coverage);write(dir+"/all-coverage.json",coverage);
   write(dir+"/blockers.json",jcs(json::Value(json::Array{json::Object{{"code","BD-B-ISA7"},{"entry",entryName},
     {"section","11.5/17.6/25.1"},{"reason","R entry: mandatory pre-instruction typed fault 1 requires ISA-7; generic trap only on exhausted counter; no later source effect; prefix history retained"}}}))+"\n");
   // Device bitcode retains materialised bodies; host main gets the launch ABI.
