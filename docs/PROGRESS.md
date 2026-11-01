@@ -6,24 +6,26 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-tav allocator CC closure implementation in progress**; bp-7ni stays outside this pass.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-tav closed after one full dual-major gate**; bp-7ni stays outside this pass.
 Published-runtime probes: red malloc refusal → 4/4 green per major (11 execution vectors, five full-state reversals).
-Linked bodies retain allocation primitives, byte zero-fill, frees and §11.5 explicit-fault reporting; full gate and hashtable retest pending.
+Linked bodies retain allocation primitives, byte zero-fill, frees and §11.5 code requests before trap; gate 66/66/0/0/0 each major.
+Hashtable linked analyses pass; production next stops at `ht_third_pass` (§14.1/§17.4, bp-9fo), both majors; rung-2 gate conditional unmet.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
   pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
   the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
-  and 23 recognition, analysis_edges, analysis_performance, reference_images, materialisation, aggregate_rows, region_keys, scalars, descriptors,
+  and 23 recognition, analysis_edges, analysis_performance, reference_images, materialisation, aggregate_rows, allocator_closure, region_keys, scalars, descriptors,
   production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate. The gate also runs the full key audit with explicit bd accounting and independent V1–V16 validation.
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
 
 Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**
 (924/924 cells on 18, 792/792 on 23); analysis_edges 20/20 and analysis_performance 3/3.
+Allocator closure: 4/4 probes per major, 11 CC vectors and five full-state reversals, with recognised/materialised hashes.
 Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
-All 288 prior object hashes preserved; 297 equal object pairs, 45 published matches.
+All 297 prior object hashes preserved; 297 equal object pairs, 45 published matches.
 Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
@@ -144,3 +146,10 @@ Depth-first field locations, unchanged-field aliases, flattened parameters/edge 
 N25 hidden return pointers precede N22; nested projections and aggregate phi/select/freeze field shells preserve i129 top widths and loop-carried values.
 Three recognised/materialised/verified probes per major: 15 L vectors + 3 numerical CC launches; pinned real-arith L production passes five vectors on both majors (softfloat 90/90 and 95/95).
 Final full gate exit 0, 66/66/0/0/0 each; 297 equal pairs, 45 published matches, all 288 prior hashes preserved; one incomplete gate stopped for wide aggregate phis; bp-7ni untouched.
+
+### Pass 20 - 2026-11-01 - 0f90deb (bp-tav closed)
+Linked malloc/calloc/free/memset bodies expand into CC CFGs down to alloc/free and byte operations (§19.1/§17.4); dead/zero histories and zero-fill remain explicit.
+N27 overflow field projections, dominator-first CFG emission and allocator-only memory layouts support both published majors; new allocator faults use §11.5 code payload then trap.
+Four runtime-SHA/arith-SHA-pinned probes per major pass 11 vectors and five complete-state reversals, with recognised/normalised/materialised hashes and independent check/hash.
+Recorded and freshly compiled hashtable links reach S1–S5, then production stops at `tail call fastcc void @ht_third_pass(ptr %3, i64 %0)` on both majors; filed bp-9fo (§14.1); conditional rung-2 gate not run.
+One full scripts/gate exit 0: 66/66/0/0/0 each, 924/924 and 792/792 cells, 297 equal pairs/45 published matches/all 297 prior hashes preserved; bp-7ni untouched.

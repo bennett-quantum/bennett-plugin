@@ -1,15 +1,13 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "nineteenth-bp-1us",
-    "date": "2026-10-31",
+    "name": "bp-tav",
+    "date": "2026-11-01",
     "commits": [
-      "04006df",
-      "569fa9c",
-      "56eadb7"
+      "0f90deb13fc7b0b1e30190d522723dc5aba7f2bb"
     ],
-    "code_head": "56eadb7f7044e42c75510884a44a98178ba78a65",
-    "recorded_at": "2026-10-31T23:42:34+00:00",
+    "code_head": "0f90deb13fc7b0b1e30190d522723dc5aba7f2bb",
+    "recorded_at": "2026-11-01T08:59:22+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
@@ -20,8 +18,8 @@
       "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
     },
     "plugin_sha256": {
-      "18": "8c7ca5095bc1b1d11f8480a69e7532747f07919a82d33be99b248a659dafa0d0",
-      "23": "112b4a8096a6b18718c25f4bad3a244243ca756079f500dcbb2a932bb68f78b4"
+      "18": "7caf66e34f3b78e99a35f8cbde4b3b2157d7edaf629b8ffde1f439439b0a805b",
+      "23": "cf65a226a39d76690e24706d028f1c8039929bee8c3c8a6dd59c48cd1d3cf681"
     },
     "gate": {
       "command": "scripts/gate",
@@ -48,7 +46,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 2.716584827998304,
+          "seconds": 10.04381939501036,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%251) in @ht_demo_grow (milestone 1) at   %251 = icmp eq i64 %250, %0\n"
         },
@@ -423,6 +421,424 @@
             }
           ]
         },
+        "allocator-closure": {
+          "cases": 4,
+          "passed": 4,
+          "evidence": [
+            {
+              "case": "allocator-closure",
+              "ok": true,
+              "runtime_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+              "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+              "recognised_sha256": "7bccb20d6ad46aea60866beef4f80ee6b128f7ac4d3c004f84a3809fc4a0e971",
+              "normalised_sha256": "4de3cb16557f66d02f4af019a3e50cfb53604d04a3e8e065127df6bc0363c93b",
+              "materialised_sha256": "0a90bb37cf6ee316e053a952521b4b658c3d386a7592ab0fbe50b233f23d7934",
+              "materialised_verified": true,
+              "object_sha256": "ca8aac3dff017eb533848d531f19cca06a349f61c8c1202600c738b6b98dc843",
+              "runs": [
+                {
+                  "input": 1,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 160,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 226,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 332,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 32,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 831,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 64,
+                  "expected": "heapfault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": false,
+                    "fault": 2,
+                    "faults": [
+                      {
+                        "code": 2,
+                        "name": "FAULT_BUDGET_HEAP"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 2))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f50b6a082f915e6fc235c3aa04324eb818d1b4a5e4c8074b778bbc5e78028435",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 66,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-overflow",
+              "ok": true,
+              "runtime_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+              "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+              "recognised_sha256": "b56f82ac555c3bc0eb1d5f9dd2c8efb2335e9688d83b4d31f017898192aa990b",
+              "normalised_sha256": "efbf874b895ca346a8f740fbe0c27ddad08c021971e3bfa0091cf81152abac81",
+              "materialised_sha256": "035a5d033d488f6682f22525c25367cd87a30880cd93c508b0903bd362bc8463",
+              "materialised_verified": true,
+              "object_sha256": "f8bd52692189b5f7bffd62dc132c48e3f69981829617ba242cf411c5a124d30a",
+              "runs": [
+                {
+                  "input": 3,
+                  "expected": 7,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "7"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 108,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 18446744073709551615,
+                  "expected": "hostfault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "equals_entry": false,
+                    "fault": 4,
+                    "faults": [
+                      {
+                        "code": 4,
+                        "name": "FAULT_UB_TRAP"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v10\"): None differs from Some(Int(1, 1))",
+                    "host_requests": [
+                      {
+                        "address": 4104,
+                        "capacity": 8,
+                        "payload": "0200000000000000",
+                        "reply": "",
+                        "service": "bennett.fault"
+                      }
+                    ],
+                    "measurements": [],
+                    "memory_digest": "e9e427ff92149b612e5b7e23e596300ee828b809064f59963e5dafb44d407f52",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 16,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-invalid",
+              "ok": true,
+              "runtime_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+              "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+              "recognised_sha256": "e0c0c3cb2d342ecce7a1013a151e7a5975e62d8514b55fc15152433208a4981b",
+              "normalised_sha256": "6219b9755a725f5db1ced3cd478b97dc5344e893a00b6aa07058fe61056d7d36",
+              "materialised_sha256": "b6896fecc4178bfea40c29632533a02eb96bb17170a80b83f7c07c35a7eb9c04",
+              "materialised_verified": true,
+              "object_sha256": "e0dbf75f26579083cebada8c4b6ebc1a47b0cdc1a5ac377339782131182e3f88",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "1b981eec55b396fbde4e8d2f1eb4ffb97a82badb7d7f514e737e99ee14b9b24b",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 87,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "25fd7ef54a41258dfd00130da4f51149694148d3b0de758275da5c6f89af5baa",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 80,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-bounds",
+              "ok": true,
+              "runtime_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+              "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+              "recognised_sha256": "2458133d88fa19fbfc23f74dbb2b0fd0f9dde3aa5fe389405aa6a34d02f6603c",
+              "normalised_sha256": "90898c84a67ef2da73a7a5fce38eb505d48a266e0f77181cdb63afa8e1915060",
+              "materialised_sha256": "7ce31c2dad10ff12df070183dfcba7faa9170a5868faea3f5eaefd71f68dacb8",
+              "materialised_verified": true,
+              "object_sha256": "66f18532e8a15618a1a0fc05eb7b1839e07e245608c06e103f12e2c1baabd9ca",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "1b981eec55b396fbde4e8d2f1eb4ffb97a82badb7d7f514e737e99ee14b9b24b",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 81,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "25fd7ef54a41258dfd00130da4f51149694148d3b0de758275da5c6f89af5baa",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 74,
+                    "tape": []
+                  }
+                }
+              ]
+            }
+          ]
+        },
         "softfloat": {
           "cases": 90,
           "passed": 90,
@@ -567,7 +983,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 3.2624085179995745,
+          "seconds": 6.538256769999862,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%258) in @ht_demo_grow (milestone 1) at   %258 = icmp eq i64 %257, %0\n"
         },
@@ -942,6 +1358,424 @@
             }
           ]
         },
+        "allocator-closure": {
+          "cases": 4,
+          "passed": 4,
+          "evidence": [
+            {
+              "case": "allocator-closure",
+              "ok": true,
+              "runtime_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+              "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+              "recognised_sha256": "93bbf9736ceb2fc0f88191c5b7e1278b8587ef73499d0661a92799babfcca37a",
+              "normalised_sha256": "f656389ade2e85c2e78b869986b1089a06de40b649f4498b03ca26ca6ae1f002",
+              "materialised_sha256": "9aed28a4dea870a9475d569fe87da554d6d65b20874c1da614d21e3f8e0ede26",
+              "materialised_verified": true,
+              "object_sha256": "8ef3447ab67dc7bd5298ec800b61883451436c19d67cb6234ca39987ccb83e4f",
+              "runs": [
+                {
+                  "input": 1,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 157,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 223,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 331,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 32,
+                  "expected": 175,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "175"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 786,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 64,
+                  "expected": "heapfault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "f3a0bfd28297353daa18e2bfa6e9768ac2ed833ea330e3a9f66d0a4f6df1bafb",
+                    "equals_entry": false,
+                    "fault": 2,
+                    "faults": [
+                      {
+                        "code": 2,
+                        "name": "FAULT_BUDGET_HEAP"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 2))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "f50b6a082f915e6fc235c3aa04324eb818d1b4a5e4c8074b778bbc5e78028435",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 66,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-overflow",
+              "ok": true,
+              "runtime_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+              "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+              "recognised_sha256": "f6463cd6eae57a14c1cdc336f1f184345e584e1296d880396c86559095f3f71e",
+              "normalised_sha256": "51300737f618feb2fea3e533b228fc5083912ebd0422268976c0a458ff46c656",
+              "materialised_sha256": "7bfa820921989794aeee82e3a8f9cb6d42df206503cb96a4e6a2ffb66ed4d95f",
+              "materialised_verified": true,
+              "object_sha256": "cf65771264fb2bf199449d493a95ce4967989b180c98390527d52a55306a7902",
+              "runs": [
+                {
+                  "input": 3,
+                  "expected": 7,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "7"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 108,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 18446744073709551615,
+                  "expected": "hostfault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "e209211449f3d64c110dbdfe605194996b7f78feb73030de54639ece0256fd16",
+                    "equals_entry": false,
+                    "fault": 4,
+                    "faults": [
+                      {
+                        "code": 4,
+                        "name": "FAULT_UB_TRAP"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v10\"): None differs from Some(Int(128, 36893488147419103230))",
+                    "host_requests": [
+                      {
+                        "address": 4104,
+                        "capacity": 8,
+                        "payload": "0200000000000000",
+                        "reply": "",
+                        "service": "bennett.fault"
+                      }
+                    ],
+                    "measurements": [],
+                    "memory_digest": "e9e427ff92149b612e5b7e23e596300ee828b809064f59963e5dafb44d407f52",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 16,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-invalid",
+              "ok": true,
+              "runtime_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+              "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+              "recognised_sha256": "3abd1dba80d15757c324d9776f08b00e0f19f215d0e5eefe25a838c1c28fd64e",
+              "normalised_sha256": "34f8aefe67f1d1504037141c467515b8fd7d4877ff49f43ceb80e098df9a007b",
+              "materialised_sha256": "20e53afce485e93930731c081490c7aa64a4a05b20946ba44fd462cfbea8f1fb",
+              "materialised_verified": true,
+              "object_sha256": "e0dbf75f26579083cebada8c4b6ebc1a47b0cdc1a5ac377339782131182e3f88",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "1b981eec55b396fbde4e8d2f1eb4ffb97a82badb7d7f514e737e99ee14b9b24b",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 87,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "25fd7ef54a41258dfd00130da4f51149694148d3b0de758275da5c6f89af5baa",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 80,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "allocator-bounds",
+              "ok": true,
+              "runtime_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+              "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+              "recognised_sha256": "584615b9ebe664f5e7850b920c014292455477d4b8f0d43125c0a54a2f4992b4",
+              "normalised_sha256": "87c9bbd739049e89eaa30faa82dadee0d9fe2345f9b02eebbdfa4f8950836403",
+              "materialised_sha256": "d09c6f4d375e3f618918d1fa85b6c666e0bc4355390d259a2be93593735aa5a7",
+              "materialised_verified": true,
+              "object_sha256": "66f18532e8a15618a1a0fc05eb7b1839e07e245608c06e103f12e2c1baabd9ca",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "1b981eec55b396fbde4e8d2f1eb4ffb97a82badb7d7f514e737e99ee14b9b24b",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 81,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": "fault",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": 7,
+                    "faults": [
+                      {
+                        "code": 7,
+                        "name": "FAULT_UB_MEMFAULT"
+                      }
+                    ],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 3))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "25fd7ef54a41258dfd00130da4f51149694148d3b0de758275da5c6f89af5baa",
+                    "memory_equals_entry": false,
+                    "results": [],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "FAILED",
+                    "steps": 74,
+                    "tape": []
+                  }
+                }
+              ]
+            }
+          ]
+        },
         "softfloat": {
           "cases": 95,
           "passed": 95,
@@ -1283,8 +2117,8 @@
           ]
         }
       },
-      "next_production_bead": "bp-tav",
-      "claims": "S2 fixpoint completion only. Both linked production invocations stop at \u00a717.4 malloc; no executor or reversal claim.",
+      "next_production_bead": "bp-9fo",
+      "claims": "Allocator closure probes pass on both majors. Both full runtime-linked hashtable analyses pass; production advances past allocation and stops at the ordinary CC call to ht_third_pass (\u00a714.1/\u00a717.4, bp-9fo). No hashtable executor or reversal claim. Conditional rung-2 gate not run because production is incomplete.",
       "linked_final": {
         "18": {
           "major": 18,
@@ -1430,14 +2264,349 @@
         }
       },
       "linked_final_code_commit": "56eadb7f7044e42c75510884a44a98178ba78a65",
-      "linked_final_note": "Retested after bp-1us with the final gated plugin: both linked analyses complete; both production runs stop at \u00a717.4 malloc (bp-tav). No hashtable executor/reversal claim."
+      "linked_final_note": "Retested after bp-1us with the final gated plugin: both linked analyses complete; both production runs stop at \u00a717.4 malloc (bp-tav). No hashtable executor/reversal claim.",
+      "allocator_after": {
+        "18": {
+          "major": 18,
+          "plugin_sha256": "7caf66e34f3b78e99a35f8cbde4b3b2157d7edaf629b8ffde1f439439b0a805b",
+          "input_sha256": "8f5ae2537e76ebf0c8c8b9358ff0b380a9cd9c36925eeabd9a40f3a4b5555972",
+          "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+          "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+          "stages": [
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-18.ll",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.028442623995942995,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.07312788799754344,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 6.8074554030026775,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-18/out"
+              ],
+              "exit": 1,
+              "seconds": 10.124530165994656,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   tail call fastcc void @ht_third_pass(ptr %3, i64 %0)\n"
+            }
+          ]
+        },
+        "23": {
+          "major": 23,
+          "plugin_sha256": "cf65a226a39d76690e24706d028f1c8039929bee8c3c8a6dd59c48cd1d3cf681",
+          "input_sha256": "d9af32ad33d63b9133bb2b4245cdc9c30491d3f284ecedcb37e272f3cff63ade",
+          "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+          "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+          "stages": [
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/hashtable-postlink-23.ll",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.02672027600056026,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.07696885900804773,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 11.09519801598799,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/linked-23/out"
+              ],
+              "exit": 1,
+              "seconds": 13.859914547996596,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   tail call fastcc void @ht_third_pass(ptr %3, i64 %0)\n"
+            }
+          ]
+        }
+      },
+      "allocator_after_utc": "2026-11-01T08:27:15.423614+00:00",
+      "allocator_code_commit": "0f90deb13fc7b0b1e30190d522723dc5aba7f2bb",
+      "allocator_rung2_gate": "Not run: both linked production invocations stop at \u00a714.1 ordinary CC call; the user requested gate.sh only if production completes.",
+      "allocator_red": {
+        "before_code_commit": "21cb4fb16874f7ebec4bbf318738aba4356a3cc1",
+        "majors": [
+          18,
+          23
+        ],
+        "probe": "tests/probes/allocator-closure.ll",
+        "publication_link": "matching-major runtimes and pinned arith, llvm-link --only-needed, lto<O3>",
+        "exit": 1,
+        "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at %dead = tail call dereferenceable_or_null(3) ptr @malloc(i64 3)"
+      },
+      "allocator_fresh_after": {
+        "18": {
+          "major": 18,
+          "plugin_sha256": "7caf66e34f3b78e99a35f8cbde4b3b2157d7edaf629b8ffde1f439439b0a805b",
+          "input_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+          "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+          "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+          "stages": [
+            {
+              "stage": "frontend",
+              "argv": [
+                "/usr/lib/llvm-18/bin/clang",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/input.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.1640726710029412,
+              "diagnostic": ""
+            },
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.03234681600588374,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.09358255300321616,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 16.777569505997235,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-18/out"
+              ],
+              "exit": 1,
+              "seconds": 21.109633999003563,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   tail call fastcc void @ht_third_pass(ptr %3, i64 %0)\n"
+            }
+          ]
+        },
+        "23": {
+          "major": 23,
+          "plugin_sha256": "cf65a226a39d76690e24706d028f1c8039929bee8c3c8a6dd59c48cd1d3cf681",
+          "input_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+          "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+          "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+          "stages": [
+            {
+              "stage": "frontend",
+              "argv": [
+                "/usr/lib/llvm-23/bin/clang",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/input.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.17686186300124973,
+              "diagnostic": ""
+            },
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.031031627993797883,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.09435198298888281,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/postlink.bc",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 11.14798073201382,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/postlink.bc",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/tav/fresh-23/out"
+              ],
+              "exit": 1,
+              "seconds": 28.502778283000225,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 CC marker/call lowering (milestone 1) at   tail call fastcc void @ht_third_pass(ptr %3, i64 %0)\n"
+            }
+          ]
+        }
+      },
+      "allocator_fresh_after_utc": "2026-11-01T08:34:14.292253+00:00"
     },
     "object_pairs": {
       "count": 297,
       "byte_identical": true,
       "published_matches": 45,
       "production_cross_major_pairs": 212,
-      "preserved_previous_objects": 288,
+      "preserved_previous_objects": 297,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
