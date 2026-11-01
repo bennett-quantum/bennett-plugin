@@ -77,6 +77,9 @@ class Analysis {
   AV load(const AV &, llvm::Type *);
   AV convert(const AV &, llvm::Type *, llvm::Type *, unsigned);
   AV displace(const AV &, const llvm::APInt &, unsigned, bool gep = true);
+  struct GEPIndex { AV values; llvm::APInt scale; unsigned width; };
+  AV gepImage(const AV &base, const llvm::APInt &offset, const std::vector<GEPIndex> &indices, unsigned pointerBits);
+  void vectorGEP(llvm::GetElementPtrInst &);
   void bind(llvm::CallBase &, llvm::Function *);
 
 public:

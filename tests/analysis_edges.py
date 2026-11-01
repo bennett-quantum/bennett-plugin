@@ -3,6 +3,63 @@
 import argparse,json,subprocess
 from contracts import ROOT as R
 CASES={
+# PT2 lane by lane (bp-1bb): a vector GEP computes each lane as the scalar GEP of that lane's base and indices.
+'vector-gep-scalar-base':('''@g = internal global [4 x i64] zeroinitializer
+define void @top() {
+ %v = getelementptr inbounds i64, ptr @g, <2 x i64> <i64 1, i64 3>
+ %a = extractelement <2 x ptr> %v, i32 0
+ %b = extractelement <2 x ptr> %v, i32 1
+ ret void
+}''',[('top','%a',{'PTR(@g,8,0)'}),('top','%b',{'PTR(@g,24,0)'})]),
+'vector-gep-vector-base':('''@g = internal global [4 x i64] zeroinitializer
+define void @top() {
+ %v = getelementptr i8, ptr @g, <2 x i64> <i64 0, i64 8>
+ %w = getelementptr i8, <2 x ptr> %v, i64 16
+ %a = extractelement <2 x ptr> %w, i32 0
+ %b = extractelement <2 x ptr> %w, i32 1
+ ret void
+}''',[('top','%a',{'PTR(@g,16,0)'}),('top','%b',{'PTR(@g,24,0)'})]),
+'vector-gep-struct-field':('''%s = type { i64, i64 }
+@g = internal global [4 x %s] zeroinitializer
+define void @top() {
+ %i0 = insertelement <2 x i64> <i64 1, i64 2>, i64 3, i32 1
+ %v = getelementptr %s, ptr @g, <2 x i64> %i0, i32 1
+ %w = getelementptr %s, ptr @g, <2 x i64> <i64 0, i64 1>, <2 x i32> <i32 1, i32 1>
+ %a = extractelement <2 x ptr> %v, i32 0
+ %b = extractelement <2 x ptr> %v, i32 1
+ %c = extractelement <2 x ptr> %w, i32 0
+ %d = extractelement <2 x ptr> %w, i32 1
+ ret void
+}''',[('top','%a',{'PTR(@g,24,0)'}),('top','%b',{'PTR(@g,56,0)'}),('top','%c',{'PTR(@g,8,0)'}),('top','%d',{'PTR(@g,24,0)'})]),
+# The lane's memory is reached through the GEP: the load sees the slot, never an empty set.
+'vector-gep-load':('''@g = internal global [2 x i64] [i64 5, i64 6]
+define void @top() {
+ %v = getelementptr i64, ptr @g, <2 x i64> <i64 0, i64 1>
+ %b = extractelement <2 x ptr> %v, i32 1
+ %x = load i64, ptr %b
+ ret void
+}''',[('top','%x',{'INT(6)'})]),
+# N21 folds through the integer min/max rules; S2 keeps every value that fold can produce.
+'vector-extrema-lanes':('''declare <2 x i32> @llvm.smax.v2i32(<2 x i32>, <2 x i32>)
+declare i32 @llvm.vector.reduce.umax.v2i32(<2 x i32>)
+define void @top() {
+ %m = call <2 x i32> @llvm.smax.v2i32(<2 x i32> <i32 1, i32 2>, <2 x i32> <i32 3, i32 4>)
+ %a = extractelement <2 x i32> %m, i32 0
+ %b = extractelement <2 x i32> %m, i32 1
+ %u = call i32 @llvm.vector.reduce.umax.v2i32(<2 x i32> <i32 7, i32 9>)
+ ret void
+}''',[('top','%a',{'INT(1)','INT(3)'}),('top','%b',{'INT(2)','INT(4)'}),('top','%u',{'INT(7)','INT(9)'})]),
+# An intrinsic result S2 does not expand may not be an empty set: PT5 evaluates finite inputs.
+'scalar-intrinsic-finite':('''declare i32 @llvm.bswap.i32(i32)
+declare i32 @llvm.abs.i32(i32, i1)
+declare i32 @llvm.fshl.i32(i32, i32, i32)
+define void @top(i1 %c) {
+ %x = select i1 %c, i32 1, i32 2
+ %s = call i32 @llvm.bswap.i32(i32 %x)
+ %a = call i32 @llvm.abs.i32(i32 -5, i1 false)
+ %f = call i32 @llvm.fshl.i32(i32 1, i32 0, i32 %x)
+ ret void
+}''',[('top','%s',{'INT(16777216)','INT(33554432)'}),('top','%a',{'INT(5)'}),('top','%f',{'INT(2)','INT(4)'})]),
 # An additive PT5 cycle remains additive through PT3's unconditional copies.
 'additive-copy-cycle':('''define internal i64 @cycle(i1 %c) {
 entry: br label %loop

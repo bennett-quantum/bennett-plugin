@@ -4,6 +4,8 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/NoFolder.h"
+#include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Scalar/LowerWidenableCondition.h"
 #include "llvm/Config/llvm-config.h"
@@ -244,7 +246,34 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
     return result;
   };
   SmallVector<Instruction *> laneWork, deadVectors;
-  for(Instruction &i:instructions(f)) laneWork.push_back(&i);
+  // Lanes are defined before they are used: reverse postorder visits a definition
+  // ahead of every non-phi use, whatever the layout. Phi incoming lanes follow below.
+  {
+    std::set<BasicBlock *> visited;
+    for(BasicBlock *block:ReversePostOrderTraversal<Function *>(&f)) {
+      visited.insert(block);for(Instruction &i:*block)laneWork.push_back(&i);
+    }
+    for(BasicBlock &block:f)if(!visited.count(&block))for(Instruction &i:block)laneWork.push_back(&i);
+  }
+  auto scalarIntrinsic=[&](Intrinsic::ID id,Type *t)->Function * {
+#if LLVM_VERSION_MAJOR >= 23
+    return Intrinsic::getOrInsertDeclaration(f.getParent(),id,{t});
+#else
+    return Intrinsic::getDeclaration(f.getParent(),id,{t});
+#endif
+  };
+  // N14 is defined on scalars and runs before N21, so a shift lane takes its N14 form here.
+  auto shiftLane=[&](IRBuilder<NoFolder> &b,unsigned opcode,Value *x,Value *y,const std::string &name)->Value * {
+    unsigned width=x->getType()->getIntegerBitWidth();
+    if(auto *c=dyn_cast<ConstantInt>(y)) {
+      if(c->getValue().uge(width))return Constant::getNullValue(x->getType());
+      return b.CreateBinOp((Instruction::BinaryOps)opcode,x,y,name);
+    }
+    auto *cmp=b.CreateICmpUGE(y,ConstantInt::get(y->getType(),width),"nz.c."+name);
+    auto *shift=b.CreateBinOp((Instruction::BinaryOps)opcode,x,y,"nz.s."+name);
+    return b.CreateSelect(cmp,Constant::getNullValue(x->getType()),shift,name);
+  };
+  SmallVector<PHINode *> vectorPhis;
   unsigned vectorStoreOrdinal=0;
   for(Instruction *i:laneWork) {
     auto &dl=f.getParent()->getDataLayout();
@@ -275,10 +304,29 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
         }
         laneValues[i]=result;deadVectors.push_back(i);continue;
       }
+      auto base=Intrinsic::getBaseName(call->getIntrinsicID());
+      static const std::set<std::string> elementwise={"llvm.smax","llvm.smin","llvm.umax","llvm.umin","llvm.abs","llvm.ctpop","llvm.ctlz","llvm.cttz","llvm.bswap","llvm.bitreverse","llvm.fshl","llvm.fshr","llvm.sadd.sat","llvm.uadd.sat","llvm.ssub.sat","llvm.usub.sat","llvm.sshl.sat","llvm.ushl.sat"};
+      if(i->getType()->isVectorTy() && elementwise.count(base.str())) {
+        auto *t=cast<VectorType>(i->getType());unsigned n=t->getElementCount().getKnownMinValue();
+        SmallVector<SmallVector<Value *>> inputs;bool ready=true;
+        for(Value *operand:call->args()) {
+          SmallVector<Value *> lanes;
+          if(operand->getType()->isVectorTy())lanes=lanesOf(operand);else lanes.assign(n,operand);
+          ready&=lanes.size()==n;inputs.push_back(lanes);
+        }
+        if(!ready)continue;
+        auto *helper=scalarIntrinsic(call->getIntrinsicID(),t->getElementType());SmallVector<Value *> result;
+        for(unsigned k=0;k<n;++k) {
+          SmallVector<Value *> args;for(auto &lanes:inputs)args.push_back(lanes[k]);
+          result.push_back(b.CreateCall(helper,args,"nz.l"+std::to_string(k)+"."+r));
+        }
+        laneValues[i]=result;deadVectors.push_back(i);continue;
+      }
       if(reduce || vpReduce) {
         auto op=name.drop_front(vpReduce?15:19).split('.').first;
         unsigned opcode=op=="add"?Instruction::Add:op=="mul"?Instruction::Mul:op=="and"?Instruction::And:op=="or"?Instruction::Or:op=="xor"?Instruction::Xor:0;
-        if(!opcode)continue;
+        Intrinsic::ID extremum=op=="smax"?Intrinsic::smax:op=="smin"?Intrinsic::smin:op=="umax"?Intrinsic::umax:op=="umin"?Intrinsic::umin:Intrinsic::not_intrinsic;
+        if(!opcode && extremum==Intrinsic::not_intrinsic)continue;
         auto lanes=lanesOf(call->getArgOperand(vpReduce?1:0));if(lanes.empty())continue;
         Value *acc=vpReduce?call->getArgOperand(0):lanes[0];auto mask=vpReduce?lanesOf(call->getArgOperand(2)):SmallVector<Value *>();
         if(vpReduce && mask.empty())continue;
@@ -289,14 +337,48 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
             auto *evl=call->getArgOperand(3);
             auto *active=b.CreateICmpULT(ConstantInt::get(evl->getType(),k),evl,"nz.active"+suffix);
             auto *enabled=b.CreateAnd(active,mask[k],"nz.mask"+suffix);
-            auto *fold=b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],"nz.fold"+suffix);
+            Value *fold=opcode?b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],"nz.fold"+suffix):b.CreateCall(scalarIntrinsic(extremum,acc->getType()),{acc,lanes[k]},"nz.fold"+suffix);
             acc=b.CreateSelect(enabled,fold,acc,k+1==lanes.size()?r:"nz.acc"+suffix);
-          } else acc=b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],k+1==lanes.size()?r:"nz.f"+suffix);
+          } else if(opcode)acc=b.CreateBinOp((Instruction::BinaryOps)opcode,acc,lanes[k],k+1==lanes.size()?r:"nz.f"+suffix);
+          else acc=b.CreateCall(scalarIntrinsic(extremum,acc->getType()),{acc,lanes[k]},k+1==lanes.size()?r:"nz.f"+suffix);
         }
         i->replaceAllUsesWith(acc);i->eraseFromParent();continue;
       }
     }
-    if(i->getType()->isVectorTy() && (isa<BinaryOperator>(i)||isa<CmpInst>(i)||isa<CastInst>(i)||isa<SelectInst>(i))) {
+    if(auto *p=dyn_cast<PHINode>(i);p && p->getType()->isVectorTy()) {
+      auto *t=cast<VectorType>(p->getType());IRBuilder<NoFolder> b(p);SmallVector<Value *> result;
+      for(unsigned k=0;k<t->getElementCount().getKnownMinValue();++k)
+        result.push_back(b.CreatePHI(t->getElementType(),p->getNumIncomingValues(),"nz.l"+std::to_string(k)+"."+p->getName().str()));
+      laneValues[p]=result;vectorPhis.push_back(p);deadVectors.push_back(p);continue;
+    }
+    if(auto *sv=dyn_cast<ShuffleVectorInst>(i)) {
+      auto left=lanesOf(sv->getOperand(0)),right=lanesOf(sv->getOperand(1));
+      if(left.empty() || right.empty())continue;
+      SmallVector<Value *> result;
+      // N7: an undefined mask element is 0, source lane zero.
+      for(int j:sv->getShuffleMask()) {
+        if(j<0)j=0;
+        result.push_back((unsigned)j<left.size()?left[j]:right[j-left.size()]);
+      }
+      laneValues[sv]=result;deadVectors.push_back(sv);continue;
+    }
+    if(auto *g=dyn_cast<GetElementPtrInst>(i);g && g->getType()->isVectorTy()) {
+      unsigned n=cast<VectorType>(g->getType())->getElementCount().getKnownMinValue();
+      SmallVector<SmallVector<Value *>> inputs;bool ready=true;
+      for(Value *operand:g->operands()) {
+        SmallVector<Value *> lanes;
+        if(operand->getType()->isVectorTy())lanes=lanesOf(operand);else lanes.assign(n,operand);
+        ready&=lanes.size()==n;inputs.push_back(lanes);
+      }
+      if(!ready)continue;
+      IRBuilder<NoFolder> b(g);SmallVector<Value *> result;
+      for(unsigned k=0;k<n;++k) {
+        SmallVector<Value *> indices;for(unsigned o=1;o<inputs.size();++o)indices.push_back(inputs[o][k]);
+        result.push_back(b.CreateGEP(g->getSourceElementType(),inputs[0][k],indices,"nz.l"+std::to_string(k)+"."+g->getName().str()));
+      }
+      laneValues[g]=result;deadVectors.push_back(g);continue;
+    }
+    if(i->getType()->isVectorTy() && (isa<BinaryOperator>(i)||isa<UnaryOperator>(i)||isa<CmpInst>(i)||isa<CastInst>(i)||isa<SelectInst>(i))) {
       if(isa<BitCastInst>(i)) {} // Geometry handled by the bit-string rule below.
       else {
         SmallVector<SmallVector<Value *>> inputs;bool ready=true;
@@ -311,7 +393,8 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
         IRBuilder<NoFolder> b(i);SmallVector<Value *> result;
         for(unsigned k=0;k<n;++k) {
           auto name="nz.l"+std::to_string(k)+"."+i->getName().str();Value *v=nullptr;
-          if(auto *op=dyn_cast<BinaryOperator>(i))v=b.CreateBinOp((Instruction::BinaryOps)op->getOpcode(),inputs[0][k],inputs[1][k],name);
+          if(auto *op=dyn_cast<BinaryOperator>(i))v=op->isShift() && inputs[0][k]->getType()->isIntegerTy()?shiftLane(b,op->getOpcode(),inputs[0][k],inputs[1][k],name):b.CreateBinOp((Instruction::BinaryOps)op->getOpcode(),inputs[0][k],inputs[1][k],name);
+          else if(auto *op=dyn_cast<UnaryOperator>(i))v=b.CreateUnOp((Instruction::UnaryOps)op->getOpcode(),inputs[0][k],name);
           else if(auto *cmp=dyn_cast<CmpInst>(i))v=b.CreateCmp(cmp->getPredicate(),inputs[0][k],inputs[1][k],name);
           else if(auto *c=dyn_cast<CastInst>(i))v=b.CreateCast((Instruction::CastOps)c->getOpcode(),inputs[0][k],cast<VectorType>(i->getType())->getElementType(),name);
           else v=b.CreateSelect(inputs[0][k],inputs[1][k],inputs[2][k],name);
@@ -413,9 +496,25 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
       i->replaceAllUsesWith(replacement);i->eraseFromParent();
     }
   }
+  for(PHINode *p:vectorPhis) {
+    auto &result=laneValues[p];
+    for(unsigned e=0;e<p->getNumIncomingValues();++e) {
+      auto lanes=lanesOf(p->getIncomingValue(e));
+      if(lanes.size()!=result.size())unimplemented("§12.6 N21 vector phi incoming without lanes",2,p);
+      for(unsigned k=0;k<result.size();++k)cast<PHINode>(result[k])->addIncoming(lanes[k],p->getIncomingBlock(e));
+    }
+  }
   // A vector may still have a genuine vector user; never erase that producer.
-  for(auto it=deadVectors.rbegin();it!=deadVectors.rend();++it)
-    if((*it)->use_empty()) (*it)->eraseFromParent();
+  // Vector phi cycles are dead together, so liveness is solved over the whole set.
+  std::set<Instruction *> dead(deadVectors.begin(),deadVectors.end());
+  for(bool again=true;again;) {
+    again=false;
+    for(Instruction *d:deadVectors)if(dead.count(d))
+      for(User *u:d->users())if(!dead.count(cast<Instruction>(u))) {dead.erase(d);again=true;break;}
+  }
+  for(auto it=deadVectors.rbegin();it!=deadVectors.rend();++it)if(dead.count(*it)) {
+    (*it)->replaceAllUsesWith(PoisonValue::get((*it)->getType()));(*it)->eraseFromParent();
+  }
 
   // N26. The helpers are ordinary linked device functions; this rewrite does
   // not supply their implementation or make an unknown call a passing object.
