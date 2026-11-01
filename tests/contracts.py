@@ -25,3 +25,10 @@ def arith_path(major):
  path=Path(root)/f'llvm{major}/bennett-arith.bc' if root else Path(pin[f'llvm{major}_path'])
  assert hashlib.sha256(path.read_bytes()).hexdigest()==pin[f'llvm{major}_sha256'], f'LLVM {major}: arith pin mismatch: {path}'
  return path
+
+def arith_manifest(major):
+ # The bitcode digest is checked by arith_path; metadata comes from that same
+ # immutable publication, even when only the .bc files have been relocated.
+ import json
+ arith_path(major)
+ return json.loads(subprocess.check_output(['git','-C',str(SIBLINGS/'bennett-arith'),'show',f'249e619:dist/llvm{major}/manifest.json'],text=True))

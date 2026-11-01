@@ -40,6 +40,8 @@ directory, then run `BENNETT_ARITH_PINNED_ROOT=/absolute/path scripts/gate`.
 The directory contains `llvm18/bennett-arith.bc` and `llvm23/bennett-arith.bc`.
 The gate and the plugin still check the SHA-256 values in `SPEC_VERSIONS.toml`;
 this relocates those artifacts and does not adopt a newer publication.
+The test harness reads export metadata from the same immutable arith `249e619`
+publication, so relocated directories need only the two bitcode files.
 `BENNETT_ARITH_BITCODE` remains the explicit unpinned ABI-test library override.
 
 Whole-program R mode is selected with `--bennett-tier=reversible --bennett-entry=main`.

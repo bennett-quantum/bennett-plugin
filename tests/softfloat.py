@@ -188,7 +188,7 @@ declare void @__bennett_qfree(ptr)
  # The newly published numerical library is consumed solely via its pinned binary edge.
  pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith'];published=__import__('contracts').arith_path(a.major)
  check('published-pin',hashlib.sha256(published.read_bytes()).hexdigest()==pins[f'llvm{a.major}_sha256'])
- manifest=json.loads((published.parent/'manifest.json').read_text());exports={x['name'] for x in manifest['exports']}
+ manifest=__import__('contracts').arith_manifest(a.major);exports={x['name'] for x in manifest['exports']}
  check('published-required-exports',all('__bennett_sf_'+op+'_f64' in exports for op in ['sitofp','add','mul','div','cmp']))
  realenv=dict(os.environ);realenv.pop('BENNETT_ARITH_BITCODE',None)
  real=d/'real.ll';real.write_text('define i64 @real(i64 %x) { %a = sitofp i64 %x to double\n %b = fadd double %a, 1.0\n %r = bitcast double %b to i64\n ret i64 %r }')
