@@ -35,3 +35,14 @@ with tempfile.TemporaryDirectory(dir=c.ROOT/'.tmp') as d:
    except AssertionError:pass
    else:raise AssertionError('relocation bypassed the digest pin')
 print('arith relocation: corrupt publications rejected on both majors')
+
+# M2 publication: pins, live bitcode and immutable manifests move together.
+for major in (18,23):
+ with patch.dict(os.environ, {}, clear=False):
+  os.environ.pop('BENNETT_ARITH_PINNED_ROOT',None)
+  c.arith_path(major)
+  manifest=c.arith_manifest(major)
+  assert len(manifest['exports'])==1134, (major,len(manifest['exports']))
+  names={row['name'] for row in manifest['exports']}
+  assert {'__bennett_sf_add_ppcf128','__bennett_sf_sin_f128'} <= names
+print('arith M2: live hashes and 1134-export immutable manifests verified on both majors')

@@ -31,4 +31,5 @@ def arith_manifest(major):
  # immutable publication, even when only the .bc files have been relocated.
  import json
  arith_path(major)
- return json.loads(subprocess.check_output(['git','-C',str(SIBLINGS/'bennett-arith'),'show',f'249e619:dist/llvm{major}/manifest.json'],text=True))
+ pin=tomllib.loads((ROOT/'SPEC_VERSIONS.toml').read_text())['arith']
+ return json.loads(subprocess.check_output(['git','-C',str(SIBLINGS/'bennett-arith'),'show',f"{pin['commit']}:dist/llvm{major}/manifest.json"],text=True))
