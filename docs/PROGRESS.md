@@ -6,11 +6,12 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-7ni recursive CC/native-wide fixes green; final gate pending after prior-hash correction**; bp-eof stays open, rung-2 not rerun.
-§13.1 linked helpers retain §14.1 recursive calls; §17.4 carries flattened aggregate tuples; private S2 graphs release before source rewrites.
-Recursive transport/reversal, six real f64 CC vectors, native i192 O0/O3 and live-parent-slot preservation pass on both majors.
-Unchanged full-width launches complete in 318.42s (18) / 274.61s (23), 9 CC steps; matching zero-input L uses 44892/70119 < 1000000 steps.
-Completed gate was red only at four changed stack-snapshot objects; scoping pointer comparisons to the new FP closure restores all 299 prior hashes on both majors, with numerical CC bytes unchanged.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-7ni BLOCKED by bp-xms publication; recursive CC/native-wide mechanics verified**; bp-eof stays open, rung-2 not rerun.
+§13.1 linked helpers use §14.1 recursive CC calls and §17.4 flattened aggregate transport; private S2 graphs release before source rewrites.
+Final scripts/gate exit 0: 66/66/0/0/0 each major, cells 924/924 (18), 792/792 (23); fp-rot-fastmath-reassoc agrees with zero deferrals.
+Unchanged full-width launches: 464.36s (18), 276.14s (23), 9 CC steps each; matching zero-input L 44892/70119 steps < 1000000-token limits.
+Softfloat 112/112 and 116/116: recursive tuples, six real f64 CC reversals, native i192 O0/O3 with live parent slots; frozen release interpreter hashes recorded.
+Evidence: docs/verification.json; all 299 prior hashes preserved, 305 equal pairs, 45 published matches. Earlier interrupted/prior-hash-red runs retained; no waiver of missing arith exports.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
@@ -27,7 +28,7 @@ Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 
 Allocator closure: 4/4 probes per major, 11 CC vectors and five full-state reversals, with recognised/materialised hashes.
 Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
 CC calls: 2/2 probes per major, eight full-state reversals and four small-budget CC executions (§9.3), with recognised/materialised hashes.
-All 297 prior object hashes preserved; 299 equal object pairs, 45 published matches.
+All 299 prior object hashes preserved; 305 equal object pairs, 45 published matches.
 Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 

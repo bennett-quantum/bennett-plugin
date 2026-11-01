@@ -1,74 +1,68 @@
 # Handoff
 
-Rewritten at session end with `date -u`: **2026-11-01T10:21:57Z**.
+Rewritten at session end with `date -u`: **2026-11-01T12:36:24Z**.
 
-Pinned contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**,
-ISA **0.8**. M1 remains complete; M2 and the North Star ladder remain in progress.
-**bp-bux remains open**: this attempted pass was rolled back under the task's red-gate stop rule.
-**bp-eof** records the measured consumer execution/admission failures. **bp-7ni unchanged**. No push.
+Pinned contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**.
+SHA-pinned major-matched arith bitcode remains unchanged (SPEC_VERSIONS.toml).
+M1 remains complete. **bp-7ni remains BLOCKED on bp-xms**, not closed; no capability waived.
+The missing published exports include `__bennett_sf_add_ppcf128` and `__bennett_sf_sin_f128`
+on both majors; PPCDoubleDouble, own-format libm/non-i32 powi, arbitrary-format schema and
+signaling ABI obligations remain on bp-xms (r3d/0he/38c/chn). No sibling repository edited.
 
-Implementation attempt: **9adc557486b2aa739111f4daa7312e0c836b768c**.
-Revert: **5081c8d9fc11cc684a719b9a0f414acf2989352f**. Source, probes and gate/recorder changes from the attempt are all reverted.
-The active code is the pre-attempt bp-9fo implementation and again stops at CC switch.
-Both plugins were rebuilt after the revert; an archived dense probe reproduced the original
-§17.4 switch refusal (exit 1) on both majors. Diagnostics and plugin hashes are recorded in
-`docs/rung2-analysis.json` `bp-bux_rollback_reproduction`.
-No hashtable forward/native equality or byte-exact reversal is claimed.
+## Where the closure stopped and what changed
 
-## Attempted switch lowering and verification
+The exact LLVM23 red stop was the plugin's active-set inlining guard at `bennett_sf_eval`,
+encountering `call void @bennett_sf_eval(ptr %19, i32 %1, i32 3, ptr %18, i32 0, i32 %5)`.
+§13.1 requires the entry points defined by bennett-arith in linked bitcode; §14.1 requires
+CC/R calls and says recursion is unrestricted; §17.4 supplies integer/memory, phi block
+parameters and aggregate multi-result transport. ISA §16.2 requires parenthesized multi-LHS.
+The text is clear: no dialect-ruling bead was filed.
 
-§14.8 uses §16.4's unsigned sorted compare tree: midpoint ult split for more than three keys,
-eq chains at leaves, unconditional default for no keys, generated blocks in creation order.
-§17.4/ISA §3.4 carry original-predecessor phi values as parallel block-argument tuples,
-including duplicate destinations, shared defaults and loop-carried swaps.
-Five probes in the implementation commit cover dense/sparse sets, default-only, a loop and
-loaded conditions. Each major passed 41 independent-native/full-state reversal vectors, including
-memory/allocator/handle equality. Objects were independently checked/hashed and byte-identical
-across majors; recognised/materialised digests and bitcode verification are retained.
+Recursive numerical closures now retain real CC call frames, materialise N22/N27/N24 helpers
+and initialise their logical stack. Helpers remain callees with H bodies, not host launch stubs.
+Aggregate parameters/results/insert/extract/phi/select/load/store flatten into scalar tuples;
+new numerical pointer comparisons use integer addresses. Private S2 transfer graphs release
+source operand uses before production rewrites (otherwise final verification exposed corruption).
+Native M>128 comparison slots now link the existing logical-stack runtime and idempotent init;
+linked allocation definitions win over native calloc backing. No arithmetic definition is fabricated.
 
-One complete **scripts/gate exit 0** on the attempt: **66 run / 66 agree / 0 deferred /
-0 blocked / 0 diverge** each major; cells **924/924** (18), **792/792** (23).
-All **299** prior hashes preserved; **304** equal object pairs, **45** published matches.
-Log: `.tmp/bp-bux-gate.log`. Recorded with scripts/record-verification.py --pass bp-bux.
-`docs/verification.json` retains that exact receipt as `rolled_back_attempt`, with disposition
-and revert SHA; `latest_pass` keeps the active bp-9fo baseline, avoiding impossible prior-object
-requirements for probes removed by the mandated rollback.
+Probes in tests/probes: cc-softfloat.ll, cc-softfloat-recursive.ll, cc-softfloat-oracle.ll,
+softfloat-native-wide.ll. Real f64 zero/subnormal/negative-zero/finite/infinity/NaN direct CC
+vectors completely reverse state and memory on both majors. Recursive tuple/phi/select transport
+reverses at 0/1/3/7. Native i192 round-trips ±2^190/0/−1 at O0/O3, preserving a live parent slot.
+Recognised/source/materialised/object hashes and LLVM verification are in docs/verification.json.
 
-## Linked hashtable and unchanged rung-2 gate
+## Final verification
 
-With the attempt, fresh marked C -> clang -O2 -flto -> llvm-link --only-needed with published
-major-matched runtimes and SHA-pinned arith -> lto<O3> -> S1–S5 analysis -> S1–S9 production
-all passed on both majors (production 6.31s LLVM18 / 7.85s LLVM23, concurrent with plugin gate).
-Full commands, timings and hashes: `docs/rung2-analysis.json` `bp-bux_after`.
+**scripts/gate exit 0**, LLVM18/23 each **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**;
+924/924 and 792/792 cells. fp-rot-fastmath-reassoc agrees on both majors.
+Softfloat checks **112/112 (18), 116/116 (23)**.
+305 equal object pairs, 45 published matches; all 299 previous hashes preserved.
+Recorded by scripts/record-verification.py --pass bp-7ni; raw final log .tmp/bp-7ni-gate.log.
 
-The requested unchanged rung-2 gate ran **once**, exit **1**, against frozen implementation
-9adc557 and the gate's frozen VM/reference executables. Fixtures, plugin/VM builds, native
-reference, front end, link, LTO, production and launch artifacts all passed on both majors.
+Unchanged 64-wire/two-oracle CC launch, frozen release ISA CLI: **464.356708s (18),
+276.140375s (23)**, **9 CC steps each**, no faults, memory equal. Arguments
+1000000,1000000; budget 1000000,65536,65536,128. Matching zero-input L runs return code 0/payload 0
+in 44892 / 70119 materialised steps, below each 1000000-step token; CC's reported 9 steps exclude
+nested oracle work. CLI hashes, commands, budgets and results are recorded. The case was not shrunk.
 
-| Stage | LLVM 18 | LLVM 23 |
-|---|---|---|
-| Reference admission | PASS | PASS |
-| VM admission | FAIL | FAIL |
-| Reference forward = native | FAIL (300s timeout, basic 0) | FAIL (300s timeout, basic 0) |
-| VM forward = native | BLOCKED | BLOCKED |
-| Reference byte-exact reverse | BLOCKED | BLOCKED |
-| VM byte-exact reverse | BLOCKED | BLOCKED |
+Earlier attempts are not green receipts: .tmp/bp-7ni-gate-incomplete.log (stopped for native-wide
+repair), .tmp/bp-7ni-gate-prior-red.log (four legacy stack-snapshot hashes changed). e126501
+scoped pointer comparison changes to the new numerical closure, restoring all prior hashes;
+new numerical CC objects stayed byte-identical to the executed ones. Final run uses fixed source/plugins.
 
-VM check reports `§3.3: arithmetic needs integer operands`; the emitted object contains pointer
-icmp/null comparisons outside the switch trees (e.g. LLVM18 `%192 = icmp eq ptr %191, null`,
-ISA `v535 = icmp.eq v532 v533`, both operands ptr). The diagnostic has no instruction location;
-ownership/causality remains unproven. Accepted reference check/hash accepts both objects, but
-its forward `ht_demo_basic --args 0` commands each time out at 300s, without an instruction
-diagnostic. No nontermination or spec ambiguity is inferred. Do not conflate these two failures.
+## Commits and next work
 
-Raw evidence: `../bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/`.
-Report, manifest, table and hashes are copied into `docs/rung2-analysis.json` `bp-bux_rung2_gate`.
-Raw tables say UNFILED; **bp-eof**, labels consumer,m2,rung2, now accounts for those observed failures.
-No further lowering pass was attempted after production completed and the consumer gate went red.
-No dialect-ruling bead was needed; no conformance/runtime/VM/arith/spec source was edited.
+- 78b006075c69f7249e2b82ec2924b58035ee4720 — recursive closure, aggregate ABI, graph lifetime and probes.
+- 1bc3f3610eee9a9c267333fea45619f800087c75 — native wide slot linkage/initialisation and probe.
+- e126501ee07ce89913e2d0301b3a949f776395f4 — scope correction preserving prior CC objects; final gated code head.
 
-Run headless: unset DISPLAY, WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS and BROWSER;
-TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp. Never LLVM -view-*.
-Export beads before committing .beads; commit explicit paths. Never push from this task.
-The orchestrator owns the session worklog and any later push. Investigate bp-eof against the
-frozen emitted artifacts; restore/close bp-bux only in a subsequent authorized green pass.
+Consume remaining published arith exports/ABI under bp-xms before claiming full seven-format
+§13 closure or closing bp-7ni. No force-close or implicit waiver was used.
+**bp-eof remains open**; the rung-2 gate was not run by this task (downstream work remains pending).
+Switch lowering/bp-bux was already reinstated/closed before this task; no hashtable execution claim here.
+
+Run headless, TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp;
+unset DISPLAY, WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS, BROWSER; never LLVM -view-*.
+Export beads before committing .beads, commit explicit own paths with BEADS_HOOK_TIMEOUT=20.
+No push. The orchestrator owns the session worklog and any subsequent push.
