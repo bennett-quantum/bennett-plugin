@@ -79,6 +79,9 @@ class Analysis {
   void bind(llvm::CallBase &, llvm::Function *);
 
 public:
+  // End the lifetime of private S2 graphs before rewriting their source IR.
+  // The caller must rerun analysis before using transfer-derived results.
+  void releaseTransferGraphs();
   explicit Analysis(llvm::Module &m, llvm::Function *entry = nullptr) : M(m), Entry(entry) {}
   AV get(const llvm::Value *);
   AV read(llvm::Value *, uint64_t, llvm::Type *);

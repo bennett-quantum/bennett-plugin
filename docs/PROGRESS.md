@@ -6,11 +6,11 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-bux open; attempted switch pass rolled back after rung-2 gate red (bp-eof)**; bp-7ni unchanged.
-Switch probes passed both majors (5 probes, 41 native/full-state reversal vectors each); 9adc557 was reverted by 5081c8d.
-With 9adc557, fresh published-runtime/pinned-arith links completed S1–S9 production on both majors; reverted code again stops at switch.
-Unchanged rung-2 gate exit 1: reference admission passes; VM admission rejects arithmetic types; reference basic-0 times out at 300s; execution/reversal dependants blocked.
-One full plugin gate exit 0: 66/66/0/0/0 each major. Attempt evidence is docs/verification.json rolled_back_attempt; latest_pass retains the active bp-9fo baseline.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-7ni recursive CC closure implemented; final verification in progress**; bp-eof remains open, rung-2 gate not rerun.
+This pass: §13.1 linked helpers retain §14.1 recursive calls; §17.4 transports flattened aggregates and integer pointer comparisons.
+Recursive transport/full reversal passes on both majors; six real f64 direct CC vectors pass (including −0 and NaN).
+Unchanged 64-wire LLVM23 launch completes in 291.85s with the release ISA interpreter; final gate measurements follow.
+Private S2 graphs are released before source rewrites; both majors pass final host/device verification, ISA check and numerical reversal.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:

@@ -4,12 +4,12 @@
 The synthetic definitions deliberately only implement bit operations. They prove
 linkage/closure and carrier transport, never stand in for bennett-arith's arithmetic.
 """
-import argparse, json, os, re, subprocess, shutil, hashlib, tomllib
+import argparse, json, os, re, subprocess, shutil, hashlib, tomllib, time
 from contracts import ROOT as R
 from scalars import REF
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);p.add_argument('--production-cc',action='store_true',help='also execute the full-width real CC oracle launch (bp-7ni long-running probe)');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args()
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
  def run(argv,env=None,timeout=180):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=timeout,env=env)
@@ -21,6 +21,21 @@ def main():
   z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',*flags,src],e)
   return z,dest
  def check(name,ok,detail=''):rows.append(dict(name=name,ok=bool(ok),detail=detail))
+ def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+ def evidence(out,source,recognised):
+  for file in ['host.bc','device.bc']:
+   z=run([tool+'opt','-passes=verify',out/file,'-disable-output']);assert z.returncode==0,z.stderr
+  return dict(source_sha256=sha(source),recognised_sha256=sha(recognised),materialised_sha256=sha(out/'device.bc'),materialised_verified=True,object_sha256=sha(out/'top/launch.bennett'))
+ # The release build is the same independent ISA CLI, with its exact hash recorded.
+ # The unchanged 64-wire oracle is expensive in a debug interpreter.
+ release_ref=REF.parent.parent/'release/bennett-isa-ref'
+ assert release_ref.is_file(),release_ref
+ numerical_ref=d/'isa-ref-release';shutil.copy2(release_ref,numerical_ref)
+ def measured_program(obj,args,reverse=False):
+  argv=[numerical_ref,'run-program',obj,'top','--args',args,'--budget','1000000,65536,65536,128']+(['--reverse'] if reverse else [])
+  start=time.monotonic();z=run(argv,timeout=1800);seconds=time.monotonic()-start
+  data=json.loads(z.stdout) if z.returncode==0 else {}
+  return z,data,dict(command=list(map(str,argv)),seconds=seconds,ref_sha256=sha(numerical_ref),result=data)
  formats=[('half','f16',16),('bfloat','bf16',16),('float','f32',32),('double','f64',64),('x86_fp80','f80',80),('fp128','f128',128),('ppc_fp128','ppcf128',128)]
  for t,s,w in formats:
   body=f'''define {t} @f({t} %a, {t} %b, i128 %n) {{
@@ -125,27 +140,7 @@ define i64 @top() { %old = atomicrmw fmax ptr @g, double 1.0 seq_cst
    src=d/'main.c';src.write_text('extern _Bool top(void); int main(void) { return top()!=1; }')
    exe=d/f'compare-O{level}';z=run([tool+'clang',f'-O{level}',comparison,src,'-o',exe]);check(f'comparison-O{level}',z.returncode==0 and run([exe]).returncode==0,z.stderr)
  # Production L closure via a real descriptor and CC launch; helper body change changes the key.
- production='''define internal i1 @region(i64 %x) { %a = bitcast i64 %x to double
- %r = fcmp une double %a, 0.0
- ret i1 %r }
-define void @top() {
- %d = alloca [64 x i8], align 8
- %q = call ptr @__bennett_qalloc(i64 0,i64 64)
- %t = call ptr @__bennett_qalloc(i64 0,i64 1)
- %f = call ptr @__bennett_qalloc(i64 0,i64 4)
- STORES
- call void @__bennett_oracle(ptr @region,ptr null,ptr %d)
- call void @__bennett_oracle(ptr @region,ptr null,ptr %d)
- call void @__bennett_qfree(ptr %f)
- call void @__bennett_qfree(ptr %t)
- call void @__bennett_qfree(ptr %q)
- ret void }
-declare ptr @__bennett_qalloc(i64,i64)
-declare void @__bennett_qfree(ptr)
-declare void @__bennett_oracle(ptr,ptr,ptr)
-'''
- fields=[(0,'i32','2'),(4,'i32','1'),(8,'i32','0'),(12,'i32','0'),(16,'ptr','%t'),(24,'ptr','%f'),(32,'i32','1'),(36,'i32','0'),(40,'ptr','%q'),(48,'i64','0'),(56,'i64','0')]
- production=production.replace('STORES','\n'.join(f'%p{j} = getelementptr i8, ptr %d, i64 {off}\n store {ty} {v}, ptr %p{j}' for j,(off,ty,v) in enumerate(fields)))
+ production=(R/'tests/probes/cc-softfloat-oracle.ll').read_text()
  out=d/'production';z,_=opt(production,'production-input',['-bennett-out='+str(out),'-bennett-budget-default=1000,0,256,16,0','-disable-output'],bc)
  check('production-link',z.returncode==0,z.stderr)
  if z.returncode==0:
@@ -167,6 +162,18 @@ declare void @__bennett_qfree(ptr)
   obj=out/'top/launch.bennett';z=run([REF,'check',obj]);check('CC-check',z.returncode==0,z.stdout+z.stderr)
   z=run([REF,'run-program',obj,'top','--args','0','--budget','100000,0,0,0'])
   check('CC-execute',z.returncode==0 and json.loads(z.stdout).get('results')==[{'type':'i1','value':'1'}],z.stdout+z.stderr)
+ # Recursive transport fixture: nested call tuples, phi and select, full reversal.
+ source=R/'tests/probes/cc-softfloat-recursive.ll';out=d/'recursive';recognised=d/'recursive-recognised.json'
+ z,_=opt(source.read_text(),'recursive-input',['-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'])
+ check('CC-recursive-recognition',z.returncode==0,z.stderr)
+ z,_=opt(source.read_text(),'recursive-input',['-bennett-out='+str(out),'-disable-output'])
+ check('CC-recursive-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  ev=evidence(out,source,recognised);obj=out/'top/launch.bennett'
+  z=run([REF,'check',obj]);check('CC-recursive-check',z.returncode==0,z.stdout+z.stderr);rows[-1].update(ev)
+  for n in [0,1,3,7]:
+   z,data,measurement=measured_program(obj,str(n),True)
+   check('CC-recursive-reverse-'+str(n),z.returncode==0 and data.get('status')=='REVERSED' and not data.get('faults') and data.get('equals_entry') and data.get('memory_equals_entry') and data.get('results')==[dict(type='i1',value=str(int(n!=0)))],z.stdout+z.stderr);rows[-1].update(measurement)
  # N26 adapters execute both overlap directions and the zero-length/null cases.
  memory='declare void @__bennett_rt_memmove(ptr,ptr,i64)\ndeclare void @__bennett_rt_memset(ptr,i8,i64)\ndefine void @move(ptr %d,ptr %s,i64 %n) { call void @__bennett_rt_memmove(ptr %d,ptr %s,i64 %n)\n ret void }\ndefine void @fill(ptr %d,i8 %v,i64 %n) { call void @__bennett_rt_memset(ptr %d,i8 %v,i64 %n)\n ret void }'
  membc=d/'memory.bc';z,_=opt(memory,'memory-input',['-bennett-comparison','-o',str(membc)])
@@ -203,19 +210,30 @@ declare void @__bennett_qfree(ptr)
    z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
    data=json.loads(z.stdout) if z.returncode==0 else {}
    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
-  if a.major==23:
-   # The direct CC path has a concrete, separately owned recursive producer.
-   # This is a known refusal, never a claim of CC numerical conformance.
-   ccdir=realout/'direct-cc'
-   z,_=opt(ccbody,'published-cc-input',['-bennett-out='+str(ccdir),'-disable-output'],published)
-   (d/'published-cc-diagnostic.txt').write_text(z.stderr)
-   check('published-production-CC-next-rule',z.returncode!=0 and '§13.1 recursive CC soft-float closure' in z.stderr and '@bennett_sf_eval' in z.stderr and not list(ccdir.rglob('*.bennett')),'\n'.join(z.stderr.splitlines()[:3]))
-   rows[-1]['expected_unimplemented']=True
-   rows[-1]['determining_sentence']='§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links; recursive CC materialisation of bennett_sf_eval is required (bp-7ni), with the integer/memory and multi-result rules of §17.4.'
-   if a.production_cc:
-    launch=realout/'top/launch.bennett'
-    z=run([REF,'run-program',launch,'top','--args','1000000,1000000','--budget','1000000,65536,65536,128'],timeout=600)
-    check('published-production-CC-execute',z.returncode==0 and json.loads(z.stdout).get('status')=='COMPLETED',z.stdout+z.stderr)
+   rows[-1]['result']=data
+  source=R/'tests/probes/cc-softfloat-oracle.ll';recognised=realout/'oracle-recognised.json'
+  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)))
+  check('published-production-recognition',z.returncode==0,z.stderr)
+  if z.returncode==0:rows[-1].update(evidence(realout,source,recognised))
+  # The production oracle launch retains all 64 input wires and both calls.
+  launch=realout/'top/launch.bennett'
+  z,data,measurement=measured_program(launch,'1000000,1000000')
+  check('published-production-CC-execute',z.returncode==0 and data.get('status')=='COMPLETED' and not data.get('faults') and not data.get('host_requests') and data.get('memory_equals_entry'),z.stdout+z.stderr)
+  rows[-1].update(measurement,object_sha256=sha(launch),oracle_steps_budget=1000000)
+  ccdir=realout/'direct-cc';source=R/'tests/probes/cc-softfloat.ll';recognised=realout/'direct-cc-recognised.json'
+  linkedenv=dict(realenv,BENNETT_ARITH_BITCODE=str(published))
+  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source]
+  z=run([*base,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],linkedenv,timeout=600)
+  check('published-production-CC-recognition',z.returncode==0,z.stderr)
+  z=run([*base,'-bennett-budget-default=1000000,65536,65536,128,4096','-bennett-out='+str(ccdir),'-disable-output'],realenv,timeout=600)
+  check('published-production-CC-link',z.returncode==0,z.stderr)
+  if z.returncode==0:
+   ev=evidence(ccdir,source,recognised);obj=ccdir/'top/launch.bennett'
+   z=run([numerical_ref,'check',obj],timeout=600);check('published-production-CC-check',z.returncode==0,z.stdout+z.stderr);rows[-1].update(ev)
+   for value in [0,1,0x8000000000000000,0x3ff0000000000000,0x7ff0000000000000,0x7ff8000000000000]:
+    z,data,measurement=measured_program(obj,str(value),True)
+    expected=int(bool(value&0x7fffffffffffffff))
+    check('published-production-CC-numerical-'+str(value),z.returncode==0 and data.get('status')=='REVERSED' and data.get('equals_entry') and data.get('memory_equals_entry') and not data.get('faults') and data.get('results')==[dict(type='i1',value=str(expected))],z.stdout+z.stderr);rows[-1].update(measurement)
  # Missing production helpers are unavailability, never an unknown host call or a trap object.
  z,_=opt(production,'production-missing',['-bennett-out='+str(d/'missing-out'),'-disable-output'])
  check('production-missing',z.returncode!=0 and '§13.1 missing entry point __bennett_sf_cmp_f64' in z.stderr,z.stderr)

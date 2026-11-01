@@ -283,6 +283,55 @@ struct Entry {
     }
     unimplemented("§17.4 CC operand / §6.5 handle environment", 1, v);
   }
+  // §17.4: aggregates travel as depth-first scalar tuples, including
+  // recursive call arguments/results and parallel phi bindings.
+  struct Field { std::vector<unsigned> path; Type *type; uint64_t offset; };
+  std::vector<Field> fields(Type *t) {
+    std::vector<Field> out;
+    std::function<void(Type *,std::vector<unsigned>,uint64_t)> visit =
+      [&](Type *t,std::vector<unsigned> path,uint64_t offset) {
+        if(t->isAggregateType()) {
+          unsigned n=t->isStructTy()?cast<StructType>(t)->getNumElements():t->getArrayNumElements();
+          for(unsigned k=0;k<n;++k) {
+            auto p=path;p.push_back(k);
+            auto *e=t->isStructTy()?t->getStructElementType(k):t->getArrayElementType();
+            auto off=t->isStructTy()?m.getDataLayout().getStructLayout(cast<StructType>(t))->getElementOffset(k):k*m.getDataLayout().getTypeAllocSize(e).getFixedValue();
+            visit(e,p,offset+off);
+          }
+        } else out.push_back({path,t,offset});
+      };
+    visit(t,{},0);return out;
+  }
+  std::map<const Value *,std::vector<std::string>> tuples;
+  std::string fieldType(Type *t) {
+    return t->isPointerTy()?"ptr":"i"+std::to_string(width(t));
+  }
+  std::vector<std::string> operands(Value *v) {
+    if(!v->getType()->isAggregateType())return {operand(v)};
+    if(auto it=tuples.find(v);it!=tuples.end())return it->second;
+    if(auto *c=dyn_cast<Constant>(v)) {
+      std::vector<std::string> out;
+      for(auto &field:fields(v->getType())) {
+        auto *e=c;for(auto k:field.path)e=e->getAggregateElement(k);
+        out.push_back(operand(e));
+      }
+      return out;
+    }
+    unimplemented("§17.4 aggregate CC operand",2,v);
+  }
+  std::vector<std::string> destinations(Value *v) {
+    if(!v->getType()->isAggregateType()) {auto n=fresh(type(v));names[v]=n;return {n};}
+    std::vector<std::string> out;
+    for(auto &field:fields(v->getType()))out.push_back(fresh(fieldType(field.type)));
+    tuples[v]=out;return out;
+  }
+  std::string fieldPointer(const std::string &p,uint64_t offset) {
+    if(!offset)return p;
+    auto t="i"+std::to_string(m.getDataLayout().getPointerSizeInBits());
+    auto bits=emit(t,"ptrtoint."+t+" "+p);
+    auto off=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),offset));
+    bits=emit(t,"add "+bits+" "+off);return emit("ptr","inttoptr "+bits);
+  }
   const Value *root(AV v, const Value *at) {
     if (v.top || v.atoms.size() != 1 || v.atoms.begin()->kind != Atom::Root)
       unimplemented("§6.5 descriptor handle dispatch", 1, at);
@@ -1072,25 +1121,34 @@ struct Entry {
       }
     }
     for (Argument &p : f.args()) {
-      auto n = "a" + std::to_string(p.getArgNo()),
-           t = type(&p);
-      names[&p] = n;
-      params.push_back(n + ":" + t);
-      paramTypes.push_back(t);
+      if(p.getType()->isAggregateType()) {
+        std::vector<std::string> ns;unsigned k=0;
+        for(auto &field:fields(p.getType())) {
+          auto n="a"+std::to_string(p.getArgNo())+"_"+std::to_string(k++),t=fieldType(field.type);
+          ns.push_back(n);params.push_back(n+":"+t);paramTypes.push_back(t);
+        }
+        tuples[&p]=ns;
+      } else {
+        auto n="a"+std::to_string(p.getArgNo()),t=type(&p);
+        names[&p]=n;params.push_back(n+":"+t);paramTypes.push_back(t);
+      }
     }
     if (!f.getReturnType()->isVoidTy()) {
-      auto t = f.getReturnType()->isPointerTy() ? "ptr" : "i" + std::to_string(width(f.getReturnType()));
-      results.push_back("result:" + t);
-      resultTypes.push_back(t);
+      unsigned k=0;
+      for(auto &field:fields(f.getReturnType())) {
+        auto t=fieldType(field.type);
+        results.push_back("result"+(f.getReturnType()->isAggregateType()?std::to_string(k++):"")+":"+t);
+        resultTypes.push_back(t);
+      }
     }
     unsigned bn = 0;
     for (BasicBlock &bb : f)
       blocks[&bb] = "b" + std::to_string(bn++);
     for (BasicBlock &bb : f)
-      for (PHINode &p : bb.phis()) names[&p] = fresh(type(&p));
+      for (PHINode &p : bb.phis()) destinations(&p);
     auto edge = [&](BasicBlock *to, BasicBlock *from) {
       std::vector<std::string> values;
-      for (PHINode &p : to->phis()) values.push_back(operand(p.getIncomingValueForBlock(from)));
+      for (PHINode &p : to->phis()) {auto vs=operands(p.getIncomingValueForBlock(from));values.insert(values.end(),vs.begin(),vs.end());}
       return "^" + blocks[to] + ("(" + join(values) + ")");
     };
     // Linked/LTO block order need not place dominators before uses. Preserve
@@ -1103,7 +1161,10 @@ struct Entry {
     for (auto *block : order) {
       auto &bb=*block;
       std::vector<std::string> bindings;
-      for (PHINode &p : bb.phis()) bindings.push_back(names[&p] + ":" + type(&p));
+      for (PHINode &p : bb.phis()) {
+        auto ns=operands(&p);auto fs=fields(p.getType());
+        for(unsigned k=0;k<ns.size();++k)bindings.push_back(ns[k]+":"+(p.getType()->isAggregateType()?fieldType(fs[k].type):type(&p)));
+      }
       rows.push_back("^" + blocks[&bb] + "(" + join(bindings) + "):");
       ordinal = 0;
       if (&bb == &f.getEntryBlock()) for (auto *site : fileOrder) {
@@ -1184,12 +1245,22 @@ struct Entry {
             // ISA calls bind typed operands, keep a callee environment and
             // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
             std::vector<std::string> args;
-            for(auto &arg:c->args())args.push_back(operand(arg));
+            for(auto &arg:c->args()) {auto vs=operands(arg);args.insert(args.end(),vs.begin(),vs.end());}
             auto call="call @"+ccNames->at(g)+(args.empty()?"":" "+join(args," "));
             if(c->getType()->isVoidTy())rows.push_back(call);
-            else {auto result=fresh(type(c));rows.push_back(result+" = "+call);names[c]=result;}
+            else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
+        } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
+          auto vs=operands(insert->getAggregateOperand()),part=operands(insert->getInsertedValueOperand());
+          auto fs=fields(insert->getType());unsigned k=0;
+          for(unsigned j=0;j<fs.size();++j)if(ArrayRef<unsigned>(fs[j].path).take_front(insert->getNumIndices())==insert->getIndices())vs[j]=part.at(k++);
+          tuples[insert]=vs;
+        } else if(auto *extract=dyn_cast<ExtractValueInst>(&i)) {
+          auto vs=operands(extract->getAggregateOperand());auto fs=fields(extract->getAggregateOperand()->getType());
+          std::vector<std::string> out;
+          for(unsigned j=0;j<fs.size();++j)if(ArrayRef<unsigned>(fs[j].path).take_front(extract->getNumIndices())==extract->getIndices())out.push_back(vs[j]);
+          if(extract->getType()->isAggregateType())tuples[extract]=out;else names[extract]=out.at(0);
         } else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
           names[g] = gep(cast<GEPOperator>(g));
         } else if (auto *al = dyn_cast<AllocaInst>(&i)) {
@@ -1199,6 +1270,15 @@ struct Entry {
           auto bytes = operand(ConstantInt::get(Type::getInt64Ty(m.getContext()),n*count->getZExtValue()));
           auto p = fresh("ptr"); rows.push_back(p + " = alloc " + bytes); names[al] = p; localMemory.push_back(p); allocatedBytes+=std::max(uint64_t(1),n*count->getZExtValue());recordAllocation(p,bytes);
         } else if (auto *st = dyn_cast<StoreInst>(&i)) {
+          if(st->getValueOperand()->getType()->isAggregateType()) {
+            auto vs=operands(st->getValueOperand());auto p=operand(st->getPointerOperand());auto fs=fields(st->getValueOperand()->getType());
+            for(unsigned k=0;k<fs.size();++k) {
+              auto value=vs[k],address=fieldPointer(p,fs[k].offset),t="i"+std::to_string(width(fs[k].type));
+              if(fs[k].type->isPointerTy())value=emit(t,"ptrtoint."+t+" "+value);
+              rows.push_back("store."+t+" "+address+" "+value);
+            }
+            continue;
+          }
           auto value = operand(st->getValueOperand()), p = operand(st->getPointerOperand());
           auto w = st->getValueOperand()->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(st->getValueOperand()->getType());
           if (st->getValueOperand()->getType()->isPointerTy() && !tagged(a.get(st->getValueOperand()))) {
@@ -1206,13 +1286,23 @@ struct Entry {
           }
           rows.push_back("store.i" + std::to_string(w) + " " + p + " " + value);
         } else if (auto *ld = dyn_cast<LoadInst>(&i)) {
+          if(ld->getType()->isAggregateType()) {
+            auto p=operand(ld->getPointerOperand());std::vector<std::string> ns;
+            for(auto &field:fields(ld->getType())) {
+              auto address=fieldPointer(p,field.offset),t="i"+std::to_string(width(field.type));
+              auto n=emit(t,"load."+t+" "+address);
+              if(field.type->isPointerTy())n=emit("ptr","inttoptr "+n);
+              ns.push_back(n);
+            }
+            tuples[ld]=ns;continue;
+          }
           auto p = operand(ld->getPointerOperand());
           auto w = ld->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(ld->getType());
           auto value = fresh("i" + std::to_string(w)); rows.push_back(value + " = load.i" + std::to_string(w) + " " + p);
           if (ld->getType()->isPointerTy() && !tagged(a.get(ld))) { auto d = fresh("ptr"); rows.push_back(d + " = inttoptr " + value); value=d; }
           names[ld] = value;
         } else if (auto *r = dyn_cast<ReturnInst>(&i)) {
-          auto v = r->getReturnValue() ? operand(r->getReturnValue()) : "";
+          auto v = r->getReturnValue() ? join(operands(r->getReturnValue())," ") : "";
           for (auto &p : localMemory) rows.push_back("free " + p);
           rows.push_back("ret" + (v.empty() ? "" : " " + v));
         } else if (auto *br = dyn_cast<BranchInst>(&i)) {
@@ -1285,6 +1375,12 @@ struct Entry {
           names[b] = d;
           rows.push_back(d + " = " + b->getOpcodeName() + " " + x + " " + y);
         } else if (auto *sel = dyn_cast<SelectInst>(&i)) {
+          if(sel->getType()->isAggregateType()) {
+            auto p=operand(sel->getCondition());
+            auto xs=operands(sel->getTrueValue()),ys=operands(sel->getFalseValue()),ns=destinations(sel);
+            for(unsigned k=0;k<ns.size();++k)rows.push_back(ns[k]+" = select "+p+" "+xs[k]+" "+ys[k]);
+            continue;
+          }
           auto p = operand(sel->getCondition()),
                x = operand(sel->getTrueValue()),
                y = operand(sel->getFalseValue()),
@@ -1305,6 +1401,10 @@ struct Entry {
             std::swap(xv, yv);
           }
           auto x = operand(xv), y = operand(yv), d = fresh("i1");
+          if(xv->getType()->isPointerTy() && !tagged(a.get(xv)) && !tagged(a.get(yv))) {
+            auto t="i"+std::to_string(width(xv->getType()));
+            x=emit(t,"ptrtoint."+t+" "+x);y=emit(t,"ptrtoint."+t+" "+y);
+          }
           names[cmp] = d;
           rows.push_back(d + " = icmp." +
                          CmpInst::getPredicateName(pred).str() + " " + x + " " +
@@ -2011,7 +2111,8 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
         }
   }
   // CC arithmetic uses the same linked definitions as L and native comparison.
-  // Inline the numerical closure before the existing SSA/CFG CC lowering.
+  // Keep recursive numerical closures as §14.1 CC calls; acyclic closures
+  // retain their established inlining and object identities.
   bool preparedFP=false;
   for(auto &fn:m)if(!fn.isDeclaration() && a.tiers[&fn].count("CC") && !fn.hasFnAttribute("bennett.cc.softfloat")) {
     bool needed=false;
@@ -2021,17 +2122,41 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())needed|=g->getName().starts_with("__bennett_sf_") || (g->isIntrinsic() && c->getType()->isFloatingPointTy());
     }
     if(!needed)continue;
+    a.releaseTransferGraphs();
     fn.addFnAttr("bennett.cc.softfloat");preparedFP=true;normaliseScalar(fn);materialiseFPBits(fn);
-    // Check recursion before inlining; an unbounded expansion must never hang.
+    // A back edge is a real call frame, never an inlining refusal.
+    bool recursive=false;
     std::set<Function *> active,done;
     std::function<void(Function *)> check=[&](Function *f) {
       requireSoftFloat(*f);if(f->isDeclaration() || done.count(f))return;
-      if(!active.insert(f).second)unimplemented("§13.1 recursive CC soft-float closure",2,f);
+      if(!active.insert(f).second) {recursive=true;return;}
       normaliseScalar(*f);materialiseFPBits(*f);
       for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g && !markers().count(g->getName().str()))check(g);
       active.erase(f);done.insert(f);
     };
     for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g && g->getName().starts_with("__bennett_sf_"))check(g);
+    if(recursive) {
+      for(auto *g:done)g->addFnAttr("bennett.cc.softfloat.callee");
+      auto *entry=normaliseWideABI(m,&fn);
+      for(auto &g:m)if(!g.isDeclaration()) {normaliseScalar(g);materialiseFPBits(g);}
+      for(auto &g:m)if(!g.use_empty())materialiseIntegerRuntime(g);
+      prepareStack(m,*entry,table.capacities[4]);
+      if(auto *init=m.getFunction("__bennett_rt_ss_init");init && !init->isDeclaration()) {
+        IRBuilder<> b(&*entry->getEntryBlock().getFirstInsertionPt());b.CreateCall(init,{b.getInt64(table.capacities[4])});
+      }
+      for(auto &g:m)if(!g.isDeclaration()) {normaliseScalar(g);materialiseFPBits(g);}
+      // N22/N27 and N24 introduce additional linked runtime definitions.
+      // All reachable helpers execute in this entry, including externally
+      // named slot helpers; their H bodies must not become launch stubs.
+      std::set<Function *> closure;
+      std::function<void(Function *)> retain=[&](Function *g) {
+        if(g->isDeclaration() || !closure.insert(g).second)return;
+        if(g!=entry)g->addFnAttr("bennett.cc.softfloat.callee");
+        for(auto &i:instructions(g))if(auto *c=dyn_cast<CallBase>(&i))
+          if(auto *target=resolve(c->getCalledOperand()))retain(target);
+      };retain(entry);
+      Analysis prepared(m);prepared.run();lowerProduction(m,prepared,out,stack,budgetDefault,budgetFile);return;
+    }
     while(true) {
       CallBase *site=nullptr;
       for(auto &i:instructions(fn))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && done.count(c->getCalledFunction())) {site=c;break;}
@@ -2111,6 +2236,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     if (!f.isDeclaration() && a.tiers[&f].count("CC")) {
       // Internal direct-only callees execute in their caller's launch and
       // memory. Keep their H body; no host launch ABI is crossed here.
+      if(f.hasFnAttribute("bennett.cc.softfloat.callee") || f.hasFnAttribute("bennett.stack.internal"))continue;
       bool internal=f.hasLocalLinkage();
       for(auto *u:f.users()) {
         auto *c=dyn_cast<CallBase>(u);
@@ -2204,6 +2330,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   }
   // Snapshot analysis of every entry sees the linked source memory, before
   // native stubs add embedded objects and launch-API string globals.
+  a.releaseTransferGraphs();
   for(auto *entry:entries) {
     auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
     hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject());

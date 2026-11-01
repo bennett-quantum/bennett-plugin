@@ -94,6 +94,15 @@ def main():
                 c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
             if name=='softfloat':
                 c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
+                c[name]['recursive_closure']=[r for r in j['results'] if r['name'].startswith('CC-recursive-')]
+                c[name]['closure_contract'] = {
+                    'rewrite': '§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links.',
+                    'recursion': '§14.1: Direct calls lower to CC/R call; Recursion is unrestricted.',
+                    'transport': '§17.4: LLVM integer and memory instructions map to ISA instructions; phis to block parameters; multi-result calls carry aggregates.',
+                    'original_stop': '§13.1 recursive CC soft-float closure: active-set inlining guard at bennett_sf_eval',
+                    'llvm23_recursive_instruction': 'call void @bennett_sf_eval(ptr %19, i32 %1, i32 3, ptr %18, i32 0, i32 %5)',
+                    'cc_steps_note': 'run-program reports CC steps separately from the nested oracle; successful unchanged 64-wire launch uses two 1000000-step oracle tokens. L numerical rows record nested materialised steps.'}
+
                 c[name]['published_production']=[r for r in j['results'] if r['name'].startswith('published-production')]
         audit = read(f'key-audit-{m}.json')
         assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']

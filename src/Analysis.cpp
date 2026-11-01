@@ -406,6 +406,10 @@ std::string regionKey(Function *f) {
   auto hash = SHA256::hash(arrayRefFromStringRef(text));
   return toHex(hash, true);
 }
+void Analysis::releaseTransferGraphs() {
+  for(auto &entry:fpTransfers)entry.second->dropAllReferences();
+  fpTransfers.clear();
+}
 AV Analysis::get(const Value *v) {
   if (auto *c = dyn_cast<ConstantInt>(v))
     return integer(c->getValue());
