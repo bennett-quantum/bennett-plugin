@@ -13,6 +13,19 @@ def main():
  d=R/f'.tmp/softfloat/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so';rows=[]
  def run(argv,env=None,timeout=180):return subprocess.run(list(map(str,argv)),capture_output=True,text=True,timeout=timeout,env=env)
+ measurements=[]
+ def save_measurements():
+  (d/'timings.json').write_text(json.dumps(measurements,indent=2)+'\n')
+ def measured_run(argv,env=None,timeout=180):
+  measurement=dict(command=list(map(str,argv)),timeout_seconds=timeout)
+  start=time.monotonic()
+  try:z=run(argv,env,timeout)
+  except subprocess.TimeoutExpired:
+   measurement.update(seconds=time.monotonic()-start,host_timeout=True)
+   measurements.append(measurement);save_measurements();raise
+  measurement.update(seconds=time.monotonic()-start,exit=z.returncode)
+  measurements.append(measurement);save_measurements()
+  return z,measurement
  env=dict(os.environ);env['BENNETT_ARITH_BITCODE']=''
  def opt(body,name,flags,linked=None):
   src=d/(name+'.ll');src.write_text(body);dest=d/name
@@ -33,9 +46,13 @@ def main():
  numerical_ref=d/'isa-ref-release';shutil.copy2(release_ref,numerical_ref)
  def measured_program(obj,args,reverse=False):
   argv=[numerical_ref,'run-program',obj,'top','--args',args,'--budget','1000000,65536,65536,128']+(['--reverse'] if reverse else [])
-  start=time.monotonic();z=run(argv,timeout=1800);seconds=time.monotonic()-start
+  # Shared-host wall time is separate from the unchanged ISA step budgets.
+  # The orchestrator authorised this allowance after a load-induced timeout.
+  z,measurement=measured_run(argv,timeout=7200)
   data=json.loads(z.stdout) if z.returncode==0 else {}
-  return z,data,dict(command=list(map(str,argv)),seconds=seconds,ref_sha256=sha(numerical_ref),result=data)
+  measurement.update(ref_sha256=sha(numerical_ref),object_sha256=sha(obj),result=data)
+  save_measurements()
+  return z,data,measurement
  formats=[('half','f16',16),('bfloat','bf16',16),('float','f32',32),('double','f64',64),('x86_fp80','f80',80),('fp128','f128',128),('ppc_fp128','ppcf128',128)]
  for t,s,w in formats:
   body=f'''define {t} @f({t} %a, {t} %b, i128 %n) {{
@@ -214,8 +231,9 @@ declare void @__bennett_qfree(ptr)
  # M2 imports the recursive seven-format/libm closure. Keep the same extended
  # S2 allowance as direct CC below; total production includes two L builds.
  realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)
- z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
+ z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
  check('published-production-link',z.returncode==0,z.stderr)
+ rows[-1].update(timing)
  if z.returncode==0:
   obj=realout/'top/oracle-0/ref.bennett';z=run([numerical_ref,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
   rows[-1]['ref_sha256']=sha(numerical_ref)
@@ -226,8 +244,9 @@ declare void @__bennett_qfree(ptr)
    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
    rows[-1].update(result=data,command=list(map(str,argv)),seconds=seconds,ref_sha256=sha(numerical_ref))
   source=R/'tests/probes/cc-softfloat-oracle.ll';recognised=realout/'oracle-recognised.json'
-  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
+  z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
   check('published-production-recognition',z.returncode==0,z.stderr)
+  rows[-1].update(timing)
   if z.returncode==0:rows[-1].update(evidence(realout,source,recognised))
   # The production oracle launch retains all 64 input wires and both calls.
   launch=realout/'top/launch.bennett'
@@ -237,10 +256,12 @@ declare void @__bennett_qfree(ptr)
   ccdir=realout/'direct-cc';source=R/'tests/probes/cc-softfloat.ll';recognised=realout/'direct-cc-recognised.json'
   linkedenv=dict(realenv,BENNETT_ARITH_BITCODE=str(published))
   base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source]
-  z=run([*base,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],linkedenv,timeout=600)
+  z,timing=measured_run([*base,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],linkedenv,timeout=600)
   check('published-production-CC-recognition',z.returncode==0,z.stderr)
-  z=run([*base,'-bennett-budget-default=1000000,65536,65536,128,4096','-bennett-out='+str(ccdir),'-disable-output'],realenv,timeout=600)
+  rows[-1].update(timing)
+  z,timing=measured_run([*base,'-bennett-budget-default=1000000,65536,65536,128,4096','-bennett-out='+str(ccdir),'-disable-output'],realenv,timeout=600)
   check('published-production-CC-link',z.returncode==0,z.stderr)
+  rows[-1].update(timing)
   if z.returncode==0:
    ev=evidence(ccdir,source,recognised);obj=ccdir/'top/launch.bennett'
    z=run([numerical_ref,'check',obj],timeout=600);check('published-production-CC-check',z.returncode==0,z.stdout+z.stderr);rows[-1].update(ev)
