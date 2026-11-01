@@ -14,7 +14,7 @@ def main():
     assert sha(runtime)==RUNTIME_SHA[a.major]
     # Use the same SHA-pinned arith publication as the rest of the gate.
     pin=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith']
-    arith=Path(pin[f'llvm{a.major}_path'])
+    arith=__import__('contracts').arith_path(a.major)
     assert sha(arith)==pin[f'llvm{a.major}_sha256']
     rows=[]
     def run(args):

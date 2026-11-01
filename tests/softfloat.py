@@ -186,7 +186,7 @@ declare void @__bennett_qfree(ptr)
  z,_=opt(body,'signaling',['-bennett-normalise-only','-S','-o','-'])
  check('signaling-ABI-loud',z.returncode!=0 and 'bennett-arith-chn' in z.stderr,z.stderr)
  # The newly published numerical library is consumed solely via its pinned binary edge.
- pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith'];published=__import__('pathlib').Path(pins[f'llvm{a.major}_path'])
+ pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith'];published=__import__('contracts').arith_path(a.major)
  check('published-pin',hashlib.sha256(published.read_bytes()).hexdigest()==pins[f'llvm{a.major}_sha256'])
  manifest=json.loads((published.parent/'manifest.json').read_text());exports={x['name'] for x in manifest['exports']}
  check('published-required-exports',all('__bennett_sf_'+op+'_f64' in exports for op in ['sitofp','add','mul','div','cmp']))

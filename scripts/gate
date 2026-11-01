@@ -10,6 +10,13 @@ unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS BROWSER
 export TMPDIR="${TMPDIR:-$root/.tmp}"
 export BENNETT_SIBLINGS="${BENNETT_SIBLINGS:-$(dirname "$root")}"
 mkdir -p "$TMPDIR"
+# A relocated immutable publication is allowed; its digest remains the contract pin.
+python3 - "$root" <<'PYTHON'
+import sys
+sys.path.insert(0, sys.argv[1]+'/tests')
+from contracts import arith_path
+for major in (18,23): print(f'arith LLVM {major}: {arith_path(major)}', flush=True)
+PYTHON
 "$root/scripts/build"
 python3 "$root/tests/smoke.py"
 python3 "$root/tests/gate_policy.py"

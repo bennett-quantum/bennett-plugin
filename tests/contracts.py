@@ -18,3 +18,10 @@ def drift():
          or pin['isa']!='0.8' or pin['specs']['bennett-isa-spec']!='0.8'
          or hashlib.sha256(dialect_text().encode()).hexdigest()!='d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206'
          or pin['commits']['bennett-dialect-spec']!=PIN)
+
+def arith_path(major):
+ pin=tomllib.loads((ROOT/'SPEC_VERSIONS.toml').read_text())['arith']
+ root=os.environ.get('BENNETT_ARITH_PINNED_ROOT')
+ path=Path(root)/f'llvm{major}/bennett-arith.bc' if root else Path(pin[f'llvm{major}_path'])
+ assert hashlib.sha256(path.read_bytes()).hexdigest()==pin[f'llvm{major}_sha256'], f'LLVM {major}: arith pin mismatch: {path}'
+ return path

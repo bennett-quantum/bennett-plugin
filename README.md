@@ -33,3 +33,11 @@ and supplies only non-numerical byte-move/fill/fault adapters. The real arith
 The plugin contains no replacement numerical library. Tests use clearly marked
 integer-only ABI fixtures to check the link path independently of numerical
 conformance.
+
+For a gate while the sibling arith publication is being edited, extract the pinned
+`dist/llvm{18,23}/bennett-arith.bc` from arith commit `249e619` to an immutable
+directory, then run `BENNETT_ARITH_PINNED_ROOT=/absolute/path scripts/gate`.
+The directory contains `llvm18/bennett-arith.bc` and `llvm23/bennett-arith.bc`.
+The gate and the plugin still check the SHA-256 values in `SPEC_VERSIONS.toml`;
+this relocates those artifacts and does not adopt a newer publication.
+`BENNETT_ARITH_BITCODE` remains the explicit unpinned ABI-test library override.

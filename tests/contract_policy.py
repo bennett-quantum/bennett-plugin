@@ -24,3 +24,14 @@ with tempfile.TemporaryDirectory(dir=c.ROOT/'.tmp') as d:
  assert c.drift(), 'pinned byte corruption was hidden'
 c.DIALECT=original
 print('contract policy: 5 assertions passed')
+
+# Relocated publications must retain the pin, including rejection of corruption.
+import os
+with tempfile.TemporaryDirectory(dir=c.ROOT/'.tmp') as d:
+ with patch.dict(os.environ, {'BENNETT_ARITH_PINNED_ROOT':d}):
+  for major in (18,23):
+   path=Path(d)/f'llvm{major}/bennett-arith.bc';path.parent.mkdir();path.write_bytes(b'corrupt')
+   try:c.arith_path(major)
+   except AssertionError:pass
+   else:raise AssertionError('relocation bypassed the digest pin')
+print('arith relocation: corrupt publications rejected on both majors')

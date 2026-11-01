@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -28,7 +29,10 @@ static Type *carrier(Type *t) {return IntegerType::get(t->getContext(),t->getPri
 // No numerical implementation lives here. This is the published bitcode edge.
 void linkArith(Module &m) {
   auto *overridePath=std::getenv("BENNETT_ARITH_BITCODE");
-  auto *path=overridePath?overridePath:BENNETT_ARITH_DEFAULT_PATH;
+  std::string pinnedPath;
+  if(auto *root=std::getenv("BENNETT_ARITH_PINNED_ROOT"))
+    pinnedPath=std::string(root)+"/llvm"+std::to_string(LLVM_VERSION_MAJOR)+"/bennett-arith.bc";
+  auto *path=overridePath?overridePath:(pinnedPath.empty()?BENNETT_ARITH_DEFAULT_PATH:pinnedPath.c_str());
   if(!*path)return;
   if(!m.getModuleFlag("bennett.arith.bitcode.sha256")) {
   // Publish only the required closure. Discover N9/N32/N33 declarations on
