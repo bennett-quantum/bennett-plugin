@@ -841,5 +841,953 @@
   },
   "cc_calls_code_commit": "680ea61a824cd946e09824ffb85fdaa6f0818f43",
   "cc_calls_next_frontier": "bp-bux",
-  "cc_calls_rung2_gate_run": false
+  "cc_calls_rung2_gate_run": false,
+  "bp-bux_after_utc": "2026-11-01T09:45:15.200270+00:00",
+  "bp-bux_after": {
+    "18": {
+      "major": 18,
+      "plugin_sha256": "ccdeadda4694f25d86f7c369a5bb838b90e2204056db00d225f7797f1e2e3bd8",
+      "source_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+      "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+      "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+      "stages": [
+        {
+          "stage": "frontend",
+          "argv": [
+            "/usr/lib/llvm-18/bin/clang",
+            "-O2",
+            "-flto",
+            "-emit-llvm",
+            "-c",
+            "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/input.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.05205337097868323,
+          "diagnostic": ""
+        },
+        {
+          "stage": "link",
+          "argv": [
+            "/usr/lib/llvm-18/bin/llvm-link",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/input.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+            "--only-needed",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/linked.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.020082275004824623,
+          "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+        },
+        {
+          "stage": "lto",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-passes=lto<O3>",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/linked.bc",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/postlink.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.033630190999247134,
+          "diagnostic": ""
+        },
+        {
+          "stage": "analysis",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/postlink.bc",
+            "-disable-output",
+            "-bennett-analysis-only",
+            "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/analysis.json"
+          ],
+          "exit": 0,
+          "seconds": 2.8200863809906878,
+          "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        },
+        {
+          "stage": "production",
+          "argv": [
+            "/usr/lib/llvm-18/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/postlink.bc",
+            "-disable-output",
+            "-bennett-budget-default=10000000,1048576,65536,256,65536",
+            "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-18/out"
+          ],
+          "exit": 0,
+          "seconds": 6.311142250982812,
+          "diagnostic": ""
+        }
+      ],
+      "input_sha256": "6c32f95f8ca23bc317cc927964a226194a69bfc2beb51a7e1a373127c625baab"
+    },
+    "23": {
+      "major": 23,
+      "plugin_sha256": "69634bc518b0231864abbfd04317e7e2f4a24a7b1ee941cdc8c62a56bc2e7dd5",
+      "source_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+      "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+      "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+      "stages": [
+        {
+          "stage": "frontend",
+          "argv": [
+            "/usr/lib/llvm-23/bin/clang",
+            "-O2",
+            "-flto",
+            "-emit-llvm",
+            "-c",
+            "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/input.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.06837993301451206,
+          "diagnostic": ""
+        },
+        {
+          "stage": "link",
+          "argv": [
+            "/usr/lib/llvm-23/bin/llvm-link",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/input.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+            "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+            "--only-needed",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/linked.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.017811434983741492,
+          "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+        },
+        {
+          "stage": "lto",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-passes=lto<O3>",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/linked.bc",
+            "-o",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/postlink.bc"
+          ],
+          "exit": 0,
+          "seconds": 0.05248239799402654,
+          "diagnostic": ""
+        },
+        {
+          "stage": "analysis",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/postlink.bc",
+            "-disable-output",
+            "-bennett-analysis-only",
+            "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/analysis.json"
+          ],
+          "exit": 0,
+          "seconds": 3.4870717719895765,
+          "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+        },
+        {
+          "stage": "production",
+          "argv": [
+            "/usr/lib/llvm-23/bin/opt",
+            "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+            "-passes=bennett",
+            "-bennett-dialect=0.2.10",
+            "-bennett-isa=0.8",
+            "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/postlink.bc",
+            "-disable-output",
+            "-bennett-budget-default=10000000,1048576,65536,256,65536",
+            "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/fresh-23/out"
+          ],
+          "exit": 0,
+          "seconds": 7.848963434982579,
+          "diagnostic": ""
+        }
+      ],
+      "input_sha256": "df47121a9b30523f3e06ea554fdeeaf191f63ece2c1834e1648b275b3ace8be2"
+    }
+  },
+  "bp-bux_code_commit": "9adc557486b2aa739111f4daa7312e0c836b768c",
+  "bp-bux_red": {
+    "18": {
+      "exit": 1,
+      "log": ".tmp/bp-bux-red18.log",
+      "diagnostic": "(['/usr/lib/llvm-18/bin/opt', '-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so', '-passes=bennett', '-bennett-dialect=0.2.10', PosixPath('/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/cc-switch-dense.ll'), '-bennett-budget-default=100000,128,4096,32,0', '-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/cc-switch/18/dense/out', '-disable-output'], '', 'bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %x, label %done [\\n    i64 7, label %c0\\n    i64 0, label %c1\\n    i64 6, label %c2\\n    i64 1, label %c0\\n    i64 5, label %c1\\n    i64 2, label %c2\\n    i64 4, label %c0\\n    i64 3, label %c1\\n  ]\\n')"
+    },
+    "23": {
+      "exit": 1,
+      "log": ".tmp/bp-bux-red23.log",
+      "diagnostic": "(['/usr/lib/llvm-23/bin/opt', '-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so', '-passes=bennett', '-bennett-dialect=0.2.10', PosixPath('/home/tobias/Projects/bennett-workspace/bennett-plugin/tests/probes/cc-switch-dense.ll'), '-bennett-budget-default=100000,128,4096,32,0', '-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/cc-switch/23/dense/out', '-disable-output'], '', 'bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %x, label %done [\\n    i64 7, label %c0\\n    i64 0, label %c1\\n    i64 6, label %c2\\n    i64 1, label %c0\\n    i64 5, label %c1\\n    i64 2, label %c2\\n    i64 4, label %c0\\n    i64 3, label %c1\\n  ]\\n')"
+    }
+  },
+  "bp-bux_probe_summary": {
+    "18": {
+      "probes": 5,
+      "native_and_full_state_reversal_vectors": 41,
+      "objects_byte_identical_across_majors": true
+    },
+    "23": {
+      "probes": 5,
+      "native_and_full_state_reversal_vectors": 41,
+      "objects_byte_identical_across_majors": true
+    }
+  },
+  "bp-bux_rung2_gate": {
+    "command": "env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp /home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/gate.sh",
+    "exit": 1,
+    "evidence_directory": "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z",
+    "report_sha256": "f873feaff55d6902d2d9f235f52067dd01c85fdeffee65ba04799ca1b22b07da",
+    "report": {
+      "manifest": {
+        "time_utc": "2026-11-01T09:45:24.766369+00:00",
+        "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
+        "isa": "0.8",
+        "budget": "10000000,1048576,65536,256",
+        "inputs": [
+          0,
+          1,
+          7,
+          64,
+          1000
+        ],
+        "drivers": [
+          "basic",
+          "grow"
+        ],
+        "commands": [
+          {
+            "tag": "build/plugin-configure",
+            "argv": [
+              "cmake",
+              "-S",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung2-plugin-9adc557486b2aa739111f4daa7312e0c836b768c",
+              "-B",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung2-plugin-9adc557486b2aa739111f4daa7312e0c836b768c/build"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.367,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "build/plugin-build",
+            "argv": [
+              "cmake",
+              "--build",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung2-plugin-9adc557486b2aa739111f4daa7312e0c836b768c/build",
+              "-j",
+              "4"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 80.882,
+            "timeout_seconds": 1800
+          },
+          {
+            "tag": "build/vm-worktree",
+            "argv": [
+              "git",
+              "-C",
+              "/home/tobias/Projects/bennett-workspace/bennett-vm",
+              "worktree",
+              "add",
+              "--detach",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-80da12a889f2f75a33a229ad5a8713725121d6c7",
+              "80da12a889f2f75a33a229ad5a8713725121d6c7"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.174,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "build/vm-build",
+            "argv": [
+              "cargo",
+              "build",
+              "--offline",
+              "--manifest-path",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-80da12a889f2f75a33a229ad5a8713725121d6c7/Cargo.toml",
+              "--target-dir",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-80da12a889f2f75a33a229ad5a8713725121d6c7/target"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 15.352,
+            "timeout_seconds": 600
+          },
+          {
+            "tag": "18/native-build-O2",
+            "argv": [
+              "/usr/lib/llvm-18/bin/clang",
+              "-O2",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable.c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/main_golden.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/native-O2"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.244,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/native-run-O2",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/native-O2"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.001,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/native-build-O2",
+            "argv": [
+              "/usr/lib/llvm-23/bin/clang",
+              "-O2",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable.c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/main_golden.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/native-O2"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.297,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/native-run-O2",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/native-O2"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.002,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/native-build-O0",
+            "argv": [
+              "/usr/lib/llvm-18/bin/clang",
+              "-O0",
+              "-fsanitize=address,undefined",
+              "-fno-omit-frame-pointer",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable.c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/main_golden.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/native-O0"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.334,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/native-run-O0",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/native-O0"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.011,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/native-build-O0",
+            "argv": [
+              "/usr/lib/llvm-23/bin/clang",
+              "-O0",
+              "-fsanitize=address,undefined",
+              "-fno-omit-frame-pointer",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable.c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/main_golden.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/native-O0"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.325,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/native-run-O0",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/native-O0"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.021,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/frontend",
+            "argv": [
+              "/usr/lib/llvm-18/bin/clang",
+              "-O2",
+              "-flto",
+              "-emit-llvm",
+              "-c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/input.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.103,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/runtime-link",
+            "argv": [
+              "/usr/lib/llvm-18/bin/llvm-link",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/input.bc",
+              "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+              "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+              "--only-needed",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/linked.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.025,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/postlink",
+            "argv": [
+              "/usr/lib/llvm-18/bin/opt",
+              "-passes=lto<O3>",
+              "-S",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/linked.bc",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/postlink.ll"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.087,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/frontend",
+            "argv": [
+              "/usr/lib/llvm-23/bin/clang",
+              "-O2",
+              "-flto",
+              "-emit-llvm",
+              "-c",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/input.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.17,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/runtime-link",
+            "argv": [
+              "/usr/lib/llvm-23/bin/llvm-link",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/input.bc",
+              "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+              "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+              "--only-needed",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/linked.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.028,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/postlink",
+            "argv": [
+              "/usr/lib/llvm-23/bin/opt",
+              "-passes=lto<O3>",
+              "-S",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/linked.bc",
+              "-o",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/postlink.ll"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.085,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/production",
+            "argv": [
+              "/usr/lib/llvm-18/bin/opt",
+              "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung2-plugin-9adc557486b2aa739111f4daa7312e0c836b768c/build/libbennett-plugin-18.so",
+              "-passes=bennett",
+              "-bennett-dialect=0.2.10",
+              "-bennett-isa=0.8",
+              "-bennett-budget-default=10000000,1048576,65536,256,65536",
+              "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/postlink.ll"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 29.818,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/verify-device",
+            "argv": [
+              "/usr/lib/llvm-18/bin/opt",
+              "-passes=verify",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/device.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.016,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/verify-host",
+            "argv": [
+              "/usr/lib/llvm-18/bin/opt",
+              "-passes=verify",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/host.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.016,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/reference-check-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.054,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/reference-hash-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "hash",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.037,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/reference-check-grow",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_grow/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.041,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/reference-hash-grow",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "hash",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_grow/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.039,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/production",
+            "argv": [
+              "/usr/lib/llvm-23/bin/opt",
+              "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung2-plugin-9adc557486b2aa739111f4daa7312e0c836b768c/build/libbennett-plugin-23.so",
+              "-passes=bennett",
+              "-bennett-dialect=0.2.10",
+              "-bennett-isa=0.8",
+              "-bennett-budget-default=10000000,1048576,65536,256,65536",
+              "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/postlink.ll"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 33.404,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/verify-device",
+            "argv": [
+              "/usr/lib/llvm-23/bin/opt",
+              "-passes=verify",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/device.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.026,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/verify-host",
+            "argv": [
+              "/usr/lib/llvm-23/bin/opt",
+              "-passes=verify",
+              "-disable-output",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/host.bc"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.017,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/reference-check-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.069,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/reference-hash-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "hash",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.05,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/reference-check-grow",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_grow/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.098,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/reference-hash-grow",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "hash",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_grow/launch.bennett"
+            ],
+            "exit": 0,
+            "elapsed_seconds": 0.065,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/reference-forward-basic-0",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "run-program",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_basic/launch.bennett",
+              "ht_demo_basic",
+              "--args",
+              "0",
+              "--budget",
+              "10000000,1048576,65536,256"
+            ],
+            "exit": 124,
+            "elapsed_seconds": 300.109,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "18/VM-check-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-80da12a889f2f75a33a229ad5a8713725121d6c7/target/debug/bennett-vm",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/18/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 1,
+            "elapsed_seconds": 0.017,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/reference-forward-basic-0",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/debug/bennett-isa-ref",
+              "run-program",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_basic/launch.bennett",
+              "ht_demo_basic",
+              "--args",
+              "0",
+              "--budget",
+              "10000000,1048576,65536,256"
+            ],
+            "exit": 124,
+            "elapsed_seconds": 300.095,
+            "timeout_seconds": 300
+          },
+          {
+            "tag": "23/VM-check-basic",
+            "argv": [
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-80da12a889f2f75a33a229ad5a8713725121d6c7/target/debug/bennett-vm",
+              "check",
+              "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-2/20261101T094524.766276Z/23/out/ht_demo_basic/launch.bennett"
+            ],
+            "exit": 1,
+            "elapsed_seconds": 0.01,
+            "timeout_seconds": 300
+          }
+        ],
+        "environment": {
+          "DISPLAY": null,
+          "WAYLAND_DISPLAY": null,
+          "DBUS_SESSION_BUS_ADDRESS": null,
+          "BROWSER": null,
+          "TMPDIR": "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp"
+        },
+        "fixture_sha256": {
+          "hashtable.c": "8cbd5a3698aea0da1f7187b97be34a0ed33743394f045c49c943323f94abd4b9",
+          "main_golden.c": "83c6d020567460b10e0f70aec25399b34f5dda8e2c2feb47f157f71fff0e8820",
+          "hashtable_marked.c": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189"
+        },
+        "plugin_commit": "9adc557486b2aa739111f4daa7312e0c836b768c",
+        "plugin_sha256": {
+          "18": "4d6e5d90cc24e962987f701308a2a947ec42aa6b0b1b5c3f710d95af9242a3e2",
+          "23": "35641b13a3144f1af9a10f264bbfefacec0ed2ee95856586ca8fa4cc0688a1cd"
+        },
+        "vm_commit": "80da12a889f2f75a33a229ad5a8713725121d6c7",
+        "vm_sha256": "7c7d2cf395f1139da4898a83f2f0283be85dd3d91c2075b60c50073775e16946",
+        "runtimes_sha256": {
+          "18": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+          "23": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b"
+        },
+        "arith_sha256": {
+          "18": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+          "23": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
+        },
+        "reference_sha256": "e30c462f5faa334c3f51822129688df8dcf2227e8e5d515d3bfa6dfa5fe279be"
+      },
+      "stages": {
+        "18": {
+          "fixtures": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "plugin build": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "VM build": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "native reference": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "C front end": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "runtime bitcode link": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "post-link LTO": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "S1\u2013S9 production": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "launch artefacts": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "reference admission": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "reference forward = native": {
+            "status": "FAIL",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "18/reference-forward-basic-0: exit 124\n\ntimeout after 300 seconds\n"
+          },
+          "reference byte-exact reverse": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires reference forward = native"
+          },
+          "VM admission": {
+            "status": "FAIL",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "18/VM-check-basic: exit 1\n\u00a73.3: arithmetic needs integer operands\n"
+          },
+          "VM forward = native": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires native reference, VM admission"
+          },
+          "VM byte-exact reverse": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires VM forward = native"
+          }
+        },
+        "23": {
+          "fixtures": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "plugin build": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "VM build": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "native reference": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "C front end": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "runtime bitcode link": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "post-link LTO": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "S1\u2013S9 production": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "launch artefacts": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "reference admission": {
+            "status": "PASS",
+            "beads": [],
+            "error": ""
+          },
+          "reference forward = native": {
+            "status": "FAIL",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "23/reference-forward-basic-0: exit 124\n\ntimeout after 300 seconds\n"
+          },
+          "reference byte-exact reverse": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires reference forward = native"
+          },
+          "VM admission": {
+            "status": "FAIL",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "23/VM-check-basic: exit 1\n\u00a73.3: arithmetic needs integer operands\n"
+          },
+          "VM forward = native": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires native reference, VM admission"
+          },
+          "VM byte-exact reverse": {
+            "status": "BLOCKED",
+            "beads": [
+              "UNFILED"
+            ],
+            "error": "Not run; requires VM forward = native"
+          }
+        }
+      }
+    },
+    "table": "| Stage | LLVM 18 | LLVM 23 |\n|---|---|---|\n| fixtures | PASS | PASS |\n| plugin build | PASS | PASS |\n| VM build | PASS | PASS |\n| native reference | PASS | PASS |\n| C front end | PASS | PASS |\n| runtime bitcode link | PASS | PASS |\n| post-link LTO | PASS | PASS |\n| S1\u2013S9 production | PASS | PASS |\n| launch artefacts | PASS | PASS |\n| reference admission | PASS | PASS |\n| VM admission | FAIL \u00b7 UNFILED | FAIL \u00b7 UNFILED |\n| reference forward = native | FAIL \u00b7 UNFILED | FAIL \u00b7 UNFILED |\n| VM forward = native | BLOCKED \u00b7 UNFILED | BLOCKED \u00b7 UNFILED |\n| reference byte-exact reverse | BLOCKED \u00b7 UNFILED | BLOCKED \u00b7 UNFILED |\n| VM byte-exact reverse | BLOCKED \u00b7 UNFILED | BLOCKED \u00b7 UNFILED |\n",
+    "followup_bead": "bp-eof"
+  },
+  "bp-bux_disposition": "Implementation 9adc557 rolled back by 5081c8d9fc11cc684a719b9a0f414acf2989352f under the red-gate stop rule; bp-bux remains open, bp-eof tracks the consumer failures. Current code again stops at switch.",
+  "bp-bux_revert_commit": "5081c8d9fc11cc684a719b9a0f414acf2989352f",
+  "bp-bux_plugin_gate": {
+    "command": "scripts/gate",
+    "exit": 0,
+    "accepted_contract_drift": false,
+    "contract_head_drift": true,
+    "contract_worktree_drift": true,
+    "corpus": {
+      "18": "66/66/0/0/0 cells 924/924",
+      "23": "66/66/0/0/0 cells 792/792"
+    },
+    "non_agreeing": []
+  },
+  "bp-bux_rollback_reproduction": {
+    "18": {
+      "argv": [
+        "/usr/lib/llvm-18/bin/opt",
+        "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+        "-passes=bennett",
+        "-bennett-dialect=0.2.10",
+        "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/reverted-dense.ll",
+        "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/reverted-18",
+        "-disable-output"
+      ],
+      "exit": 1,
+      "diagnostic": "bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %x, label %done [\n    i64 7, label %c0\n    i64 0, label %c1\n    i64 6, label %c2\n    i64 1, label %c0\n    i64 5, label %c1\n    i64 2, label %c2\n    i64 4, label %c0\n    i64 3, label %c1\n  ]\n",
+      "plugin_sha256": "c7a1309706236cab549e0283f96e588986e9706299ccf79f50d0a2689071a820"
+    },
+    "23": {
+      "argv": [
+        "/usr/lib/llvm-23/bin/opt",
+        "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+        "-passes=bennett",
+        "-bennett-dialect=0.2.10",
+        "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/reverted-dense.ll",
+        "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-bux/reverted-23",
+        "-disable-output"
+      ],
+      "exit": 1,
+      "diagnostic": "bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %x, label %done [\n    i64 7, label %c0\n    i64 0, label %c1\n    i64 6, label %c2\n    i64 1, label %c0\n    i64 5, label %c1\n    i64 2, label %c2\n    i64 4, label %c0\n    i64 3, label %c1\n  ]\n",
+      "plugin_sha256": "9a6aa6272f5c206bd151f6700e4ca6a370dfb4ad09702c683a8549b3fdddf6d1"
+    }
+  }
 }

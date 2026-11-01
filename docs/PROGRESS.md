@@ -6,11 +6,11 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-9fo closed after one full dual-major gate; next bp-bux (§14.8 CC switch)**; bp-7ni stays outside this pass.
-Separate CC callees preserve typed pointer/integer operands, returns, nested/recursive frames and shared memory (§14.1/§17.4).
-Two probes per major pass eight complete-state reversals and four small-budget CC vectors (§9.3: outside-region CC is unbounded).
-Fresh published-runtime/arith links pass S1–S5 then stop at §14.8 switch on both majors (bp-bux); conditional rung-2 gate not run.
-Gate exit 0: 66/66/0/0/0 each major; recognised/materialised hashes and execution evidence are in docs/verification.json.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-bux open; attempted switch pass rolled back after rung-2 gate red (bp-eof)**; bp-7ni unchanged.
+Switch probes passed both majors (5 probes, 41 native/full-state reversal vectors each); 9adc557 was reverted by 5081c8d.
+With 9adc557, fresh published-runtime/pinned-arith links completed S1–S9 production on both majors; reverted code again stops at switch.
+Unchanged rung-2 gate exit 1: reference admission passes; VM admission rejects arithmetic types; reference basic-0 times out at 300s; execution/reversal dependants blocked.
+One full plugin gate exit 0: 66/66/0/0/0 each major. Attempt evidence is docs/verification.json rolled_back_attempt; latest_pass retains the active bp-9fo baseline.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
@@ -161,3 +161,10 @@ Direct CC call/ret closures preserve typed pointer/integer arguments, pointer/in
 Two probes per major cover nested fastcc calls, loops, mutual/root recursion and heap/global restoration: eight complete-state reversals and four unbounded CC vectors (§9.3), with recognised/materialised evidence.
 Fresh marked-C -> published runtimes + pinned arith -> lto<O3> passes linked S1–S5, then production stops at §14.8 switch (%104/%113); filed bp-bux; conditional rung-2 gate not run.
 One full gate exit 0: 66/66/0/0/0 each, 924/924 and 792/792 cells; 299 equal object pairs, 45 published matches, all 297 previous hashes preserved; bp-7ni untouched.
+
+### Pass 22 - 2026-11-01 - 9adc557 reverted by 5081c8d (bp-bux remains open; bp-eof filed)
+§14.8/§16.4 unsigned sorted ult/eq trees and §17.4 parallel block parameters passed 5 probes/41 native-and-full-state reversal vectors per major.
+One complete plugin gate exit 0: 66/66/0/0/0 each, 924/924 and 792/792 cells; 304 equal pairs/45 published matches/all 299 prior hashes preserved.
+Fresh linked hashtable S1–S9 production completed on both majors; unchanged rung-2 gate exit 1: reference admission passed, VM admission rejected arithmetic types, reference basic-0 hit 300s.
+Forward/native comparison and reversal did not pass. Consumer failures filed as bp-eof; task stop rule required reverting the pass's code commit, including its probes/gate changes.
+Attempt receipt recorded with scripts/record-verification.py then retained under rolled_back_attempt; active latest_pass/baseline remains bp-9fo; no spec/sibling source edits or push.
