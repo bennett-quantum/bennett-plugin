@@ -6,17 +6,18 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-9fo CC call probes green on both majors; full gate and linked pipeline next**; bp-7ni stays outside this pass.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-9fo closed after one full dual-major gate; next bp-bux (§14.8 CC switch)**; bp-7ni stays outside this pass.
 Separate CC callees preserve typed pointer/integer operands, returns, nested/recursive frames and shared memory (§14.1/§17.4).
 Two probes per major pass eight complete-state reversals and four small-budget CC vectors (§9.3: outside-region CC is unbounded).
-Recognised/materialised digests, checked SCC hashes and execution evidence are integrated into the gate and recorder.
+Fresh published-runtime/arith links pass S1–S5 then stop at §14.8 switch on both majors (bp-bux); conditional rung-2 gate not run.
+Gate exit 0: 66/66/0/0/0 each major; recognised/materialised hashes and execution evidence are in docs/verification.json.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
   pushed sha (HEAD when run directly) in a detached worktree `.tmp/gate-<sha>` and removes it. `scripts/gate` runs
   the same sequence in the current tree (iteration only): build, smoke, gate_policy, contract_policy, per major 18
-  and 23 recognition, analysis_edges, analysis_performance, reference_images, materialisation, aggregate_rows, allocator_closure, region_keys, scalars, descriptors,
+  and 23 recognition, analysis_edges, analysis_performance, reference_images, materialisation, aggregate_rows, allocator_closure, cc_calls, region_keys, scalars, descriptors,
   production and production_{environments,dispatch,shapes,budgets,records}, then budget_stage (five cases, four proof refusals and 316 prefixes), production_cross_major, prior_objects, corpus_gate. The gate also runs the full key audit with explicit bd accounting and independent V1–V16 validation.
   Siblings `../bennett-isa-spec` (reference CLI) and `../bennett-dialect-spec` (corpus); `BENNETT_SIBLINGS` overrides.
 - Evidence of the latest pass: `docs/verification.json` (`scripts/record-verification.py`).
@@ -25,7 +26,8 @@ Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 
 (924/924 cells on 18, 792/792 on 23); analysis_edges 20/20 and analysis_performance 3/3.
 Allocator closure: 4/4 probes per major, 11 CC vectors and five full-state reversals, with recognised/materialised hashes.
 Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
-All 297 prior object hashes preserved; 297 equal object pairs, 45 published matches.
+CC calls: 2/2 probes per major, eight full-state reversals and four small-budget CC executions (§9.3), with recognised/materialised hashes.
+All 297 prior object hashes preserved; 299 equal object pairs, 45 published matches.
 Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
@@ -153,3 +155,9 @@ N27 overflow field projections, dominator-first CFG emission and allocator-only 
 Four runtime-SHA/arith-SHA-pinned probes per major pass 11 vectors and five complete-state reversals, with recognised/normalised/materialised hashes and independent check/hash.
 Recorded and freshly compiled hashtable links reach S1–S5, then production stops at `tail call fastcc void @ht_third_pass(ptr %3, i64 %0)` on both majors; filed bp-9fo (§14.1); conditional rung-2 gate not run.
 One full scripts/gate exit 0: 66/66/0/0/0 each, 924/924 and 792/792 cells, 297 equal pairs/45 published matches/all 297 prior hashes preserved; bp-7ni untouched.
+
+### Pass 21 - 2026-11-01 - 680ea61 (bp-9fo closed)
+Direct CC call/ret closures preserve typed pointer/integer arguments, pointer/integer/void returns, shared memory and nested/recursive frames (§14.1/§17.4; ISA §4.1/§7.4).
+Two probes per major cover nested fastcc calls, loops, mutual/root recursion and heap/global restoration: eight complete-state reversals and four unbounded CC vectors (§9.3), with recognised/materialised evidence.
+Fresh marked-C -> published runtimes + pinned arith -> lto<O3> passes linked S1–S5, then production stops at §14.8 switch (%104/%113); filed bp-bux; conditional rung-2 gate not run.
+One full gate exit 0: 66/66/0/0/0 each, 924/924 and 792/792 cells; 299 equal object pairs, 45 published matches, all 297 previous hashes preserved; bp-7ni untouched.

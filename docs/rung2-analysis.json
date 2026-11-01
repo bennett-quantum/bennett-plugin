@@ -838,5 +838,8 @@
       ],
       "input_sha256": "df47121a9b30523f3e06ea554fdeeaf191f63ece2c1834e1648b275b3ace8be2"
     }
-  }
+  },
+  "cc_calls_code_commit": "680ea61a824cd946e09824ffb85fdaa6f0818f43",
+  "cc_calls_next_frontier": "bp-bux",
+  "cc_calls_rung2_gate_run": false
 }

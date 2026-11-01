@@ -1,13 +1,14 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "bp-tav",
+    "name": "bp-9fo",
     "date": "2026-11-01",
     "commits": [
-      "0f90deb13fc7b0b1e30190d522723dc5aba7f2bb"
+      "680ea61a824cd946e09824ffb85fdaa6f0818f43",
+      "6571074f2eda2b56f5bba30d2c15de83c3110fb3"
     ],
-    "code_head": "0f90deb13fc7b0b1e30190d522723dc5aba7f2bb",
-    "recorded_at": "2026-11-01T08:59:22+00:00",
+    "code_head": "6571074f2eda2b56f5bba30d2c15de83c3110fb3",
+    "recorded_at": "2026-11-01T09:39:34+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
@@ -18,8 +19,8 @@
       "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
     },
     "plugin_sha256": {
-      "18": "7caf66e34f3b78e99a35f8cbde4b3b2157d7edaf629b8ffde1f439439b0a805b",
-      "23": "cf65a226a39d76690e24706d028f1c8039929bee8c3c8a6dd59c48cd1d3cf681"
+      "18": "c7a1309706236cab549e0283f96e588986e9706299ccf79f50d0a2689071a820",
+      "23": "9a6aa6272f5c206bd151f6700e4ca6a370dfb4ad09702c683a8549b3fdddf6d1"
     },
     "gate": {
       "command": "scripts/gate",
@@ -46,7 +47,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 10.04381939501036,
+          "seconds": 10.559008119991631,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%251) in @ht_demo_grow (milestone 1) at   %251 = icmp eq i64 %250, %0\n"
         },
@@ -839,6 +840,412 @@
             }
           ]
         },
+        "cc-calls": {
+          "cases": 2,
+          "passed": 2,
+          "evidence": [
+            {
+              "case": "cc-calls",
+              "ok": true,
+              "recognised_sha256": "b9043da2d291bc60528cf495b708a6c8b2a2179650b5e18e694023eeb0870e14",
+              "materialised_sha256": "c3e7ecb54663d936443f02ff3ca72d0a7a9757b7c07ccc385621eef3d5e1412d",
+              "materialised_verified": true,
+              "object_sha256": "96aac0f3ea8906475c67fd632dc8e177bf959b534b2085d937cc8f2382fb0f07",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": 0,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "0"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 23,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": 2,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "2"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 47,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 9,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "9"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 95,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 35,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,128,4096,2",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 7))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "01812b68c4a33932faaf0d45b5b7a8d69e1d4a9a72c229d95012702b61fba5a0",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,128,1,32",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 7))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "01812b68c4a33932faaf0d45b5b7a8d69e1d4a9a72c229d95012702b61fba5a0",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "cc-self-call",
+              "ok": true,
+              "recognised_sha256": "58bc20c330a67e122364e72ef281e21852b09d9f0dd2eee6404141214044611c",
+              "materialised_sha256": "552f80852a2bad0c8ee8ba68879be21a6652962ef2a272330157566b7c18a070",
+              "materialised_verified": true,
+              "object_sha256": "06a2ff062de75bd9bb396b302516cd47529324dbeda1173934bf80c2f5e934f0",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": 17,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "17"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 9,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": 18,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "18"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 22,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 23,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "23"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 48,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 45,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 100,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,0,4096,2",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "49ba52916582be95f5411079e76a43d0db7065df99ed71211937334b74bde6e3",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 100,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,0,1,32",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "49ba52916582be95f5411079e76a43d0db7065df99ed71211937334b74bde6e3",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 100,
+                    "tape": []
+                  }
+                }
+              ]
+            }
+          ]
+        },
         "softfloat": {
           "cases": 90,
           "passed": 90,
@@ -983,7 +1390,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 6.538256769999862,
+          "seconds": 7.265867643000092,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%258) in @ht_demo_grow (milestone 1) at   %258 = icmp eq i64 %257, %0\n"
         },
@@ -1769,6 +2176,412 @@
                     "run_state": "CLOSED",
                     "status": "FAILED",
                     "steps": 74,
+                    "tape": []
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "cc-calls": {
+          "cases": 2,
+          "passed": 2,
+          "evidence": [
+            {
+              "case": "cc-calls",
+              "ok": true,
+              "recognised_sha256": "b9043da2d291bc60528cf495b708a6c8b2a2179650b5e18e694023eeb0870e14",
+              "materialised_sha256": "65274997e8bceabc308e13a906f5758d98faaa6533db056d4472be6a7316a560",
+              "materialised_verified": true,
+              "object_sha256": "96aac0f3ea8906475c67fd632dc8e177bf959b534b2085d937cc8f2382fb0f07",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": 0,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "0"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 23,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": 2,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "2"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 47,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 9,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "9"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 95,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 35,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,128,4096,2",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 7))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "01812b68c4a33932faaf0d45b5b7a8d69e1d4a9a72c229d95012702b61fba5a0",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,128,1,32",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "3c7fdd43d5c1678aa53fbe22b21350c9d8b7884ac5cd1b898aa17388d693861c",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Int(64, 7))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "01812b68c4a33932faaf0d45b5b7a8d69e1d4a9a72c229d95012702b61fba5a0",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "35"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 191,
+                    "tape": []
+                  }
+                }
+              ]
+            },
+            {
+              "case": "cc-self-call",
+              "ok": true,
+              "recognised_sha256": "58bc20c330a67e122364e72ef281e21852b09d9f0dd2eee6404141214044611c",
+              "materialised_sha256": "1f7cc2fc578332f41fdab32d25858d73cce975758c0b710c50fa1416d8da553b",
+              "materialised_verified": true,
+              "object_sha256": "06a2ff062de75bd9bb396b302516cd47529324dbeda1173934bf80c2f5e934f0",
+              "runs": [
+                {
+                  "input": 0,
+                  "expected": 17,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "17"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 9,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 1,
+                  "expected": 18,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "18"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 22,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 3,
+                  "expected": 23,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "23"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 48,
+                    "tape": []
+                  }
+                },
+                {
+                  "input": 7,
+                  "expected": 45,
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": true,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": null,
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "memory_equals_entry": true,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": true,
+                    "run_state": "CLOSED",
+                    "status": "REVERSED",
+                    "steps": 100,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,0,4096,2",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "49ba52916582be95f5411079e76a43d0db7065df99ed71211937334b74bde6e3",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 100,
+                    "tape": []
+                  }
+                },
+                {
+                  "budget": "100000,0,1,32",
+                  "result": {
+                    "budgets": [],
+                    "clock": 0,
+                    "console": "",
+                    "console_hex": "",
+                    "effect_tape_length": 0,
+                    "entry": "top",
+                    "entry_memory_digest": "24f9ad5299e9b1fd5c392e938c44281f3f8d7357310eb20b488d9fcc7801de25",
+                    "equals_entry": false,
+                    "fault": null,
+                    "faults": [],
+                    "first_difference": "instances of (0, \"v0\"): None differs from Some(Qreg(1))",
+                    "host_requests": [],
+                    "measurements": [],
+                    "memory_digest": "49ba52916582be95f5411079e76a43d0db7065df99ed71211937334b74bde6e3",
+                    "memory_equals_entry": false,
+                    "results": [
+                      {
+                        "type": "i64",
+                        "value": "45"
+                      }
+                    ],
+                    "reversed": false,
+                    "run_state": "CLOSED",
+                    "status": "COMPLETED",
+                    "steps": 100,
                     "tape": []
                   }
                 }
@@ -2599,13 +3412,195 @@
           ]
         }
       },
-      "allocator_fresh_after_utc": "2026-11-01T08:34:14.292253+00:00"
+      "allocator_fresh_after_utc": "2026-11-01T08:34:14.292253+00:00",
+      "cc_calls_after_utc": "2026-11-01T09:11:00.920102+00:00",
+      "cc_calls_after": {
+        "18": {
+          "major": 18,
+          "plugin_sha256": "c7a1309706236cab549e0283f96e588986e9706299ccf79f50d0a2689071a820",
+          "source_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+          "runtimes_sha256": "5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88",
+          "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+          "stages": [
+            {
+              "stage": "frontend",
+              "argv": [
+                "/usr/lib/llvm-18/bin/clang",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/input.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.1831941900018137,
+              "diagnostic": ""
+            },
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.03310519400110934,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.08857606099627446,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/postlink.bc",
+                "-disable-output",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 12.000748422011384,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/postlink.bc",
+                "-disable-output",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-18/out"
+              ],
+              "exit": 1,
+              "seconds": 25.715539842,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %104, label %116 [\n    i64 -9223372036854775808, label %105\n    i64 -9223372036854775807, label %113\n  ]\n"
+            }
+          ],
+          "input_sha256": "6c32f95f8ca23bc317cc927964a226194a69bfc2beb51a7e1a373127c625baab"
+        },
+        "23": {
+          "major": 23,
+          "plugin_sha256": "9a6aa6272f5c206bd151f6700e4ca6a370dfb4ad09702c683a8549b3fdddf6d1",
+          "source_sha256": "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189",
+          "runtimes_sha256": "5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b",
+          "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+          "stages": [
+            {
+              "stage": "frontend",
+              "argv": [
+                "/usr/lib/llvm-23/bin/clang",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-2/fixtures/hashtable_marked.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/input.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.15523617999861017,
+              "diagnostic": ""
+            },
+            {
+              "stage": "link",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/linked.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.030728993995580822,
+              "diagnostic": "warning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/bennett-runtimes.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\nwarning: Linking two modules of different target triples: '/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc' is 'x86_64-unknown-linux-gnu' whereas 'llvm-link' is 'x86_64-pc-linux-gnu'\n\n"
+            },
+            {
+              "stage": "lto",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-passes=lto<O3>",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/postlink.bc"
+              ],
+              "exit": 0,
+              "seconds": 0.08654417601064779,
+              "diagnostic": ""
+            },
+            {
+              "stage": "analysis",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/postlink.bc",
+                "-disable-output",
+                "-bennett-analysis-only",
+                "-bennett-report=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/analysis.json"
+              ],
+              "exit": 0,
+              "seconds": 22.798732255992945,
+              "diagnostic": "bennett: analysis-only: S1-S5 complete; no production artefact\n"
+            },
+            {
+              "stage": "production",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-plugin/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/postlink.bc",
+                "-disable-output",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/bp-9fo/fresh-23/out"
+              ],
+              "exit": 1,
+              "seconds": 29.330844213007367,
+              "diagnostic": "bennett: unimplemented: \u00a717.4 production CC instruction (milestone 1) at   switch i64 %113, label %125 [\n    i64 -9223372036854775808, label %114\n    i64 -9223372036854775807, label %122\n  ]\n"
+            }
+          ],
+          "input_sha256": "df47121a9b30523f3e06ea554fdeeaf191f63ece2c1834e1648b275b3ace8be2"
+        }
+      },
+      "cc_calls_code_commit": "680ea61a824cd946e09824ffb85fdaa6f0818f43",
+      "cc_calls_next_frontier": "bp-bux",
+      "cc_calls_rung2_gate_run": false
     },
     "object_pairs": {
-      "count": 297,
+      "count": 299,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 212,
+      "production_cross_major_pairs": 214,
       "preserved_previous_objects": 297,
       "rows": [
         {
@@ -4388,6 +5383,18 @@
           "object": "aggregate-rows/aggregate-wide-return/production/top/oracle-0/ref.bennett",
           "bytes": 287261,
           "sha256": "f2c9cd7c41ab9b7d42f7b20ca40b2eb7fb823dc0e935912535a69dc9705be137",
+          "published_golden": null
+        },
+        {
+          "object": "cc-calls/cc-calls/out/top/launch.bennett",
+          "bytes": 2717,
+          "sha256": "96aac0f3ea8906475c67fd632dc8e177bf959b534b2085d937cc8f2382fb0f07",
+          "published_golden": null
+        },
+        {
+          "object": "cc-calls/cc-self-call/out/top/launch.bennett",
+          "bytes": 1081,
+          "sha256": "06a2ff062de75bd9bb396b302516cd47529324dbeda1173934bf80c2f5e934f0",
           "published_golden": null
         }
       ]
