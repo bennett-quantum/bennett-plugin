@@ -20,6 +20,8 @@ else()
   add_library(BennettPlugin MODULE src/BennettPlugin.cpp src/Analysis.cpp src/Scalar.cpp src/Normalise.cpp src/SoftFloat.cpp src/Wide.cpp src/Integer.cpp src/Memory.cpp src/Residual.cpp src/Production.cpp src/Snapshot.cpp)
   target_include_directories(BennettPlugin SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
   target_compile_definitions(BennettPlugin PRIVATE ${LLVM_DEFINITIONS})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/SPEC_VERSIONS.toml")
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/SPEC_VERSIONS.toml" spec_pins)
   foreach(field path sha256)
     string(REGEX MATCH "llvm${LLVM_VERSION_MAJOR}_${field} = \"([^\"]+)\"" arith_pin "${spec_pins}")
