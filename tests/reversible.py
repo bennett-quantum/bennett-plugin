@@ -37,7 +37,7 @@ def main():
    value=json.loads(run([REF,'run-program',obj,'main','--budget','1000000,131072,4096,32','--replies',replies]).stdout)
    assert value['status']=='FAILED' and value['console_hex']=='',value
    assert 'unlisted-op' in (d/'out/main/build.json').read_text()
-   assert any(e['source']=='dialect-0.2.10:N15' and 'unlisted-op' in e['reason'] for e in json.loads((d/'out/main/coverage.json').read_text())['entries'])
+   assert any(e['source']=='dialect-0.2.10:N31' and 'unlisted-op' in e['reason'] for e in json.loads((d/'out/main/coverage.json').read_text())['entries'])
    replies.write_text(json.dumps([dict(service='bennett.argv',payload='00'*20,reply='00'*20)]))
   rows.append(dict(case=case,ok=True,source_sha256=sha(source),recognised_sha256=sha(d/'recognised.json'),materialised_sha256=sha(d/'out/device.bc'),materialised_verified=True,object_sha256=sha(obj),runs=executions))
  # §17.6: budget checks precede each source effect and the final return.

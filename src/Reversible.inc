@@ -7,7 +7,7 @@ static void normaliseRAsm(Function &f, json::Array &coverage) {
     auto text=std::regex_replace(StringRef(assembly->getAsmString()).str(),std::regex("[;\\s]+")," ");text=StringRef(text).trim().str();
     bool erased=c->getType()->isVoidTy() && (text.empty() || text=="pause" || text=="nop");
     coverage.push_back(json::Object{{"function",f.getName()},{"asm",text},{"constraints",assembly->getConstraintString()},
-      {"source","dialect-0.2.10:N15"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
+      {"source","dialect-0.2.10:N31"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
     if(!erased) {
       IRBuilder<> b(c);auto fault=f.getParent()->getOrInsertFunction("__bennett_nz_fault",b.getVoidTy(),b.getInt64Ty());
       auto *trap=b.CreateCall(fault,{b.getInt64(8)});
@@ -54,7 +54,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   };
   for(unsigned k=0;k<closure.size();++k) {
     auto *f=closure[k];if(!f || !seen.insert(f).second)continue;
-    normaliseRAsm(*f,asmCoverage);normaliseScalar(*f);materialiseFPBits(*f);
+    normaliseScalar(*f);materialiseFPBits(*f);normaliseRAsm(*f,asmCoverage);
     for(auto &i:instructions(*f))if(auto *call=dyn_cast<IntrinsicInst>(&i);call && call->getType()->isVectorTy())
       unimplemented("§12 N21/N27 vector intrinsic lane materialisation",2,call);
     for(auto &i:instructions(*f))for(auto &v:i.operands())address(v);
@@ -131,7 +131,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     for(auto &entry:*report.getArray("entries")) {
       auto *entryObject=entry.getAsObject();auto *at=entryObject->getArray("point");
       if((*at)[0].getAsString()==identity && (*at)[1].getAsString()==p->getString("block") && (*at)[2].getAsInteger()==p->getInteger("ordinal")) {
-        (*entryObject)["source"]="dialect-0.2.10:N15";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
+        (*entryObject)["source"]="dialect-0.2.10:N31";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
       }
     }
   }

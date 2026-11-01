@@ -182,7 +182,7 @@ Full published-musl hello reaches a six-round S1–S5 fixpoint on both majors; p
 Runtime publication SHAs 6c1741c4… / a63f0421… and pinned arith publications used without repinning; next production frontier recorded independently of recognition.
 
 ### Pass 25 - 2026-11-01 - bp-5t9; bp-ivy remains open
-R asm rows trap only when reached with named N15 coverage; indirect callback trees and transitive global/function relocation share the production layout (§14.2/§19.5).
+R asm rows trap only when reached with named N31 coverage; indirect callback trees and transitive global/function relocation share the production layout (§14.2/§19.5).
 Both majors: console/nested-exit/callback/asm forward + reset and source-budget 0/1/2 prefixes; host argv reply and host/device LLVM verification. General argv/envp byte storage remains explicit bp-ivy mechanics.
 Full musl: six-round recognition both; LLVM18 next N21/N27 vector fshl is bp-ozp; LLVM23 emits verified artifacts and passes release ISA check but exploratory run faults7 at step1160 before console output.
 Whole-musl startup/normal-return exit, source runtime budgets and general argv remain bp-ivy obligations; no full rung3 execution claim. Full gate and consumer receipt pending.
