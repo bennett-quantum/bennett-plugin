@@ -1420,6 +1420,35 @@ void Analysis::step(Instruction &i) {
       for (Value *v : p->incoming_values())
         if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); }))
           a.top = true;
+    // PT2: a full-width constant GEP recurrence denotes the complete modular
+    // additive orbit. Solve it as a residue class, rather than allocating one
+    // memory slot per iteration (musl strlen/memcpy pointer induction).
+    if(p->getType()->isPointerTy()) {
+      auto pw=M.getDataLayout().getPointerTypeSizeInBits(p->getType());
+      if(pw==M.getDataLayout().getIndexTypeSizeInBits(p->getType())) {
+        std::set<Value *> path;unsigned zeros=pw;
+        std::function<void(Value *,APInt)> orbit=[&](Value *v,APInt delta) {
+          if(v==p) {if(!delta.isZero())zeros=std::min(zeros,delta.countr_zero());return;}
+          if(!path.insert(v).second)return;
+          if(auto *g=dyn_cast<GEPOperator>(v)) {
+            APInt offset(pw,0);if(g->accumulateConstantOffset(M.getDataLayout(),offset))orbit(g->getPointerOperand(),delta+offset);
+          } else if(auto *q=dyn_cast<PHINode>(v))for(Value *x:q->incoming_values())orbit(x,delta);
+          else if(auto *s=dyn_cast<SelectInst>(v)) {orbit(s->getTrueValue(),delta);orbit(s->getFalseValue(),delta);}
+          path.erase(v);
+        };
+        for(Value *v:p->incoming_values())orbit(v,APInt(pw,0));
+        if(zeros<pw && zeros<63) {
+          AV closure;closure.top=a.top;
+          for(auto atom:a.atoms) {
+            if(atom.kind==Atom::Ptr && atom.object && !atom.stride) {
+              atom.stride=int64_t(1)<<zeros;atom.offset=uint64_t(atom.offset)&(atom.stride-1);
+            }
+            closure.merge(AV{{atom},false});
+          }
+          numericalUnknown(closure);a=std::move(closure);
+        }
+      }
+    }
     // Exact finite additive closure, including small counters: enumerate the
     // subgroup once instead of waiting one whole-program round per element.
     if (!a.top && p->getType()->isIntegerTy()) {
@@ -1774,7 +1803,7 @@ void Analysis::run() {
     auto &s=slots[n];slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);indexSlot(n);
   }
   std::set<Function *> host,entries;
-  for(Function &f:M)if(!f.isDeclaration() && !f.hasLocalLinkage())host.insert(&f);
+  for(Function &f:M)if(!ReversibleEntry && !f.isDeclaration() && !f.hasLocalLinkage())host.insert(&f);
   if(Entry)entries.insert(Entry);
   auto seedParameters=[&](Function *f,bool boundary) {
     if(!f || f->isDeclaration())return;
@@ -1816,7 +1845,7 @@ void Analysis::run() {
       if(auto *g=call->getCalledFunction())for(unsigned p:regionOperands(g->getName()))
         for(auto *candidate:candidates(call->getArgOperand(p)))
           if(!candidate->isDeclaration())changed|=entries.insert(candidate).second;
-    for(auto *f:entries)seedParameters(f,true);
+    for(auto *f:entries)seedParameters(f,!(ReversibleEntry && f==Entry));
   };
   unsigned rounds = 0;
   do {
@@ -1864,7 +1893,7 @@ void Analysis::run() {
   for (Function &f : M)
     if (!f.isDeclaration()) {
       if (host.count(&f))tiers[&f].insert("H");
-      if (&f==Entry)tiers[&f].insert("CC");
+      if (&f==Entry)tiers[&f].insert(ReversibleEntry?"R":"CC");
       for (Argument &a : f.args())
         if (get(&a).roots())
           tiers[&f].insert("CC");
@@ -2036,6 +2065,9 @@ void Analysis::checkHandles() {
           }
 }
 void Analysis::checkRegions() {
+  if(ReversibleEntry)for(auto &f:M)if(tiers[&f].count("R"))for(auto &i:instructions(f))
+    if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction();g && g->getName()=="__bennett_measure")
+      fail("BD-E-REVERSIBLE-MEASURE","§19.2/§7.5(b)",c);
   bool defer = false;
   if (auto *md = dyn_cast_or_null<MDString>(
           M.getModuleFlag("bennett.measure_in_unitary")))

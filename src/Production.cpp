@@ -10,6 +10,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SHA256.h"
@@ -195,6 +196,39 @@ struct Entry {
   std::map<const BasicBlock *, std::string> blocks;
   std::set<const Value *> descriptorObjects;
   bool memoryDescriptors = false;
+  bool rTier = false;
+  bool argvService = false;
+  std::set<std::string> effectModels;
+  std::string diskImage;
+  GlobalVariable *rSteps = nullptr, *rEH = nullptr;
+  void rReturn() {
+    for(auto &p:localMemory)rows.push_back("free "+p);
+    std::vector<std::string> values;
+    for(auto &t:resultTypes) {
+      auto z=number(0);if(t=="ptr")z=emit("ptr","inttoptr "+z);
+      else if(t!="i64")z=emit(t,"trunc."+t+" "+z);
+      values.push_back(z);
+    }
+    rows.push_back("ret"+(values.empty()?"":" "+join(values," ")));
+  }
+  void propagateExit() {
+    if(!rTier || !rEH)return;
+    auto p=operand(rEH),active=emit("i32","load.i32 "+p);
+    auto four=operand(ConstantInt::get(Type::getInt32Ty(m.getContext()),4));
+    auto exiting=emit("i1","icmp.eq "+active+" "+four);
+    auto id=std::to_string(dispatchBlock++);
+    rows.push_back("br "+exiting+" ^exit"+id+"() ^continue"+id+"()");
+    rows.push_back("^exit"+id+"():");rReturn();rows.push_back("^continue"+id+"():");
+  }
+  void countRStep() {
+    auto p=operand(rSteps),left=emit("i64","load.i64 "+p),zero=number(0);
+    auto exhausted=emit("i1","icmp.eq "+left+" "+zero);
+    auto id=std::to_string(dispatchBlock++);
+    rows.push_back("br "+exhausted+" ^budget"+id+"() ^step"+id+"()");
+    rows.push_back("^budget"+id+"():");rows.push_back("trap");
+    rows.push_back("^step"+id+"():");auto one=number(1),remaining=emit("i64","sub "+left+" "+one);
+    rows.push_back("store.i64 "+p+" "+remaining);
+  }
   std::set<std::string> ccGlobals;
   uint64_t ccHeapBytes = 0, allocatedBytes = 0;
   const Value *activeRoot = nullptr;
@@ -1184,6 +1218,10 @@ struct Entry {
           record = descriptorObjects.count(al);
         if ((!memoryDescriptors && record) || isa<PHINode>(i))
           continue;
+        if(rTier && !isa<DbgInfoIntrinsic>(i)) {
+          auto *call=dyn_cast<CallBase>(&i);auto *target=call?call->getCalledFunction():nullptr;
+          if(!target || (!target->getName().starts_with("llvm.dbg.") && !target->getName().starts_with("llvm.lifetime.") && !target->getName().starts_with("__bennett_nz_rstep")))countRStep();
+        }
         if (auto *c = dyn_cast<CallBase>(&i)) {
           auto *g = resolve(c->getCalledOperand());
           if (!g)
@@ -1194,11 +1232,17 @@ struct Entry {
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
+          if(rTier && n.starts_with("__bennett_effect_")) {
+            auto suffix=n.drop_front(StringRef("__bennett_effect_").size());auto parts=suffix.split('_');
+            effectModels.insert(parts.first.str());std::vector<std::string> args;
+            for(auto &v:c->args())args.push_back(operand(v));
+            rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));continue;
+          }
           if (n == "__bennett_nz_fault") {
             // Newly materialised allocator closures report the explicit code
             // through §11.5 before trapping. The payload is private storage,
             // not an extra logical heap allocation on a failing path.
-            if (f.hasFnAttribute("bennett.cc.allocator")) {
+            if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
               allocatorFaultService = true;
               auto *payload = m.getGlobalVariable("__bennett_cc_fault_payload",true);
               if (!payload) payload = new GlobalVariable(m,Type::getInt64Ty(m.getContext()),false,
@@ -1249,6 +1293,7 @@ struct Entry {
             auto call="call @"+ccNames->at(g)+(args.empty()?"":" "+join(args," "));
             if(c->getType()->isVoidTy())rows.push_back(call);
             else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
+            propagateExit();
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
@@ -1403,7 +1448,7 @@ struct Entry {
           auto x = operand(xv), y = operand(yv), d = fresh("i1");
           // Keep this pass local to the newly materialised numerical closure;
           // unrelated CC objects retain their recorded §17.4 lowering.
-          if((f.hasFnAttribute("bennett.cc.softfloat") || f.hasFnAttribute("bennett.cc.softfloat.callee")) &&
+          if((rTier || f.hasFnAttribute("bennett.cc.softfloat") || f.hasFnAttribute("bennett.cc.softfloat.callee")) &&
              xv->getType()->isPointerTy() && !tagged(a.get(xv)) && !tagged(a.get(yv))) {
             auto t="i"+std::to_string(width(xv->getType()));
             x=emit(t,"ptrtoint."+t+" "+x);y=emit(t,"ptrtoint."+t+" "+y);
@@ -1648,11 +1693,17 @@ std::string launchObject(Entry &e, json::Object &record,
       {"globals",json::Object{}},{"heap_base",4096},{"heap_limit_max",int64_t(heap)},
       {"interface_regions",json::Object{}},{"null_size",4096},{"ptr_width",e.m.getDataLayout().getPointerSizeInBits()}}));
   }
-  if(e.allocatorFaultService) {
+  if(e.allocatorFaultService || e.argvService) {
     auto devices=sections.count("devices")?parse(sections["devices"]):json::Value(json::Object{{"models",json::Object{}},{"services",json::Object{}}});
     auto *services=devices.getAsObject()->getObject("services");
     if(!services) {(*devices.getAsObject())["services"]=json::Object{};services=devices.getAsObject()->getObject("services");}
-    (*services)["bennett.fault"]=json::Object{{"version","0.2.10"}};
+    if(e.allocatorFaultService)(*services)["bennett.fault"]=json::Object{{"version","0.2.10"}};
+    if(e.argvService)(*services)["bennett.argv"]=json::Object{{"version","0.2.10"}};
+    if(e.argvService) {
+      auto *models=devices.getAsObject()->getObject("models");
+      for(auto &model:e.effectModels)(*models)[model]=json::Object{{"version","0.8"}};
+      if(!e.diskImage.empty())(*models)["block"]=json::Object{{"version","0.8"}};
+    }
     sections["devices"]=jcs(devices);
   }
   auto symbols = sections.count("symbols") ? parse(sections["symbols"])
@@ -1897,7 +1948,7 @@ json::Object completeCoverage(StringRef object) {
   SmallVector<StringRef> lines; body.split(lines, '\n');
   std::string symbol, block, rule; unsigned ordinal = 0;
   for (auto line : lines) {
-    if (line.starts_with("fn cc @") || line.starts_with("oracle @") ||
+    if (line.starts_with("fn cc @") || line.starts_with("fn r @") || line.starts_with("oracle @") ||
         line.starts_with("lproc @") || line.starts_with("action @")) {
       symbol = line.split('@').second.split(' ').first.str();
       rule = line.starts_with("fn cc") ? "17.4" : line.starts_with("action") ? "18.3" : "16.4";
@@ -1975,10 +2026,11 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
   auto *bs = record.getArray("budgets");
   status(
       b.CreateCall(api("bennett_args_new", i32, {size, ptr}),
-                   {ConstantInt::get(size, f.arg_size() + bs->size()), args}));
+                   {ConstantInt::get(size, (record.getString("mode")=="reversible"?0:f.arg_size()) + bs->size()), args}));
   auto *av = b.CreateLoad(ptr, args);
   unsigned index = 0;
   for (Argument &arg : f.args()) {
+    if(record.getString("mode")=="reversible")break;
     auto w = arg.getType()->getIntegerBitWidth(), bytes = (w + 7) / 8;
     auto *storage = slot(IntegerType::get(ctx, bytes * 8));
     auto *value = b.CreateZExtOrTrunc(&arg, IntegerType::get(ctx, bytes * 8));
@@ -2049,6 +2101,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 }
 
 } // namespace
+#include "Reversible.inc"
 void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
                      StringRef budgetDefault, StringRef budgetFile) {
   // Finite source widths become distinct static roots before register-file

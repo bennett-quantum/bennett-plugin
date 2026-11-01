@@ -20,6 +20,9 @@ cl::opt<std::string> Dialect("bennett-dialect",
                              cl::desc("Required exact dialect version"));
 cl::opt<std::string> ISA("bennett-isa", cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
+cl::opt<std::string> Tier("bennett-tier");
+cl::opt<std::string> ProgramEntry("bennett-entry");
+cl::opt<std::string> Disk("bennett-disk");
 cl::opt<std::string> BudgetTableFile("bennett-budgets",cl::init(""));
 cl::opt<std::string> BudgetDefault("bennett-budget-default",cl::init("1048576,1048576,65536,256,65536"));
 cl::opt<std::string> Report("bennett-report");
@@ -321,7 +324,11 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       return PreservedAnalyses::none();
     }
     if(!AnalysisOnly || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m);
-    Analysis a(m);
+    if(!Tier.empty() && Tier!="reversible")fail("input","§19.2 expected tier reversible");
+    if(Tier.empty() && (!ProgramEntry.empty() || !Disk.empty()))fail("input","§19.2 entry/disk require reversible tier");
+    auto *rEntry=Tier.empty()?nullptr:m.getFunction(ProgramEntry);
+    if(!Tier.empty() && (!rEntry || rEntry->isDeclaration()))fail("input","§19.2 whole-program entry missing");
+    Analysis a(m,rEntry,!Tier.empty());
     a.run();
     a.checkHandles();
     a.checkRegions();
@@ -408,6 +415,11 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       if(!objects)fail("input","descriptor-reference found no oracle shape");
       errs()<<"bennett: descriptor reference objects only; CC launches remain unimplemented: §17.4 (milestone 3)\n";
       return PreservedAnalyses::none();
+    }
+    if(rEntry) {
+      lowerReversible(m,a,*rEntry,Output,StackCells,BudgetDefault,BudgetTableFile,Disk);
+      errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n";
+      std::exit(3);
     }
     for (Function &f : m)
       if (a.tiers[&f].count("R"))

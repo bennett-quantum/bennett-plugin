@@ -60,7 +60,16 @@ void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
         canonical+=rest.substr(last,it->position()-last)+"@"+replacement;last=it->position()+it->length();
       }
       canonical+=rest.substr(last);
-      envelopes+="isa=0.8\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+fn.first+"\n"+canonical+"\n"+memory+refs;
+      std::string devices;
+      if(e.argvService && sections.count("devices")) {
+        auto document=parse(sections.at("devices"));std::set<std::string> used;
+        std::regex effect(R"(effect ([a-z]+)\.)"),service(R"(hostcall ([A-Za-z_0-9./]+) )");
+        for(std::sregex_iterator it(rest.begin(),rest.end(),effect),end;it!=end;++it)used.insert((*it)[1]);
+        for(std::sregex_iterator it(rest.begin(),rest.end(),service),end;it!=end;++it)used.insert((*it)[1]);
+        for(auto &device:used)for(auto category:{"models","services"})
+          if(auto *entries=document.getAsObject()->getObject(category))if(auto *value=entries->get(device))devices+="device "+device+" "+jcs(*value)+"\n";
+      }
+      envelopes+="isa=0.8\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+fn.first+"\n"+canonical+"\n"+memory+devices+refs;
     }
     auto digest=hash(envelopes);
     for(unsigned i=0;i<group.size();++i)hashes[group[i]]=cyclic?hash(digest+":"+std::to_string(i)):digest;

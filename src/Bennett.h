@@ -46,6 +46,7 @@ struct Slot {
 class Analysis {
   llvm::Module &M;
   llvm::Function *Entry;
+  bool ReversibleEntry;
   bool changed = false;
   bool virtualFP = false;
   std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> fpTransfers;
@@ -82,7 +83,7 @@ public:
   // End the lifetime of private S2 graphs before rewriting their source IR.
   // The caller must rerun analysis before using transfer-derived results.
   void releaseTransferGraphs();
-  explicit Analysis(llvm::Module &m, llvm::Function *entry = nullptr) : M(m), Entry(entry) {}
+  explicit Analysis(llvm::Module &m, llvm::Function *entry = nullptr, bool reversible = false) : M(m), Entry(entry), ReversibleEntry(reversible) {}
   AV get(const llvm::Value *);
   AV read(llvm::Value *, uint64_t, llvm::Type *);
   AV readAt(llvm::CallBase &, llvm::Value *, uint64_t, llvm::Type *);
@@ -94,6 +95,7 @@ public:
   void checkRegions();
   llvm::json::Object report();
 };
+void lowerReversible(llvm::Module &, Analysis &, llvm::Function &, llvm::StringRef, unsigned, llvm::StringRef, llvm::StringRef, llvm::StringRef);
 void lowerProduction(llvm::Module &, Analysis &, llvm::StringRef, unsigned, llvm::StringRef, llvm::StringRef);
 std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
