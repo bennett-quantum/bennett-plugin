@@ -5,7 +5,7 @@ from pathlib import Path
 from contracts import ROOT as R, SIBLINGS
 from production import REF as DEBUG_REF
 REF = DEBUG_REF.parent.parent / 'release/bennett-isa-ref'
-RUNTIME_SHA = {18:'5eff8d60621e2f999ab32508845ef8585ed6298e048466e2025f4b6f390d1e88',23:'5c630b9b0e60e9d7aba6777885809c7e5194d4226c4bb5e8bee9df26b1f0bf8b'}
+RUNTIME_SHA = {18:'6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d',23:'a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632'}
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--major',type=int,required=True);a=ap.parse_args()
