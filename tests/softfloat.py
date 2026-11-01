@@ -211,8 +211,10 @@ declare void @__bennett_qfree(ptr)
    check(f'published-native-wide-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
  # Real published production on both majors includes flattened aggregate rows.
  # Major-local probes are recorded separately from the byte-identical object suite.
+ # M2 imports the recursive seven-format/libm closure. Keep the same extended
+ # S2 allowance as direct CC below; total production includes two L builds.
  realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)
- z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv)
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
  check('published-production-link',z.returncode==0,z.stderr)
  if z.returncode==0:
   obj=realout/'top/oracle-0/ref.bennett';z=run([REF,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
@@ -222,7 +224,7 @@ declare void @__bennett_qfree(ptr)
    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
    rows[-1]['result']=data
   source=R/'tests/probes/cc-softfloat-oracle.ll';recognised=realout/'oracle-recognised.json'
-  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)))
+  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
   check('published-production-recognition',z.returncode==0,z.stderr)
   if z.returncode==0:rows[-1].update(evidence(realout,source,recognised))
   # The production oracle launch retains all 64 input wires and both calls.

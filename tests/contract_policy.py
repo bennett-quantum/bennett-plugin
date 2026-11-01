@@ -42,6 +42,8 @@ for major in (18,23):
   os.environ.pop('BENNETT_ARITH_PINNED_ROOT',None)
   c.arith_path(major)
   manifest=c.arith_manifest(major)
+  pins=c.tomllib.loads((c.ROOT/'SPEC_VERSIONS.toml').read_text())['arith']
+  assert manifest['bitcode_sha256']==pins[f'llvm{major}_sha256']
   assert len(manifest['exports'])==1134, (major,len(manifest['exports']))
   names={row['name'] for row in manifest['exports']}
   assert {'__bennett_sf_add_ppcf128','__bennett_sf_sin_f128'} <= names
