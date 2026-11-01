@@ -1223,6 +1223,62 @@ struct Entry {
             auto yes = edge(br->getSuccessor(0), &bb), no = edge(br->getSuccessor(1), &bb);
             rows.push_back("br " + p + " " + yes + " " + no);
           }
+        } else if (auto *sw = dyn_cast<SwitchInst>(&i)) {
+          // §§14.8/16.4: unsigned sorted compare tree, not a jump table.
+          // Capture original-predecessor phi arguments before creating any
+          // synthetic block. ISA §3.4 transfers each tuple in parallel; this
+          // also preserves duplicate destinations and loop-carried swaps.
+          auto cond = operand(sw->getCondition());
+          auto fallback = edge(sw->getDefaultDest(), &bb);
+          std::vector<std::pair<APInt, std::string>> keys;
+          for (auto c : sw->cases())
+            keys.emplace_back(c.getCaseValue()->getValue(), edge(c.getCaseSuccessor(), &bb));
+          llvm::sort(keys, [](auto &a, auto &b) { return a.first.ult(b.first); });
+          std::vector<std::string> ids = {"^" + blocks[&bb] + "()"};
+          std::vector<std::vector<std::string>> chunks(1);
+          auto newBlock = [&]() {
+            unsigned n = ids.size();
+            ids.push_back("^" + blocks[&bb] + ".s" + std::to_string(n) + "()");
+            chunks.emplace_back();
+            return n;
+          };
+          std::function<void(int, int, unsigned)> tree = [&](int lo, int hi, unsigned cur) {
+            auto begin = rows.size();
+            auto save = [&]() {
+              chunks[cur].insert(chunks[cur].end(), rows.begin() + begin, rows.end());
+              rows.resize(begin);
+            };
+            if (hi < lo) {
+              rows.push_back("br " + fallback);
+            } else if (hi - lo + 1 <= 3) {
+              for (int j = lo; j <= hi; ++j) {
+                auto c = operand(ConstantInt::get(m.getContext(), keys[j].first));
+                auto t = fresh("i1");
+                rows.push_back(t + " = icmp.eq " + cond + " " + c);
+                unsigned next = j < hi ? newBlock() : 0;
+                rows.push_back("br " + t + " " + keys[j].second + " " + (j < hi ? ids[next] : fallback));
+                save(); cur = next;
+              }
+              return;
+            } else {
+              int mid = (lo + hi) / 2;
+              auto c = operand(ConstantInt::get(m.getContext(), keys[mid].first));
+              auto t = fresh("i1");
+              rows.push_back(t + " = icmp.ult " + cond + " " + c);
+              unsigned l = newBlock(), r = newBlock();
+              rows.push_back("br " + t + " " + ids[l] + " " + ids[r]);
+              save();
+              tree(lo, mid - 1, l); tree(mid, hi, r);
+              return;
+            }
+            save();
+          };
+          tree(0, int(keys.size()) - 1, 0);
+          // Text order follows creation order (L then R, then descendants).
+          for (unsigned n = 0; n < chunks.size(); ++n) {
+            if (n) rows.push_back(ids[n] + ":");
+            rows.insert(rows.end(), chunks[n].begin(), chunks[n].end());
+          }
         } else if (auto *b = dyn_cast<BinaryOperator>(&i)) {
           auto x = operand(b->getOperand(0)), y = operand(b->getOperand(1)),
                d = fresh("i" + std::to_string(width(b->getType())));
