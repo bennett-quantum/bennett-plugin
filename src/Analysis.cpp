@@ -1157,7 +1157,7 @@ bool Analysis::composite(Instruction &i) {
 // cycle with period >4096 therefore reaches normative TOP; this is exact
 // acceleration, not a precision-changing widening.
 static bool longAdditiveCycle(Value *value, Value *source,
-                              std::function<AV(Value *)> facts) {
+                              std::function<AV(Value *)> facts, bool bitwise = false) {
   // PT3 copy edges can hide an additive recurrence behind arbitrarily many
   // phis/selects (e.g. hashtable count -> exit phi -> header phi). Following
   // those edges is exact: every traversal adds the same constant modulo W.
@@ -1182,7 +1182,7 @@ static bool longAdditiveCycle(Value *value, Value *source,
         // bitwise identity already in the other operand's finite domain.
         // musl mode |= mode-1 starts with zero, so its abstract store equation
         // contains the complete -1 additive orbit even though runtime stops.
-        if(!found && (b->getOpcode()==Instruction::Or || b->getOpcode()==Instruction::Xor || b->getOpcode()==Instruction::And)) {
+        if(bitwise && !found && (b->getOpcode()==Instruction::Or || b->getOpcode()==Instruction::Xor || b->getOpcode()==Instruction::And)) {
           for(unsigned k=0;k<2 && !found;++k) {
             auto other=facts(b->getOperand(1-k));
             for(auto &atom:other.atoms)if(atom.kind==Atom::Int &&
@@ -1418,7 +1418,7 @@ void Analysis::step(Instruction &i) {
       for (Value *operand : b->operands())
         if (auto *l = dyn_cast<LoadInst>(operand);
             l && l->getPointerOperand() == s->getPointerOperand() &&
-            longAdditiveCycle(b, l, [&](Value *v) { return get(v); }) &&
+            longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry) &&
             !get(l).atoms.empty())
           written.top = true;
     store(written, get(s->getPointerOperand()),
@@ -1430,12 +1430,12 @@ void Analysis::step(Instruction &i) {
       a.merge(get(v));
     if (!a.atoms.empty())
       for (Value *v : p->incoming_values())
-        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); }))
+        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry))
           a.top = true;
     // PT2: a full-width constant GEP recurrence denotes the complete modular
     // additive orbit. Solve it as a residue class, rather than allocating one
     // memory slot per iteration (musl strlen/memcpy pointer induction).
-    if(p->getType()->isPointerTy()) {
+    if(ReversibleEntry && p->getType()->isPointerTy()) {
       auto pw=M.getDataLayout().getPointerTypeSizeInBits(p->getType());
       if(pw==M.getDataLayout().getIndexTypeSizeInBits(p->getType())) {
         std::set<Value *> path;unsigned zeros=pw;

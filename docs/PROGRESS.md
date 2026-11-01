@@ -177,7 +177,7 @@ Digest-checked BENNETT_ARITH_PINNED_ROOT relocates the immutable arith publicati
 Full gate and rung-3 receipt pending; no whole-musl success or full bp-ivy closure claimed.
 
 ### Pass 24 - 2026-11-01 - bp-loq
-S2 solves modular pointer recurrences through finite GEP indices and additive paths through bitwise identities; K=4096 and the default 30s budget unchanged.
+R-mode S2 solves modular pointer recurrences through finite GEP indices and additive paths through bitwise identities; K=4096 and the default 30s budget unchanged.
 Full published-musl hello reaches a six-round S1–S5 fixpoint on both majors; preceding raw PT2/PT7/PT4-PT5 time-budget failures retained in .tmp/r-hello-red*.log.
 Runtime publication SHAs 6c1741c4… / a63f0421… and pinned arith publications used without repinning; next production frontier recorded independently of recognition.
 
