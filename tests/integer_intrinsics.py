@@ -9,7 +9,10 @@ def run(args):
  z=subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=180);assert z.returncode==0,z.stderr;return z
 widths=[1,7,8,16,24,32,64,65,80,128,129,192,256,257,512]
 base=['smax','smin','umax','umin','abs','ctpop','ctlz','cttz','bitreverse','fshl','fshr','uadd.sat','usub.sat','sadd.sat','ssub.sat','sshl.sat','ushl.sat','uadd.with.overflow','usub.with.overflow','sadd.with.overflow','ssub.with.overflow','umul.with.overflow','smul.with.overflow','smul.fix','umul.fix','smul.fix.sat','umul.fix.sat','sdiv.fix','udiv.fix','sdiv.fix.sat','udiv.fix.sat']
-source=[];cases=[]
+# Use the native target layout throughout: clang must not introduce a different
+# wide-lane allocation stride after N21 chose scalar GEPs for an empty layout.
+layout=re.search(r'^target datalayout = .+$',run([tool+'clang','-S','-emit-llvm','-x','c','/dev/null','-o','-']).stdout,re.M)[0]
+source=[layout];cases=[];vector_cases=set()
 for n in widths:
  ops=base+(['bswap'] if n%16==0 else [])+(['scmp','ucmp','pdep','pext','clmul'] if a.major==23 else [])
  for op in ops:
@@ -32,9 +35,24 @@ for n in widths:
   elif op in ['scmp','ucmp']:body+=' store i8 %v,ptr %out,align 1\n ret i8 0 }'
   else:body+=f' store {t} %v,ptr %out,align 1\n ret i8 0 }}'
   source.append(body)
+  if n in [16,24,128,192]:
+   # Mixed lanes exercise N21 before N27, including packed i24 storage and
+   # aggregate overflow results. Scalar immargs stay scalar in each lane.
+   vector_cases.add((n,op));vt=f'<4 x {t}>';flagtype='<4 x i8>'
+   vret='{'+vt+',<4 x i1>}' if over else flagtype if op in ['scmp','ucmp'] else vt
+   vtypes=[vt if ty==t else ty for ty in types]
+   vsuffix=f'v4i8.v4i{n}' if op in ['scmp','ucmp'] else f'v4i{n}'
+   source.append(f'declare {vret} @llvm.{op}.{vsuffix}('+','.join(vtypes)+')')
+   vcall=[arg.replace(t+' ',vt+' ',1) if arg.startswith(t+' ') else arg for arg in call]
+   vbody=f'define void @v{name}(ptr %p,ptr %q,ptr %s,ptr %out,ptr %flags) {{ %a = load {vt},ptr %p,align 1\n %b = load {vt},ptr %q,align 1\n %c = load {vt},ptr %s,align 1\n %v = call {vret} @llvm.{op}.{vsuffix}('+','.join(vcall)+')\n'
+   if over:vbody+=f' %value = extractvalue {vret} %v,0\n %flag = extractvalue {vret} %v,1\n store {vt} %value,ptr %out,align 1\n %r = zext <4 x i1> %flag to {flagtype}\n store {flagtype} %r,ptr %flags,align 1\n'
+   else:vbody+=f' store {vret} %v,ptr %out,align 1\n'
+   source.append(vbody+' ret void }')
+source.append((R/'tests/probes/vector-funnel.ll').read_text())
 src=d/'in.ll';src.write_text('\n'.join(source));out=d/'out.ll'
 run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',src,'-o',out])
 assert not re.search(r'call .*@llvm\.',out.read_text()),'intrinsic call residue'
+assert not any(re.search(r'<4 x i\d+>',line) for line in out.read_text().splitlines() if not line.startswith('declare ')),'vector residue after N21/N27'
 runtime=d/'stack.c';runtime.write_text('#include <stdint.h>\n#include <unistd.h>\nstatic unsigned char s[1048576];static uint64_t sp;void *__bennett_rt_ss_push(uint64_t n,uint64_t a){sp=(sp+a-1)&-a;void*p=s+sp;sp+=n;return p;}void __bennett_rt_ss_pop(void*p){sp=(unsigned char*)p-s;}void __bennett_nz_fault(uint64_t n){_exit((int)n);}')
 so=d/'n27.so';run([tool+'clang','-shared','-fPIC','-O0',out,runtime,'-o',so]);lib=ctypes.CDLL(str(so));rng=random.Random(9027)
 def buf(x,n):return ctypes.create_string_buffer(x.to_bytes((n+7)//8,'little'),8*((n+63)//64))
@@ -44,6 +62,7 @@ for n,op,name in cases:
  mask=(1<<n)-1;lo=-(1<<(n-1));hi=(1<<(n-1))-1
  vectors=[(0,1),(mask,1),(1<<(n-1),mask),(hi,hi),(mask,mask),(0,0)]+[(rng.getrandbits(n),rng.getrandbits(n)) for _ in range(5)]
  fn=getattr(lib,name);fn.argtypes=[ctypes.c_void_p]*4;fn.restype=ctypes.c_uint8
+ expected=[]
  for x,y in vectors:
   sx,sy=signed(x,n),signed(y,n);flag=0;z=y
   if '.fix' in op and 'div' in op and not y:continue
@@ -81,7 +100,30 @@ for n,op,name in cases:
    if op.endswith('.sat'):v=max(lower,min(upper,v))
   output=buf(0,n);gotflag=fn(buf(x,n),buf(y,n),buf(z,n),output);actual=int.from_bytes(output.raw[:(1 if op in ['scmp','ucmp'] else (n+7)//8)],'little')
   want=v&(255 if op in ['scmp','ucmp'] else mask);assert (actual,gotflag)==(want,flag),(n,op,x,y,actual,want,gotflag,flag)
+  expected.append((x,y,z,want,flag))
+ if (n,op) in vector_cases:
+  vfn=getattr(lib,'v'+name);vfn.argtypes=[ctypes.c_void_p]*5;vfn.restype=None
+  for start in range(0,len(expected),4):
+   lanes=[expected[(start+k)%len(expected)] for k in range(4)]
+   inputs=[ctypes.create_string_buffer(b''.join(row[j].to_bytes(n//8,'little') for row in lanes)) for j in range(3)]
+   width=1 if op in ['scmp','ucmp'] else n//8
+   output=ctypes.create_string_buffer(4*width);flags=ctypes.create_string_buffer(4)
+   vfn(*inputs,output,flags)
+   actual=[int.from_bytes(output.raw[k*width:(k+1)*width],'little') for k in range(4)]
+   assert actual==[row[3] for row in lanes],(n,op,actual,lanes)
+   if op.endswith('.overflow'):assert list(flags.raw[:4])==[row[4] for row in lanes],(n,op,flags.raw,lanes)
+  rows.append(f'vector4/{n}/{op}')
  rows.append(f'{n}/{op}')
+for case,shift in [('shift',8),('join',24)]:
+ fn=getattr(lib,'vector_funnel_'+case);fn.argtypes=[ctypes.c_void_p]*3;fn.restype=None
+ for _ in range(8):
+  left=[rng.getrandbits(32) for _ in range(4)];right=[rng.getrandbits(32) for _ in range(4)]
+  joined=[left[0],*right[:3]] if case=='shift' else [left[3],*right[:3]]
+  output=ctypes.create_string_buffer(16)
+  fn(*(ctypes.create_string_buffer(b''.join(v.to_bytes(4,'little') for v in values)) for values in [left,right]),output)
+  actual=[int.from_bytes(output.raw[4*k:4*k+4],'little') for k in range(4)]
+  assert actual==[((x<<shift)|(y>>(32-shift)))&0xffffffff for x,y in zip(right,joined)],(case,actual,left,right)
+ rows.append('memcpy-funnel-'+case)
 # Defined-zero count, modular funnel, partial limbs, scalar flags and division faults
 # above all use real plugin definitions. Fault rows execute in isolated children.
 for n in [7,65,129,192,257,512]:

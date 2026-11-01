@@ -217,12 +217,14 @@ declare void @__bennett_qfree(ptr)
  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
  check('published-production-link',z.returncode==0,z.stderr)
  if z.returncode==0:
-  obj=realout/'top/oracle-0/ref.bennett';z=run([REF,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
+  obj=realout/'top/oracle-0/ref.bennett';z=run([numerical_ref,'check',obj]);check('published-production-check',z.returncode==0,z.stdout+z.stderr)
+  rows[-1]['ref_sha256']=sha(numerical_ref)
   for value in [0,1,0x3ff0000000000000,0x7ff0000000000000,0x7ff8000000000000]:
-   z=run([REF,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128'])
+   argv=[numerical_ref,'run-oracle',obj,'ref','--input',str(value),'--budget','1000000,65536,65536,128']
+   started=time.monotonic();z=run(argv);seconds=time.monotonic()-started
    data=json.loads(z.stdout) if z.returncode==0 else {}
    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
-   rows[-1]['result']=data
+   rows[-1].update(result=data,command=list(map(str,argv)),seconds=seconds,ref_sha256=sha(numerical_ref))
   source=R/'tests/probes/cc-softfloat-oracle.ll';recognised=realout/'oracle-recognised.json'
   z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
   check('published-production-recognition',z.returncode==0,z.stderr)

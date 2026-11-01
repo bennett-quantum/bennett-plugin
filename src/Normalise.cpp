@@ -234,6 +234,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   // N15/N21 lane renaming. Preserve the unsigned index width before building
   // exact L and lane constants (an i1 index into four lanes must not alias 2/3).
   std::map<Value *,SmallVector<Value *>> laneValues;
+  std::map<Value *,SmallVector<SmallVector<Value *>>> aggregateLanes;
   auto lanesOf=[&](Value *v)->SmallVector<Value *> {
     if(laneValues.count(v)) return laneValues[v];
     SmallVector<Value *> result;
@@ -262,6 +263,49 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
       bool vpReduce=name.starts_with("llvm.vp.reduce.");
       bool reduce=name.starts_with("llvm.vector.reduce.");
       IRBuilder<NoFolder> b(i);auto r=i->getName().str();
+      // N21 precedes N27: keep scalar control/immarg operands and scalarise
+      // integer data operands in lane order. N27 then expands each scalar
+      // call with the ordinary integer rules, including wide-slot transport.
+      auto op=Intrinsic::getBaseName(call->getIntrinsicID()).drop_front(5);
+      static const std::set<std::string> integerOps={
+        "smax","smin","umax","umin","abs","ctpop","ctlz","cttz",
+        "bitreverse","bswap","fshl","fshr","uadd.sat","usub.sat",
+        "sadd.sat","ssub.sat","sshl.sat","ushl.sat","uadd.with.overflow",
+        "usub.with.overflow","sadd.with.overflow","ssub.with.overflow",
+        "umul.with.overflow","smul.with.overflow","smul.fix","umul.fix",
+        "smul.fix.sat","umul.fix.sat","sdiv.fix","udiv.fix","sdiv.fix.sat",
+        "udiv.fix.sat","scmp","ucmp","pdep","pext","clmul"};
+      auto *input=call->arg_empty()?nullptr:dyn_cast<VectorType>(call->getArgOperand(0)->getType());
+      if(input && input->getElementType()->isIntegerTy() && integerOps.count(op.str())) {
+        unsigned count=input->getElementCount().getKnownMinValue();
+        SmallVector<SmallVector<Value *>> args;bool ready=true;
+        for(Value *arg:call->args()) {
+          auto lanes=arg->getType()->isVectorTy()?lanesOf(arg):SmallVector<Value *>(count,arg);
+          ready&=lanes.size()==count;args.push_back(lanes);
+        }
+        if(!ready)continue;
+        SmallVector<Type *> types;
+        if(op=="scmp" || op=="ucmp")types.push_back(cast<VectorType>(call->getType())->getElementType());
+        types.push_back(input->getElementType());
+#if LLVM_VERSION_MAJOR >= 23
+        auto *scalar=Intrinsic::getOrInsertDeclaration(f.getParent(),call->getIntrinsicID(),types);
+#else
+        auto *scalar=Intrinsic::getDeclaration(f.getParent(),call->getIntrinsicID(),types);
+#endif
+        auto *aggregate=dyn_cast<StructType>(scalar->getReturnType());
+        SmallVector<Value *> result;
+        SmallVector<SmallVector<Value *>> fields(aggregate?aggregate->getNumElements():0);
+        for(unsigned k=0;k<count;++k) {
+          SmallVector<Value *> laneArgs;for(auto &arg:args)laneArgs.push_back(arg[k]);
+          auto suffix=std::to_string(k)+"."+r;
+          auto *value=b.CreateCall(scalar,laneArgs,"nz.l"+suffix);
+          if(aggregate)for(unsigned j=0;j<fields.size();++j)
+            fields[j].push_back(b.CreateExtractValue(value,j,"nz.f"+std::to_string(j)+".l"+suffix));
+          else result.push_back(value);
+        }
+        if(aggregate)aggregateLanes[i]=fields;else laneValues[i]=result;
+        deadVectors.push_back(i);continue;
+      }
       if(selector) {
         auto cond=lanesOf(call->getArgOperand(0)),yes=lanesOf(call->getArgOperand(1)),no=lanesOf(call->getArgOperand(2));
         if(cond.empty() || yes.empty() || no.empty())continue;
@@ -295,6 +339,20 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
         }
         i->replaceAllUsesWith(acc);i->eraseFromParent();continue;
       }
+    }
+    if(auto *extract=dyn_cast<ExtractValueInst>(i);extract && aggregateLanes.count(extract->getAggregateOperand())) {
+      if(extract->getNumIndices()!=1)unimplemented("§12 N21 nested intrinsic result",2,i);
+      laneValues[i]=aggregateLanes[extract->getAggregateOperand()][*extract->idx_begin()];
+      deadVectors.push_back(i);continue;
+    }
+    if(auto *shuffle=dyn_cast<ShuffleVectorInst>(i)) {
+      auto left=lanesOf(shuffle->getOperand(0)),right=lanesOf(shuffle->getOperand(1));
+      if(left.empty() || right.empty())continue;
+      SmallVector<Value *> result;
+      for(int lane:shuffle->getShuffleMask())
+        result.push_back(lane<0?Constant::getNullValue(cast<VectorType>(shuffle->getType())->getElementType()):
+            unsigned(lane)<left.size()?left[lane]:right[lane-left.size()]);
+      laneValues[i]=result;deadVectors.push_back(i);continue;
     }
     if(i->getType()->isVectorTy() && (isa<BinaryOperator>(i)||isa<CmpInst>(i)||isa<CastInst>(i)||isa<SelectInst>(i))) {
       if(isa<BitCastInst>(i)) {} // Geometry handled by the bit-string rule below.

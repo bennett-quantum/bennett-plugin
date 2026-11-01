@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pinned §19.2 R mode: executable successful paths with an ISA-7 verdict."""
-import argparse, hashlib, json, shutil, subprocess, time
+import argparse, hashlib, json, os, shutil, subprocess, time
+from pathlib import Path
 from contracts import ROOT as R, SIBLINGS, arith_path
 from production import REF
 
@@ -50,10 +51,11 @@ def main():
   assert value['console_hex']==prefix,value
   assert value['status']==('COMPLETED' if limit==2 else 'FAILED'),value
   rows.append(dict(case=f'budget-{limit}',ok=True,object_sha256=sha(obj),result=value,typed_fault_implemented=False))
- # Full ordinary musl program: preserve the next production frontier as a
- # measured implementation remainder, never as whole-program agreement.
+ # Full ordinary musl program: both majors must pass vector intrinsic lowering
+ # and emit checked R artifacts. Typed budget faults remain the ISA-7 blocker.
  d=R/f'.tmp/reversible/{m}/r-hello';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
- runtime=SIBLINGS/f'bennett-runtimes/dist/llvm{m}/bennett-runtimes.bc'
+ runtime_root=Path(os.environ['BENNETT_ALLOCATOR_PINNED_ROOT']) if os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT') else SIBLINGS/'bennett-runtimes/dist'
+ runtime=runtime_root/f'llvm{m}/bennett-runtimes.bc'
  expected={18:'6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d',23:'a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632'}
  assert sha(runtime)==expected[m], 'runtime publication changed'
  sysroot=runtime.parent/'musl-sysroot';arith=arith_path(m);source=R/'tests/probes/r-hello.c'
@@ -63,15 +65,14 @@ def main():
  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','--bennett-tier=reversible','--bennett-entry=main',d/'postlink.bc']
  started=time.monotonic();run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output']);seconds=time.monotonic()-started
  assert seconds<20, seconds
- z=run([*base,'-bennett-report='+str(d/'production-recognised.json'),'-bennett-out='+str(d/'out'),'-disable-output'],1 if m==18 else 3)
+ z=run([*base,'-bennett-report='+str(d/'production-recognised.json'),'-bennett-out='+str(d/'out'),'-disable-output'],3)
  (d/'production.stderr').write_text(z.stderr)
  row=dict(case='r-hello',ok=True,production_complete=False,source_sha256=sha(source),runtime_sha256=sha(runtime),arith_sha256=sha(arith),postlink_sha256=sha(d/'postlink.bc'),recognised_sha256=sha(d/'recognised.json'),analysis_seconds=seconds,analysis_rounds=json.loads((d/'recognised.json').read_text())['analysis_rounds'],diagnostic=z.stderr)
- if m==18:
-  assert '§12 N21/N27 vector intrinsic lane materialisation' in z.stderr and '@llvm.fshl.v4i32' in z.stderr,z.stderr
-  row.update(expected_unimplemented=True,bead='bp-ozp',materialised_verified=False)
- else:
-  for file in ['device.bc','host.bc']:run([tool+'opt','-passes=verify',d/'out'/file,'-disable-output'])
-  row.update(expected_blocked='BD-B-ISA7',materialised_verified=True,materialised_sha256=sha(d/'out/device.bc'),object_sha256=sha(d/'out/main/launch.bennett'))
+ for file in ['device.bc','host.bc']:run([tool+'opt','-passes=verify',d/'out'/file,'-disable-output'])
+ obj=d/'out/main/launch.bennett';release_ref=REF.parent.parent/'release/bennett-isa-ref'
+ run([release_ref,'check',obj]);run([release_ref,'hash',obj])
+ assert json.loads((d/'out/main/blockers.json').read_text())[0]['code']=='BD-B-ISA7'
+ row.update(expected_blocked='BD-B-ISA7',materialised_verified=True,materialised_sha256=sha(d/'out/device.bc'),object_sha256=sha(obj),checker_sha256=sha(release_ref))
  rows.append(row)
  result=dict(major=m,cases=len(rows),passed=len(rows),results=rows)
  (R/f'.tmp/reversible-{m}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
