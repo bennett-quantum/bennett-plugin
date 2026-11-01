@@ -200,6 +200,9 @@ struct Entry {
   const Value *activeRoot = nullptr;
   bool generalUsed = false;
   bool allocatorFaultService = false;
+  bool usesCCCalls = false;
+  std::map<Function *, std::string> *ccNames = nullptr;
+  std::map<std::string, std::pair<std::string,std::string>> ccFunctions;
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
@@ -1070,13 +1073,13 @@ struct Entry {
     }
     for (Argument &p : f.args()) {
       auto n = "a" + std::to_string(p.getArgNo()),
-           t = "i" + std::to_string(width(p.getType()));
+           t = type(&p);
       names[&p] = n;
       params.push_back(n + ":" + t);
       paramTypes.push_back(t);
     }
     if (!f.getReturnType()->isVoidTy()) {
-      auto t = "i" + std::to_string(width(f.getReturnType()));
+      auto t = f.getReturnType()->isPointerTy() ? "ptr" : "i" + std::to_string(width(f.getReturnType()));
       results.push_back("result:" + t);
       resultTypes.push_back(t);
     }
@@ -1093,7 +1096,7 @@ struct Entry {
     // Linked/LTO block order need not place dominators before uses. Preserve
     // the established order elsewhere; visit new allocator CFGs in RPO.
     std::vector<BasicBlock *> order;
-    if(f.hasFnAttribute("bennett.cc.allocator")) {
+    if(f.hasFnAttribute("bennett.cc.allocator") || (ccNames && ccNames->size()>1)) {
       for(auto *bb:ReversePostOrderTraversal<Function *>(&f))order.push_back(bb);
       for(auto &bb:f)if(!is_contained(order,&bb))order.push_back(&bb);
     } else for(auto &bb:f)order.push_back(&bb);
@@ -1121,7 +1124,7 @@ struct Entry {
         if ((!memoryDescriptors && record) || isa<PHINode>(i))
           continue;
         if (auto *c = dyn_cast<CallBase>(&i)) {
-          auto *g = c->getCalledFunction();
+          auto *g = resolve(c->getCalledOperand());
           if (!g)
             unimplemented("§17.4 indirect CC call", 1, c);
           auto n = g->getName();
@@ -1175,6 +1178,16 @@ struct Entry {
           } else if(n=="__bennett_nz_free") {
             auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
             auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
+          } else if (ccNames && ccNames->count(g)) {
+            usesCCCalls=true;
+            // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
+            // ISA calls bind typed operands, keep a callee environment and
+            // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
+            std::vector<std::string> args;
+            for(auto &arg:c->args())args.push_back(operand(arg));
+            auto call="call @"+ccNames->at(g)+(args.empty()?"":" "+join(args," "));
+            if(c->getType()->isVoidTy())rows.push_back(call);
+            else {auto result=fresh(type(c));rows.push_back(result+" = "+call);names[c]=result;}
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
@@ -1319,6 +1332,7 @@ std::string linkReferences(Entry &e) {
     globals[name]=json::Object{{"base",int64_t(bases.at(name))},{"size",int64_t(sizes.at(name))},{"image",name}};
     auto marker="CCADDRESS"+std::to_string(std::distance(e.m.global_begin(),g.getIterator()));
     for(auto &row:e.rows)row=std::regex_replace(row,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
+    for(auto &fn:e.ccFunctions)fn.second.second=std::regex_replace(fn.second.second,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
   }
   for(unsigned i=0;i<parsed.size();++i) {
     auto &sec=parsed[i];auto syms=parse(sec.at("symbols"));auto suffix=i?std::to_string(i):"";
@@ -1427,6 +1441,8 @@ std::string linkReferences(Entry &e) {
   if(!data.empty()) { object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n"; }
   object+="\nsection layout\n"+jcs(json::Value(std::move(layout)))+"\n";return object;
 }
+// Hash CC call SCCs only after the entire shared memory layout is fixed.
+#include "CCCalls.inc"
 std::string launchObject(Entry &e, json::Object &record,
                          json::Object &certificate) {
   std::map<std::string, std::string> sections;
@@ -1464,11 +1480,11 @@ std::string launchObject(Entry &e, json::Object &record,
     pos = next;
   }
   if(sections.count("functions") && sections["functions"].empty())sections.erase("functions");
-  if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes)) {
+  if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes || e.usesCCCalls)) {
     uint64_t heap = std::max(e.table.capacities[1],e.ccHeapBytes); unsigned h = 0, tab = 0, sc = 0;
     while ((uint64_t(1)<<h) < 4096 + heap) ++h;
-    while ((uint64_t(1)<<tab) < (e.f.hasFnAttribute("bennett.cc.allocator") ? heap : e.localMemory.size())) ++tab;
-    while ((uint64_t(1)<<sc) < (e.f.hasFnAttribute("bennett.cc.allocator") ? std::max(uint64_t(e.stack),e.table.capacities[2]) : e.stack)) ++sc;
+    while ((uint64_t(1)<<tab) < ((e.f.hasFnAttribute("bennett.cc.allocator") || e.usesCCCalls) ? heap : e.localMemory.size())) ++tab;
+    while ((uint64_t(1)<<sc) < ((e.f.hasFnAttribute("bennett.cc.allocator") || e.usesCCCalls) ? std::max(uint64_t(e.stack),e.table.capacities[2]) : e.stack)) ++sc;
     sections["layout"] = jcs(json::Value(json::Object{{"A_tab",tab},{"H",h},{"S_cells",sc},
       {"globals",json::Object{}},{"heap_base",4096},{"heap_limit_max",int64_t(heap)},
       {"interface_regions",json::Object{}},{"null_size",4096},{"ptr_width",e.m.getDataLayout().getPointerSizeInBits()}}));
@@ -1579,6 +1595,7 @@ std::string launchObject(Entry &e, json::Object &record,
                      {"signature", parse(x.second.first)}};
     actionBodies += "\n" + x.second.second;
   }
+  if(e.usesCCCalls)linkCCCalls(e,sections,sig,body,hashes,*so,actionBodies);
   std::function<void(std::string)> helper=[&](std::string name) {
     if(hashes.count(name))return;
     auto &item=e.snapshotFunctions.at(name);auto text=item.second;auto nl=text.find('\n');auto rest=text.substr(nl+1);std::string canonical=text.substr(0,nl+1),refs;size_t last=0;std::set<std::string> seen;
@@ -1651,7 +1668,7 @@ std::string launchObject(Entry &e, json::Object &record,
     envelope += "layout " + x.first + " " + x.second + "\n";
   if(e.allocatorFaultService) envelope += "device bennett.fault {\"version\":\"0.2.10\"}\n";
   envelope += refs;
-  auto ih = hash(envelope);
+  auto ih = e.usesCCCalls ? hashes.at(e.f.getName().str()) : hash(envelope);
   std::string block;
   unsigned ordinal = 0;
   for (auto &line : e.rows) {
@@ -2035,15 +2052,55 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   auto device = CloneModule(m, vm);
   std::vector<Function *> entries;
   for (Function &f : m)
-    if (!f.isDeclaration() && a.tiers[&f].count("CC"))
-      entries.push_back(&f);
+    if (!f.isDeclaration() && a.tiers[&f].count("CC")) {
+      // Internal direct-only callees execute in their caller's launch and
+      // memory. Keep their H body; no host launch ABI is crossed here.
+      bool internal=f.hasLocalLinkage();
+      for(auto *u:f.users()) {
+        auto *c=dyn_cast<CallBase>(u);
+        internal &= c && c->getCalledOperand()==&f && a.tiers[c->getFunction()].count("CC");
+      }
+      for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))
+        if(auto *g=resolve(c->getCalledOperand());g && markers().count(g->getName().str()))internal=false;
+      if(!internal)entries.push_back(&f);
+    }
   json::Array launches;
   for (Function *f : entries) {
     std::string dir = out.str() + "/" + f->getName().str();
     if (auto ec = sys::fs::create_directories(dir))
       fail("output", ec.message());
     Entry e{m, a, *f, dir, stack, table};
+    std::map<Function *,std::string> ccNames;
+    ccNames[f]=f->getName().str();
+    std::vector<Function *> closure{f};
+    for(unsigned k=0;k<closure.size();++k)for(auto &i:instructions(*closure[k]))
+      if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand());
+          g && !g->isDeclaration() && !markers().count(g->getName().str()) && !ccNames.count(g)) {
+        auto name="C"+std::to_string(closure.size()-1);
+        if(name==f->getName())name+="callee";
+        ccNames[g]=name;closure.push_back(g);
+      }
+    e.ccNames=&ccNames;
     e.lower();
+    for(unsigned k=1;k<closure.size();++k) {
+      Entry callee{m,a,*closure[k],dir,stack,table};callee.ccNames=&ccNames;
+      // One object owns the memory, references and action namespace, while
+      // each CC body has its own SSA registers and block parameters.
+      callee.actions=e.actions;callee.references=e.references;callee.reference=e.reference;
+      callee.referenceGlobals=e.referenceGlobals;callee.snapshotFunctions=e.snapshotFunctions;
+      callee.budgets=std::move(e.budgets);
+      callee.lower();
+      e.actions=std::move(callee.actions);e.references=std::move(callee.references);e.reference=std::move(callee.reference);
+      e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
+      e.budgets=std::move(callee.budgets);
+      e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+      e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);e.allocatedBytes+=callee.allocatedBytes;
+      e.allocatorFaultService|=callee.allocatorFaultService;
+      json::Array pt,rt;for(auto &t:callee.paramTypes)pt.push_back(t);for(auto &t:callee.resultTypes)rt.push_back(t);
+      auto sig=jcs(json::Value(json::Object{{"abi","0.8"},{"kind","cc"},{"params",std::move(pt)},{"results",std::move(rt)},{"tier","cc"}}));
+      auto name=ccNames.at(closure[k]);
+      e.ccFunctions[name]={sig,"fn cc @"+name+" ("+join(callee.params)+") ("+join(callee.results)+") () () ()\n"+join(callee.rows,"\n")};
+    }
     if(e.automaticSnapshot)e.ccHeapBytes=e.table.capacities[1];
     else if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
     json::Object record{{"dialect", "0.2.10"},

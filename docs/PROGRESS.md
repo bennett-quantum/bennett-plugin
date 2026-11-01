@@ -6,10 +6,10 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-tav closed after one full dual-major gate**; bp-7ni stays outside this pass.
-Published-runtime probes: red malloc refusal → 4/4 green per major (11 execution vectors, five full-state reversals).
-Linked bodies retain allocation primitives, byte zero-fill, frees and §11.5 code requests before trap; gate 66/66/0/0/0 each major.
-Hashtable linked analyses pass; production next stops at `ht_third_pass` (§14.1/§17.4, bp-9fo), both majors; rung-2 gate conditional unmet.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-9fo CC call probes green on both majors; full gate and linked pipeline next**; bp-7ni stays outside this pass.
+Separate CC callees preserve typed pointer/integer operands, returns, nested/recursive frames and shared memory (§14.1/§17.4).
+Two probes per major pass eight complete-state reversals and four small-budget CC vectors (§9.3: outside-region CC is unbounded).
+Recognised/materialised digests, checked SCC hashes and execution evidence are integrated into the gate and recorder.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
