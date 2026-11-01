@@ -1401,7 +1401,10 @@ struct Entry {
             std::swap(xv, yv);
           }
           auto x = operand(xv), y = operand(yv), d = fresh("i1");
-          if(xv->getType()->isPointerTy() && !tagged(a.get(xv)) && !tagged(a.get(yv))) {
+          // Keep this pass local to the newly materialised numerical closure;
+          // unrelated CC objects retain their recorded §17.4 lowering.
+          if((f.hasFnAttribute("bennett.cc.softfloat") || f.hasFnAttribute("bennett.cc.softfloat.callee")) &&
+             xv->getType()->isPointerTy() && !tagged(a.get(xv)) && !tagged(a.get(yv))) {
             auto t="i"+std::to_string(width(xv->getType()));
             x=emit(t,"ptrtoint."+t+" "+x);y=emit(t,"ptrtoint."+t+" "+y);
           }

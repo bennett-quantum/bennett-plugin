@@ -6,11 +6,11 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-7ni recursive CC closure implemented; final verification in progress**; bp-eof remains open, rung-2 gate not rerun.
-This pass: §13.1 linked helpers retain §14.1 recursive calls; §17.4 transports flattened aggregates and integer pointer comparisons.
-Recursive transport/full reversal and six real f64 direct CC vectors pass on both majors (including −0 and NaN); native i192 slots now link and run at O0/O3.
-Unchanged 64-wire LLVM23 launch completes in 291.85s with the release ISA interpreter; final gate measurements follow.
-Private S2 graphs are released before source rewrites; both majors pass final host/device verification, ISA check and numerical reversal.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-7ni recursive CC/native-wide fixes green; final gate pending after prior-hash correction**; bp-eof stays open, rung-2 not rerun.
+§13.1 linked helpers retain §14.1 recursive calls; §17.4 carries flattened aggregate tuples; private S2 graphs release before source rewrites.
+Recursive transport/reversal, six real f64 CC vectors, native i192 O0/O3 and live-parent-slot preservation pass on both majors.
+Unchanged full-width launches complete in 318.42s (18) / 274.61s (23), 9 CC steps; matching zero-input L uses 44892/70119 < 1000000 steps.
+Completed gate was red only at four changed stack-snapshot objects; scoping pointer comparisons to the new FP closure restores all 299 prior hashes on both majors, with numerical CC bytes unchanged.
 Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
