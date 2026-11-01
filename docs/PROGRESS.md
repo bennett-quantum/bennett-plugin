@@ -6,9 +6,9 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**; M1 complete.
 Resume: **bp-ivy remains OPEN**; R console/callback/exit-prefix slices landed, next LLVM18 production rule **bp-ozp** (vector fshl); whole-musl execution is not green.
-Final scripts/gate exit0 at 60792e3: each major **66/66/0/0/0**, cells924/924 and792/792; R checks8/8 each, softfloat112/112 and116/116.
-Evidence: docs/verification.json embeds rung3 exit1/table/commands; 312 equal object pairs,45 published matches,all305 prior hashes preserved; failed attempts retained separately.
-Whole musl: six-round recognition both; LLVM23 emits verified artifacts with BD-B-ISA7/exit3, but exploratory forward faults7 at step1160 before output. General argv/startup/runtime budgets remain bp-ivy mechanics.
+Final scripts/gate exit 0 at 60792e3: each major **66/66/0/0/0**, cells 924/924 and 792/792; R checks 8/8 each, softfloat 112/112 and 116/116.
+Evidence: docs/verification.json embeds rung3 exit1/table/commands; 312 equal object pairs, 45 published matches, all 305 prior hashes preserved; failed attempts retained separately.
+Whole musl: six-round recognition both; LLVM23 emits verified artifacts with BD-B-ISA7/exit3, but exploratory forward faults 7 at step 1160 before output. General argv/startup/runtime budgets remain bp-ivy mechanics.
 **bp-7ni remains BLOCKED on bp-xms** at unchanged arith pins; bp-eof was closed at c93f68a. No capability waived, no sibling source edit, no push. Obligations live only in bd.
 
 Build and gate (headless, rule 11), repo root:
