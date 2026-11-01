@@ -1,7 +1,9 @@
 #include "Bennett.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
@@ -197,6 +199,7 @@ struct Entry {
   uint64_t ccHeapBytes = 0, allocatedBytes = 0;
   const Value *activeRoot = nullptr;
   bool generalUsed = false;
+  bool allocatorFaultService = false;
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
   std::vector<json::Object> budgets;
   std::string reference, shape, refPath;
@@ -1087,7 +1090,15 @@ struct Entry {
       for (PHINode &p : to->phis()) values.push_back(operand(p.getIncomingValueForBlock(from)));
       return "^" + blocks[to] + ("(" + join(values) + ")");
     };
-    for (BasicBlock &bb : f) {
+    // Linked/LTO block order need not place dominators before uses. Preserve
+    // the established order elsewhere; visit new allocator CFGs in RPO.
+    std::vector<BasicBlock *> order;
+    if(f.hasFnAttribute("bennett.cc.allocator")) {
+      for(auto *bb:ReversePostOrderTraversal<Function *>(&f))order.push_back(bb);
+      for(auto &bb:f)if(!is_contained(order,&bb))order.push_back(&bb);
+    } else for(auto &bb:f)order.push_back(&bb);
+    for (auto *block : order) {
+      auto &bb=*block;
       std::vector<std::string> bindings;
       for (PHINode &p : bb.phis()) bindings.push_back(names[&p] + ":" + type(&p));
       rows.push_back("^" + blocks[&bb] + "(" + join(bindings) + "):");
@@ -1119,7 +1130,21 @@ struct Entry {
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
-          if (n == "__bennett_nz_fault") { rows.push_back("trap"); break; }
+          if (n == "__bennett_nz_fault") {
+            // Newly materialised allocator closures report the explicit code
+            // through §11.5 before trapping. The payload is private storage,
+            // not an extra logical heap allocation on a failing path.
+            if (f.hasFnAttribute("bennett.cc.allocator")) {
+              allocatorFaultService = true;
+              auto *payload = m.getGlobalVariable("__bennett_cc_fault_payload",true);
+              if (!payload) payload = new GlobalVariable(m,Type::getInt64Ty(m.getContext()),false,
+                  GlobalValue::InternalLinkage,ConstantInt::get(Type::getInt64Ty(m.getContext()),0),"__bennett_cc_fault_payload");
+              auto p=operand(payload),code=operand(c->getArgOperand(0));
+              rows.push_back("store.i64 "+p+" "+code);
+              emit("i"+std::to_string(m.getDataLayout().getPointerSizeInBits()),"hostcall bennett.fault "+p+" "+number(8));
+            }
+            rows.push_back("trap"); break;
+          }
           if (n == "llvm.trap") { rows.push_back("trap"); break; }
           if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
             auto cls = integer(a.get(c->getArgOperand(0)), c),
@@ -1232,6 +1257,8 @@ struct Entry {
           names[c] = d;
           rows.push_back(d + " = " + c->getOpcodeName() + ".i" +
                          std::to_string(width(c->getType())) + " " + x);
+        } else if (isa<UnreachableInst>(i)) {
+          rows.push_back("trap");
         } else
           unimplemented("§17.4 production CC instruction", 1, &i);
       }
@@ -1284,6 +1311,7 @@ std::string linkReferences(Entry &e) {
     stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
   }
   heapLimit=std::max(heapLimit,e.ccHeapBytes);
+  if(parsed.empty())while((uint64_t(1)<<stack)<std::max(uint64_t(e.stack),e.table.capacities[2]))++stack;
   uint64_t endAddress=heap+heapLimit,memCount=0;
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
     auto name=globalSymbols.at(scalarGlobalKey(g)),image=scalarGlobalImage(g,sourceBases);
@@ -1413,7 +1441,11 @@ std::string launchObject(Entry &e, json::Object &record,
     }
   }
   unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty()) && !e.references.empty();
-  if(unified) ref=linkReferences(e);
+  if(unified || (e.references.empty() && !e.ccGlobals.empty())) {
+    ref=linkReferences(e);
+    if(e.references.empty()) ref="bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 coverage=0.8 target=0.8 ptr_width="+
+        std::to_string(e.m.getDataLayout().getPointerSizeInBits())+ref;
+  }
   size_t pos = ref.find("\n\nsection ");
   std::string header =
       pos == std::string::npos
@@ -1423,22 +1455,30 @@ std::string launchObject(Entry &e, json::Object &record,
           : ref.substr(0, pos);
   while (pos != std::string::npos) {
     auto start = pos + 10, end = ref.find('\n', start),
-         next = ref.find("\n\nsection ", end);
+         next = ref.find("\n\nsection ", end-1);
     sections[ref.substr(start, end - start)] =
         StringRef(ref.substr(end + 1,
-                             next == std::string::npos ? next : next - end - 1))
+                             next == std::string::npos ? next : (next > end ? next - end - 1 : 0)))
             .rtrim()
             .str();
     pos = next;
   }
-  if (!sections.count("layout") && !e.localMemory.empty()) {
+  if(sections.count("functions") && sections["functions"].empty())sections.erase("functions");
+  if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes)) {
     uint64_t heap = std::max(e.table.capacities[1],e.ccHeapBytes); unsigned h = 0, tab = 0, sc = 0;
     while ((uint64_t(1)<<h) < 4096 + heap) ++h;
-    while ((uint64_t(1)<<tab) < e.localMemory.size()) ++tab;
-    while ((uint64_t(1)<<sc) < e.stack) ++sc;
+    while ((uint64_t(1)<<tab) < (e.f.hasFnAttribute("bennett.cc.allocator") ? heap : e.localMemory.size())) ++tab;
+    while ((uint64_t(1)<<sc) < (e.f.hasFnAttribute("bennett.cc.allocator") ? std::max(uint64_t(e.stack),e.table.capacities[2]) : e.stack)) ++sc;
     sections["layout"] = jcs(json::Value(json::Object{{"A_tab",tab},{"H",h},{"S_cells",sc},
       {"globals",json::Object{}},{"heap_base",4096},{"heap_limit_max",int64_t(heap)},
       {"interface_regions",json::Object{}},{"null_size",4096},{"ptr_width",e.m.getDataLayout().getPointerSizeInBits()}}));
+  }
+  if(e.allocatorFaultService) {
+    auto devices=sections.count("devices")?parse(sections["devices"]):json::Value(json::Object{{"models",json::Object{}},{"services",json::Object{}}});
+    auto *services=devices.getAsObject()->getObject("services");
+    if(!services) {(*devices.getAsObject())["services"]=json::Object{};services=devices.getAsObject()->getObject("services");}
+    (*services)["bennett.fault"]=json::Object{{"version","0.2.10"}};
+    sections["devices"]=jcs(devices);
   }
   auto symbols = sections.count("symbols") ? parse(sections["symbols"])
                                            : json::Value(json::Object{});
@@ -1457,7 +1497,7 @@ std::string launchObject(Entry &e, json::Object &record,
     size_t p = text.find("\n\nsection ");
     while (p != std::string::npos) {
       auto start = p + 10, end = text.find('\n', start), next = text.find("\n\nsection ", end);
-      extra[text.substr(start, end - start)] = StringRef(text.substr(end + 1, next == std::string::npos ? next : next - end - 1)).rtrim().str();
+      extra[text.substr(start, end - start)] = StringRef(text.substr(end + 1, next == std::string::npos ? next : (next > end ? next - end - 1 : 0))).rtrim().str();
       p = next;
     }
     if (extra["layout"] != sections["layout"] || (extra.count("data") ? extra.at("data") : "") != (sections.count("data") ? sections.at("data") : ""))
@@ -1609,6 +1649,7 @@ std::string launchObject(Entry &e, json::Object &record,
   }
   for (auto &x : leaves)
     envelope += "layout " + x.first + " " + x.second + "\n";
+  if(e.allocatorFaultService) envelope += "device bennett.fault {\"version\":\"0.2.10\"}\n";
   envelope += refs;
   auto ih = hash(envelope);
   std::string block;
@@ -1949,6 +1990,46 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     normaliseScalar(*fn);
   }
   if(preparedCaller) {Analysis prepared(m);prepared.run();lowerProduction(m,prepared,out,stack,budgetDefault,budgetFile);return;}
+  // §19.1/§17.4: follow linked allocator bodies, never substitute libc
+  // summaries. Normalise before inlining (notably calloc's N27 overflow
+  // arithmetic and N26 memset), then retain every primitive and byte access.
+  bool preparedAllocator=false;
+  for(auto *fn:callers) {
+    auto allocator=[](StringRef n) {return n=="malloc" || n=="calloc" || n=="free" || n=="memset";};
+    bool needed=false;
+    for(auto &i:instructions(*fn))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand()))needed|=allocator(g->getName());
+    if(!needed || fn->hasFnAttribute("bennett.cc.allocator"))continue;
+    fn->addFnAttr("bennett.cc.allocator");preparedAllocator=true;
+    normaliseScalar(*fn);
+    std::set<Function *> active,done;
+    std::function<void(Function *)> visit=[&](Function *g) {
+      materialiseIntegerRuntime(*g);
+      if(g->isDeclaration() || markers().count(g->getName().str()) || done.count(g))return;
+      if(!active.insert(g).second)unimplemented("§17.4 recursive CC allocator closure",2,g);
+      normaliseScalar(*g);
+      for(auto &i:instructions(*g))if(auto *c=dyn_cast<CallBase>(&i))if(auto *target=resolve(c->getCalledOperand()))visit(target);
+      active.erase(g);done.insert(g);
+    };
+    // Only calls in the allocator closure are expanded in this pass.
+    for(auto &i:instructions(*fn))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand());g && (allocator(g->getName()) || g->getName()=="__bennett_rt_memset"))visit(g);
+    while(true) {
+      CallBase *site=nullptr;
+      for(auto &i:instructions(*fn))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand());g && done.count(g)) {site=c;break;}
+      if(!site)break;
+      InlineFunctionInfo info;if(!InlineFunction(*site,info).isSuccess())fail("output","§17.4 allocator closure inlining failed",site);
+    }
+    // N27 produces field shells for the overflow result. Project those SSA
+    // fields without running an optimiser that could erase heap history.
+    SmallVector<Instruction *> fields;
+    for(auto &i:instructions(*fn))if(isa<ExtractValueInst>(i))fields.push_back(&i);
+    for(auto *i:fields)if(auto *v=simplifyInstruction(i,SimplifyQuery(m.getDataLayout()))) {i->replaceAllUsesWith(v);i->eraseFromParent();}
+    bool dead=true;while(dead) {
+      dead=false;SmallVector<Instruction *> shells;
+      for(auto &i:instructions(*fn))if(isa<InsertValueInst>(i) && i.use_empty())shells.push_back(&i);
+      for(auto *i:shells) {i->eraseFromParent();dead=true;}
+    }
+  }
+  if(preparedAllocator) {Analysis prepared(m);prepared.run();lowerProduction(m,prepared,out,stack,budgetDefault,budgetFile);return;}
   if (auto ec = sys::fs::create_directories(out)) fail("output", ec.message());
   ValueToValueMapTy vm;
   auto device = CloneModule(m, vm);

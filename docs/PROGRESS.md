@@ -6,8 +6,10 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Consumer-driven rung-2 pass: **bp-au6 and bp-1us closed after separate full dual-major gates**. Both runtime-linked analyses reach S1–S5;
-linked production next stops at §17.4 `malloc` (bp-tav). Obligations live only in bd (`bd list`).
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-tav allocator CC closure implementation in progress**; bp-7ni stays outside this pass.
+Published-runtime probes: red malloc refusal → 4/4 green per major (11 execution vectors, five full-state reversals).
+Linked bodies retain allocation primitives, byte zero-fill, frees and §11.5 explicit-fault reporting; full gate and hashtable retest pending.
+Obligations live only in bd (`bd list`).
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the

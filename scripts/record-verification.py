@@ -85,11 +85,11 @@ def main():
     checks, scalars = {}, {}
     for m in MAJORS:
         c = {}
-        for name in ('recognition', 'analysis-edges', 'analysis-performance', 'reference-images', 'materialisation', 'aggregate-rows', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
+        for name in ('recognition', 'analysis-edges', 'analysis-performance', 'reference-images', 'materialisation', 'aggregate-rows', 'allocator-closure', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
             j = read(f'{name}-{m}.json')
             assert j['passed'] == j['cases'], (name, m)
             c[name] = {'cases': j['cases'], 'passed': j['passed']}
-            if name=='aggregate-rows':c[name]['evidence']=j['results']
+            if name in ('aggregate-rows','allocator-closure'):c[name]['evidence']=j['results']
             if name=='analysis-performance':
                 c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
             if name=='softfloat':
