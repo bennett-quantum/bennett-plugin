@@ -1,4 +1,9 @@
 #pragma once
+#include <functional>
+#include <initializer_list>
+#include <iterator>
+#include <unordered_map>
+#include <unordered_set>
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/JSON.h"
@@ -29,10 +34,51 @@ struct Atom {
   bool numerical = false;
   bool operator<(const Atom &b) const;
 };
+// A set of interned atoms, held as a sorted id vector: union is a linear merge of
+// integers (bp-fj1, SQLite carries millions of atoms). An id carries two flag bits, so
+// the (X,*) and INT segments are found without touching the atom table:
+//   ordinary atoms (by id), then (X,*) atoms (by id), then INT atoms (by width, value).
+// Iteration therefore gives INT atoms in ascending order, as dispatch tables expect.
+class AtomSet {
+  mutable std::vector<uint32_t> ids;
+  mutable size_t ordered = 0;
+  void normalise() const;
+  friend struct AV;
+public:
+  class iterator {
+    const uint32_t *at;
+  public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = Atom;
+    using difference_type = std::ptrdiff_t;
+    using pointer = const Atom *;
+    using reference = const Atom &;
+    explicit iterator(const uint32_t *p) : at(p) {}
+    const Atom &operator*() const;
+    const Atom *operator->() const { return &**this; }
+    iterator &operator++() { ++at; return *this; }
+    iterator operator++(int) { auto old = *this; ++at; return old; }
+    bool operator==(const iterator &o) const { return at == o.at; }
+    bool operator!=(const iterator &o) const { return at != o.at; }
+  };
+  AtomSet() = default;
+  AtomSet(std::initializer_list<Atom> list) { for (auto &a : list) insert(a); }
+  void insert(const Atom &);
+  iterator begin() const { normalise(); return iterator(ids.data()); }
+  iterator end() const { normalise(); return iterator(ids.data() + ids.size()); }
+  size_t size() const { normalise(); return ids.size(); }
+  bool empty() const { return ids.empty(); }
+  size_t count(const Atom &) const;
+  void eraseIf(const std::function<bool(const Atom &)> &);
+};
 struct AV {
-  std::set<Atom> atoms;
+  AtomSet atoms;
   bool top = false;
   bool merge(const AV &v);
+  // Sequential merges of many sets, ending in one canonicalisation.
+  static void startAbsorbing();
+  void absorb(const AV &v);
+  void settle();
   bool roots() const;
 };
 struct Slot {
@@ -51,7 +97,22 @@ class Analysis {
   bool virtualFP = false;
   std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> fpTransfers;
   std::map<const llvm::Value *, AV> values;
-  std::map<const llvm::Instruction *, std::vector<AV>> pureInputs;
+  // Solver state (bp-fj1). A step records what it reads; a write re-enters only the
+  // steps that read the written value or object. Same equations, same fixpoint.
+  int currentStep = -1;
+  bool seedsDue = true;
+  std::vector<char> dirty;
+  std::unordered_map<const llvm::Value *, std::unordered_set<int>> valueReaders;
+  std::unordered_map<const llvm::Value *, std::unordered_set<int>> objectReaders;
+  std::unordered_set<int> anySlotReaders;
+  std::vector<llvm::Function *> addressTaken;
+  bool addressTakenKnown = false;
+  void readValue(const llvm::Value *v) { if (currentStep >= 0) valueReaders[v].insert(currentStep); }
+  void readObject(const llvm::Value *o) { if (currentStep >= 0) objectReaders[o].insert(currentStep); }
+  void touchValue(const llvm::Value *);
+  void touchObject(const llvm::Value *);
+  void mergeValue(const llvm::Value *, const AV &);
+  std::vector<size_t> slotsOf(const llvm::Value *);
   std::vector<Slot> slots;
   using SlotKey = std::tuple<const llvm::Value *, int64_t, int64_t, uint64_t, bool, bool>;
   std::map<SlotKey, size_t> slotIndex;
