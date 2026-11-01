@@ -1178,6 +1178,18 @@ static bool longAdditiveCycle(Value *value, Value *source,
           if(b->getOpcode()==Instruction::Sub)found=walk(b->getOperand(0),delta-c->getValue());
         } else if(b->getOpcode()==Instruction::Add)
           if(auto *c=dyn_cast<ConstantInt>(b->getOperand(0)))found=walk(b->getOperand(1),delta+c->getValue());
+        // PT3's independent operand union admits an additive path through a
+        // bitwise identity already in the other operand's finite domain.
+        // musl mode |= mode-1 starts with zero, so its abstract store equation
+        // contains the complete -1 additive orbit even though runtime stops.
+        if(!found && (b->getOpcode()==Instruction::Or || b->getOpcode()==Instruction::Xor || b->getOpcode()==Instruction::And)) {
+          for(unsigned k=0;k<2 && !found;++k) {
+            auto other=facts(b->getOperand(1-k));
+            for(auto &atom:other.atoms)if(atom.kind==Atom::Int &&
+                (b->getOpcode()==Instruction::And?atom.integer.isAllOnes():atom.integer.isZero()))
+              if(walk(b->getOperand(k),delta)) {found=true;break;}
+          }
+        }
       }
       path.erase(v);return found;
     };
@@ -1431,7 +1443,23 @@ void Analysis::step(Instruction &i) {
           if(v==p) {if(!delta.isZero())zeros=std::min(zeros,delta.countr_zero());return;}
           if(!path.insert(v).second)return;
           if(auto *g=dyn_cast<GEPOperator>(v)) {
-            APInt offset(pw,0);if(g->accumulateConstantOffset(M.getDataLayout(),offset))orbit(g->getPointerOperand(),delta+offset);
+            APInt offset(pw,0);
+#if LLVM_VERSION_MAJOR >= 23
+            SmallMapVector<Value *,APInt,4> variables;
+#else
+            MapVector<Value *,APInt> variables;
+#endif
+            if(g->collectOffset(M.getDataLayout(),pw,variables,offset)) {
+              std::vector<APInt> offsets{offset};bool finite=true;
+              for(auto &variable:variables) {
+                auto fact=get(variable.first);if(fact.top || fact.atoms.empty()) {finite=false;break;}
+                std::vector<APInt> next;
+                for(auto &atom:fact.atoms)if(atom.kind==Atom::Int)
+                  for(auto &d:offsets)next.push_back(d+atom.integer.sextOrTrunc(pw)*variable.second);
+                if(next.size()>4096) {finite=false;break;}offsets=std::move(next);
+              }
+              if(finite)for(auto &d:offsets)orbit(g->getPointerOperand(),delta+d);
+            }
           } else if(auto *q=dyn_cast<PHINode>(v))for(Value *x:q->incoming_values())orbit(x,delta);
           else if(auto *s=dyn_cast<SelectInst>(v)) {orbit(s->getTrueValue(),delta);orbit(s->getFalseValue(),delta);}
           path.erase(v);
@@ -1854,7 +1882,8 @@ void Analysis::run() {
     const Instruction *lastChanged=nullptr;const char *lastRule=nullptr;
     for (Function &f : M)
       for (Instruction &i : instructions(f)) {
-        bool prior=changed;changed=false;step(i);
+        bool prior=changed;changed=false;
+        step(i);
         if(changed) {lastChanged=&i;lastRule=scope.budget.rule;}
         changed|=prior;
       }

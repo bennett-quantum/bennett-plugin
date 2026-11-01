@@ -6,9 +6,9 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
 `SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-ivy R integration in progress; minimal console and nested exit execute/reverse on both majors; musl S2 pointer recurrence bp-loq open**. bp-7ni stays blocked on bp-xms.
+(2026-10-31, `docs/PLAN.md`). Resume: **bp-ivy R integration in progress; console/nested-exit/callback/asm/budget probes pass both majors; musl S2 fixed (bp-loq), LLVM18 N21 frontier bp-ozp open**. bp-7ni stays blocked on bp-xms.
 §13.1 linked helpers use §14.1 recursive CC calls and §17.4 flattened aggregate transport; private S2 graphs release before source rewrites.
-Final scripts/gate exit 0: 66/66/0/0/0 each major, cells 924/924 (18), 792/792 (23); fp-rot-fastmath-reassoc agrees with zero deferrals.
+Previous completed scripts/gate exit 0: 66/66/0/0/0 each major, cells 924/924 (18), 792/792 (23); fp-rot-fastmath-reassoc agrees with zero deferrals.
 Unchanged full-width launches: 464.36s (18), 276.14s (23), 9 CC steps each; matching zero-input L 44892/70119 steps < 1000000-token limits.
 Softfloat 112/112 and 116/116: recursive tuples, six real f64 CC reversals, native i192 O0/O3 with live parent slots; frozen release interpreter hashes recorded.
 Evidence: docs/verification.json; all 299 prior hashes preserved, 305 equal pairs, 45 published matches. Earlier interrupted/prior-hash-red runs retained; no waiver of missing arith exports.
@@ -175,3 +175,8 @@ Whole-program R options/entry analysis, ISA effect markers, CC argv launch, logi
 Minimal console and nested exit probes pass independent ISA check/hash, forward and full-state reversal on LLVM18/23; later source effects after exit are skipped.
 Digest-checked BENNETT_ARITH_PINNED_ROOT relocates the immutable arith publications without a repin (182237c); musl hello still exposes S2 recurrence performance, bp-loq.
 Full gate and rung-3 receipt pending; no whole-musl success or full bp-ivy closure claimed.
+
+### Pass 24 - 2026-11-01 - bp-loq
+S2 solves modular pointer recurrences through finite GEP indices and additive paths through bitwise identities; K=4096 and the default 30s budget unchanged.
+Full published-musl hello reaches a six-round S1–S5 fixpoint on both majors; preceding raw PT2/PT7/PT4-PT5 time-budget failures retained in .tmp/r-hello-red*.log.
+Runtime publication SHAs 6c1741c4… / a63f0421… and pinned arith publications used without repinning; next production frontier recorded independently of recognition.
