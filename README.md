@@ -4,15 +4,51 @@ The C++ LLVM module-pass plugin of the Bennett compiler core, built from one sou
 for LLVM 18 and 23. Accepted contracts: dialect **0.2.10 @ 023f5a7**, ISA **0.8**.
 The plugin is the only LLVM-linked component; scheduler integration is a binary edge.
 
-M1 remains incomplete. The local headless gate passes on both majors with
-66 run / 65 agree / 1 explicit FP deferral / 0 blocked / 0 diverge. Twelve
-published reference objects reproduce exact bytes, hashes and run vectors.
-General analysis, full materialised region keys and production descriptor/CC
-launches remain M1 obligations; static descriptor reference output is not a
-production compile. Eight lift examples remain explicitly unavailable.
+M1 is complete on the plan's own definition (docs/PLAN.md, "M1 closure and moved work");
+M2 (full normalisation, lifted memory/calls, soft-float) is in progress. Both majors pass
+the local headless gate (`scripts/gate`; counts and run evidence in
+[docs/verification.json](docs/verification.json) and the resume block of
+[PROGRESS](docs/PROGRESS.md)). Whole-program R mode and the production native
+comparison still carry open beads (`bd ready`; see [HANDOFF](HANDOFF.md)); static
+descriptor reference output is not a production compile.
 
 See [PLAN](docs/PLAN.md), [BUILD](docs/BUILD.md), [PROGRESS](docs/PROGRESS.md) and
-[actual verification results](docs/verification.json). Nothing was pushed.
+[actual verification results](docs/verification.json).
+
+### Soft-float bitcode input
+
+`SPEC_VERSIONS.toml` pins each LLVM major’s published bennett-arith bitcode path
+and SHA-256. `BENNETT_ARITH_BITCODE` overrides that input (an explicit empty value
+exercises unavailable-library diagnostics). The plugin links the required closure
+before analysis and follows introduced numerical helpers through materialisation
+and production launches. The input SHA-256 is retained in the module and build
+record; repeating the same comparison link is idempotent. An incompatible helper
+signature is an input error.
+
+`-bennett-comparison` emits the normalised native comparison module and requires
+its soft-float entry points to have definitions. Missing definitions fail loudly
+with `unavailable: §13.1 missing entry point <name>` and the bitcode input name.
+Native comparison keeps integer-wide LLVM operations for native code generation
+and supplies only non-numerical byte-move/fill/fault adapters. The real arith
+`i512` core still exposes an explicit N22 production-lowering obligation (bd).
+The plugin contains no replacement numerical library. Tests use clearly marked
+integer-only ABI fixtures to check the link path independently of numerical
+conformance.
+
+The gate uses the live `dist/` publications at the commit pinned in
+`SPEC_VERSIONS.toml` (SHA-256 checked). While the sibling arith checkout is being
+edited, extract the pinned `dist/llvm{18,23}/bennett-arith.bc` from that commit to an
+immutable directory and run `BENNETT_ARITH_PINNED_ROOT=/absolute/path scripts/gate`
+(directory contains `llvm18/` and `llvm23/` bitcode; the SHA checks still apply and
+the test harness reads export metadata from the same root). Leave it unset otherwise.
+`BENNETT_ARITH_BITCODE` remains the explicit unpinned ABI-test library override.
+
+Whole-program R mode and the production native
+comparison still carry open beads (`bd ready`; see [HANDOFF](HANDOFF.md)); static
+descriptor reference output is not a production compile.
+
+See [PLAN](docs/PLAN.md), [BUILD](docs/BUILD.md), [PROGRESS](docs/PROGRESS.md) and
+[actual verification results](docs/verification.json).
 
 ### Soft-float bitcode input
 
