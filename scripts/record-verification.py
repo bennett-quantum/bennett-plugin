@@ -176,6 +176,7 @@ def main():
         'dialect': '0.2.10', 'dialect_commit': PIN, 'isa': '0.8',
         'arith': __import__('tomllib').loads((R/'SPEC_VERSIONS.toml').read_text())['arith'],
         'arith_gate_paths': {str(m):str(__import__('contracts').arith_path(m)) for m in MAJORS},
+        'allocator_gate_root': os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT'),
         'plugin_sha256': gate['plugin_sha256'],
         'gate': {'command': 'scripts/gate', 'exit': a.gate_exit, 'accepted_contract_drift': False,
                  'contract_head_drift': gate['contract_head_drift'], 'contract_worktree_drift': gate['contract_worktree_drift'],

@@ -58,3 +58,10 @@ LLVM18 stops at vector fshl scalarisation (bp-ozp); LLVM23 emits LLVM-verified R
 artifacts, but the exploratory executor run faults before console output (bp-ivy).
 The complete startup/normal-return exit path, argument storage and runtime-budget
 plumbing remain bp-ivy obligations. No new corpus deferral or ISA repin is implied.
+
+The historical allocator-closure probe retains its original runtime artifact pins.
+When live dist contains a newer musl publication, set
+`BENNETT_ALLOCATOR_PINNED_ROOT=/absolute/path` to a directory containing
+`llvm{18,23}/bennett-runtimes.bc` extracted from runtimes `469246e`; both original
+SHA checks remain mandatory. The R hello probe independently checks the musl
+publication SHAs, so the historical allocator receipt never stands in for musl.
