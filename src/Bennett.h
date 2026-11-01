@@ -108,6 +108,7 @@ llvm::Function *normaliseWideABI(llvm::Module &, llvm::Function *root = nullptr)
 void linkArith(llvm::Module &);
 void prepareNativeComparison(llvm::Module &);
 void requireSoftFloat(llvm::Function &);
+void materialiseStackRuntime(llvm::Module &, uint64_t);
 bool prepareStack(llvm::Module &, llvm::Function &, uint64_t);
 std::vector<llvm::GlobalVariable *> entryGlobals(llvm::Module &);
 void prepareEntryReplay(llvm::Module &, unsigned);

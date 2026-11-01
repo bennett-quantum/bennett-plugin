@@ -199,6 +199,16 @@ declare void @__bennett_qfree(ptr)
   for level in (0,3):
    exe=d/f'real-O{level}';z=run([tool+'clang',f'-O{level}',realbc,main,'-o',exe],realenv)
    check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
+ # M>128 native slots must link, initialise idempotently and execute.
+ source=R/'tests/probes/softfloat-native-wide.ll';widebc=d/'native-wide.bc'
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',source,'-o',widebc],realenv)
+ check('published-native-wide-link',z.returncode==0,z.stderr)
+ if z.returncode==0:
+  rows[-1].update(source_sha256=sha(source),materialised_sha256=sha(widebc))
+  v=run([tool+'opt','-passes=verify',widebc,'-disable-output']);check('published-native-wide-verify',v.returncode==0,v.stderr)
+  for level in [0,3]:
+   exe=d/f'native-wide-O{level}';z=run([tool+'clang',f'-O{level}',widebc,'-o',exe],realenv)
+   check(f'published-native-wide-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
  # Real published production on both majors includes flattened aggregate rows.
  # Major-local probes are recorded separately from the byte-identical object suite.
  realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)

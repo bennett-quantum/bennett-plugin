@@ -308,6 +308,37 @@ namespace bennett {
 void prepareNativeComparison(Module &m) {
   // Non-numerical N26/F(C) adapters for native execution of materialised IR.
   // A linked runtime definition wins. No arith entry point is defined here.
+  bool stack=false;
+  for(auto &f:m)if(!f.isDeclaration())for(auto &i:instructions(f))
+    if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())stack|=g->getName()=="__bennett_rt_ss_push";
+  if(stack) {
+    uint64_t capacity=65536;
+    if(auto *md=m.getModuleFlag("bennett.sstack"))capacity=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
+    materialiseStackRuntime(m,capacity);
+    auto *init=m.getFunction("__bennett_rt_ss_init");
+    // §13.1 temporary slots use the same logical stack in both builds.
+    // The linked init is idempotent; a nested helper must not reset a live frame.
+    for(auto &f:m)if(!f.isDeclaration() && !f.hasFnAttribute("bennett.stack.internal")) {
+      bool pushes=false;
+      for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())pushes|=g->getName()=="__bennett_rt_ss_push";
+      if(pushes && !f.hasFnAttribute("bennett.native.comparison.stack")) {
+        IRBuilder<> b(&*f.getEntryBlock().getFirstInsertionPt());b.CreateCall(init,{b.getInt64(capacity)});
+        f.addFnAttr("bennett.native.comparison.stack");
+      }
+    }
+    // Native backing for the internal stack only. Published/runtime allocation
+    // definitions retain precedence; arithmetic still comes from pinned bitcode.
+    if(auto *alloc=m.getFunction("__bennett_nz_alloc");alloc && alloc->isDeclaration()) {
+      IRBuilder<> b(BasicBlock::Create(m.getContext(),"entry",alloc));
+      auto *size=m.getDataLayout().getIntPtrType(m.getContext());
+      auto calloc=m.getOrInsertFunction("calloc",b.getPtrTy(),size,size);
+      auto *p=b.CreateCall(calloc,{ConstantInt::get(size,1),b.CreateZExtOrTrunc(alloc->getArg(0),size)});
+      auto *fail=BasicBlock::Create(m.getContext(),"fail",alloc),*done=BasicBlock::Create(m.getContext(),"done",alloc);
+      b.CreateCondBr(b.CreateIsNull(p),fail,done);b.SetInsertPoint(fail);
+      b.CreateCall(m.getOrInsertFunction("__bennett_nz_fault",b.getVoidTy(),b.getInt64Ty()),{b.getInt64(2)});b.CreateUnreachable();b.SetInsertPoint(done);b.CreateRet(p);
+      alloc->addFnAttr("bennett.native.comparison.runtime");
+    }
+  }
   bool needed=false;for(StringRef name:{"__bennett_rt_memmove","__bennett_rt_memset","__bennett_nz_fault"})
     if(auto *f=m.getFunction(name);f && f->isDeclaration() && !f->use_empty())needed=true;
   if(!needed)return;

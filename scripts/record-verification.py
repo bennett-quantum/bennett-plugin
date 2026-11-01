@@ -94,6 +94,7 @@ def main():
                 c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
             if name=='softfloat':
                 c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
+                c[name]['native_wide']=[r for r in j['results'] if r['name'].startswith('published-native-wide-')]
                 c[name]['recursive_closure']=[r for r in j['results'] if r['name'].startswith('CC-recursive-')]
                 c[name]['closure_contract'] = {
                     'rewrite': '§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links.',

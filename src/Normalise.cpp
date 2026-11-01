@@ -587,6 +587,19 @@ void normaliseStack(Function &f) {
   auto pop=m.getOrInsertFunction("__bennett_rt_ss_pop",b.getVoidTy(),ptr);
   for(auto &i:instructions(f))if(isa<ReturnInst>(i)) {b.SetInsertPoint(&i);b.CreateCall(pop,{fp});}
 }
+void materialiseStackRuntime(Module &m,uint64_t capacity) {
+  auto *init=m.getFunction("__bennett_rt_ss_init");
+  if(init && !init->isDeclaration())return;
+  std::string source=
+#include "runtime/ShadowStack.inc"
+  ;
+  source=std::regex_replace(source,std::regex("CAP"),std::to_string(capacity+1));
+  SMDiagnostic error;auto runtime=parseAssemblyString(source,error,m.getContext());
+  if(!runtime) {error.print("bennett shadow runtime",errs());fail("output","invalid internal shadow runtime");}
+  runtime->setDataLayout(m.getDataLayout());
+  for(auto &f:*runtime)if(!f.isDeclaration())f.addFnAttr("bennett.stack.internal");
+  if(Linker::linkModules(m,std::move(runtime)))fail("output","shadow runtime link failed");
+}
 bool prepareStack(Module &m,Function &root,uint64_t capacity) {
   std::set<Function *> closure;std::function<void(Function *)> visit=[&](Function *f) {
     if(!f || f->isDeclaration() || !closure.insert(f).second)return;
@@ -598,17 +611,7 @@ bool prepareStack(Module &m,Function &root,uint64_t capacity) {
   if(!needed && !m.getModuleFlag("bennett.entry.stack"))return false;
   auto *init=m.getFunction("__bennett_rt_ss_init");
   bool singleFrame=init && !init->isDeclaration() && proveSingleFrame(m,root,capacity);
-  if(!init || init->isDeclaration()) {
-    std::string source=
-#include "runtime/ShadowStack.inc"
-    ;
-    source=std::regex_replace(source,std::regex("CAP"),std::to_string(capacity+1));
-    SMDiagnostic error;auto runtime=parseAssemblyString(source,error,m.getContext());
-    if(!runtime) {error.print("bennett shadow runtime",errs());fail("output","invalid internal shadow runtime");}
-    runtime->setDataLayout(m.getDataLayout());
-    for(auto &f:*runtime)if(!f.isDeclaration())f.addFnAttr("bennett.stack.internal");
-    if(Linker::linkModules(m,std::move(runtime)))fail("output","shadow runtime link failed");
-  }
+  materialiseStackRuntime(m,capacity);
   // Prove only a constant subrange of a fresh frame in the same block, before
   // any possibly invalidating call. Everything else uses the logical table.
   for(auto *f:closure)if(!f->hasFnAttribute("bennett.stack.internal")) {
