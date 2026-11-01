@@ -1,68 +1,78 @@
 # Handoff
 
-Rewritten at session end with `date -u`: **2026-11-01T12:36:24Z**.
+Rewritten at session end with `date -u`: **2026-11-01T15:08:27Z**.
 
 Pinned contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**.
-SHA-pinned major-matched arith bitcode remains unchanged (SPEC_VERSIONS.toml).
-M1 remains complete. **bp-7ni remains BLOCKED on bp-xms**, not closed; no capability waived.
-The missing published exports include `__bennett_sf_add_ppcf128` and `__bennett_sf_sin_f128`
-on both majors; PPCDoubleDouble, own-format libm/non-i32 powi, arbitrary-format schema and
-signaling ABI obligations remain on bp-xms (r3d/0he/38c/chn). No sibling repository edited.
+M1 remains complete. **bp-ivy remains OPEN**, **bp-ozp OPEN**; bp-loq and bp-5t9 closed.
+**bp-7ni remains BLOCKED on bp-xms**; arith was not repinned. The old 606-export
+publication still lacks its staged PPCDoubleDouble/own-format libm/signaling obligations.
+No spec ambiguity was found, no spec bead filed, no sibling source edited, no push.
+The orchestrator owns the session worklog and eventual push.
 
-## Where the closure stopped and what changed
+## R integration and actual limits
 
-The exact LLVM23 red stop was the plugin's active-set inlining guard at `bennett_sf_eval`,
-encountering `call void @bennett_sf_eval(ptr %19, i32 %1, i32 3, ptr %18, i32 0, i32 %5)`.
-§13.1 requires the entry points defined by bennett-arith in linked bitcode; §14.1 requires
-CC/R calls and says recursion is unrestricted; §17.4 supplies integer/memory, phi block
-parameters and aggregate multi-result transport. ISA §16.2 requires parenthesized multi-LHS.
-The text is clear: no dialect-ruling bead was filed.
+Whole-program R options and entry analysis now route the reachable program into R bodies.
+The CC launch requests bennett.argv, initialises the logical stack, and calls R.
+Effects use ISA device models/tapes (§11.2), with scalar memory/call/phi lowering,
+indirect compare trees and shared global/function relocation (§14.2/§17.4/§19.5).
+N31 unlisted asm traps only when reached and has named, point-bound coverage.
+Each counted R instruction has a pre-instruction source-step check (§17.6).
+Nested exit pseudo-exceptions propagate and the launch returns their status (§14.7).
+Pinned §1.6/§11.5 requires artifacts **and exit3 BD-B-ISA7** for every R entry;
+generic exhaustion traps are blocker fallbacks, never typed-fault conformance.
 
-Recursive numerical closures now retain real CC call frames, materialise N22/N27/N24 helpers
-and initialise their logical stack. Helpers remain callees with H bodies, not host launch stubs.
-Aggregate parameters/results/insert/extract/phi/select/load/store flatten into scalar tuples;
-new numerical pointer comparisons use integer addresses. Private S2 transfer graphs release
-source operand uses before production rewrites (otherwise final verification exposed corruption).
-Native M>128 comparison slots now link the existing logical-stack runtime and idempotent init;
-linked allocation definitions win over native calloc backing. No arithmetic definition is fabricated.
+This is partial bp-ivy delivery. General argv/envp byte storage is explicit unimplemented
+if the source consumes either pointer argument; current launch replies carry argc and
+unused null pointers. Full musl startup/normal-return exit cleanup, runtime source-budget
+plumbing, complete depth/heap checks and exit-frame cleanup remain on bp-ivy.
+No acceptance or scope waiver is inferred from the passing small probes.
 
-Probes in tests/probes: cc-softfloat.ll, cc-softfloat-recursive.ll, cc-softfloat-oracle.ll,
-softfloat-native-wide.ll. Real f64 zero/subnormal/negative-zero/finite/infinity/NaN direct CC
-vectors completely reverse state and memory on both majors. Recursive tuple/phi/select transport
-reverses at 0/1/3/7. Native i192 round-trips ±2^190/0/−1 at O0/O3, preserving a live parent slot.
-Recognised/source/materialised/object hashes and LLVM verification are in docs/verification.json.
+## Probes and verification
 
-## Final verification
+Probes: r-console.ll, r-start-exit.ll, r-callback.ll, r-asm.ll, r-budget.ll, r-hello.c.
+Both majors pass8/8 checks, including forward/full-state reversal, skipped post-exit
+writes, callback relocation, reached/unreached asm and budgets0/1/2 before effects/return.
+Recognised/materialised/source/object hashes and LLVM verification are recorded.
+Full published-musl hello reaches S1–S5 in six rounds on both majors. LLVM18 stops at
+`%129 = call <4 x i32> @llvm.fshl.v4i32(...)` in memcpy: next N21/N27 rule bp-ozp.
+LLVM23 emits verified artifacts; the release checker admits the unchanged object, but
+exploratory forward returns FAILED/fault7 at step1160 with no console output.
+The latter is preserved as measured failure, not agreement; suspected strlen word-tail
+bounds require confirmation. Do not pad allocations or waive §17.1 bounds speculatively.
 
-**scripts/gate exit 0**, LLVM18/23 each **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**;
-924/924 and 792/792 cells. fp-rot-fastmath-reassoc agrees on both majors.
-Softfloat checks **112/112 (18), 116/116 (23)**.
-305 equal object pairs, 45 published matches; all 299 previous hashes preserved.
-Recorded by scripts/record-verification.py --pass bp-7ni; raw final log .tmp/bp-7ni-gate.log.
+Final **scripts/gate exit0**, code head **60792e378950c014a37bfa6061a3343c0fea09e0**:
+LLVM18/23 each **66 run /66 agree /0 deferred /0 blocked /0 diverge**,
+cells924/924 and792/792; softfloat112/112 and116/116. Unchanged full-width launches
+completed in373.673s/181.065s. 312 equal object pairs,45 published matches,
+all305 previous hashes preserved. Recorded with scripts/record-verification.py;
+docs/verification.json contains the full consumer report and exploratory failure.
+Final raw log: .tmp/bp-ivy-gate.log. Prior prerequisite/coverage/manifest/CC-timeout
+red logs are hashed separately; none is a green receipt. The numerical timeout was
+fixed by restricting new recurrence acceleration to R analysis, retaining old CC behavior.
 
-Unchanged 64-wire/two-oracle CC launch, frozen release ISA CLI: **464.356708s (18),
-276.140375s (23)**, **9 CC steps each**, no faults, memory equal. Arguments
-1000000,1000000; budget 1000000,65536,65536,128. Matching zero-input L runs return code 0/payload 0
-in 44892 / 70119 materialised steps, below each 1000000-step token; CC's reported 9 steps exclude
-nested oracle work. CLI hashes, commands, budgets and results are recorded. The case was not shrunk.
+## Immutable publications and rung3
 
-Earlier attempts are not green receipts: .tmp/bp-7ni-gate-incomplete.log (stopped for native-wide
-repair), .tmp/bp-7ni-gate-prior-red.log (four legacy stack-snapshot hashes changed). e126501
-scoped pointer comparison changes to the new numerical closure, restoring all prior hashes;
-new numerical CC objects stayed byte-identical to the executed ones. Final run uses fixed source/plugins.
+Use BENNETT_ARITH_PINNED_ROOT=$PWD/.tmp/arith-pinned for llvm18/23/bennett-arith.bc
+extracted from arith249e619. Original b235c88a…/1c7f4009… digest checks remain;
+export metadata is read from that same git publication even with only relocated .bc files.
+The historical allocator probe additionally uses
+BENNETT_ALLOCATOR_PINNED_ROOT=$PWD/.tmp/allocator-pinned, extracted from runtimes469246e,
+with its original digest checks. The R hello separately pins the published musl
+6c1741c4…/a63f0421… artifacts, extracted from runtimesfd0c522 for the consumer.
+No SPEC_VERSIONS.toml change or new-arith adoption occurred.
 
-## Commits and next work
+Rung3 gate ran **once**, exit1, with --plugin-rev=60792e3 and --runtimes18/23 pointing
+to those immutable musl copies; default pre-musl consumer pins/files were not edited.
+Evidence: ../bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/.
+Frontend/link/LTO/runtime export audit PASS both; production18 stops bp-ozp,
+production23 and both R probes exit3 BD-B-ISA7. The old matcher calls these UNFILED;
+known bead mappings are on bp-ivy/bp-ozp, not patched into consumer evidence.
+Native/admission/forward/reset/replay required rows remain BLOCKED. Reference control
+and replay-API diagnostics PASS; driver cyg and pinned VM replay u8m FAIL.
+ISA-0.8 R prerequisite remains red (221). No full hello/native/replay acceptance claim.
 
-- 78b006075c69f7249e2b82ec2924b58035ee4720 — recursive closure, aggregate ABI, graph lifetime and probes.
-- 1bc3f3610eee9a9c267333fea45619f800087c75 — native wide slot linkage/initialisation and probe.
-- e126501ee07ce89913e2d0301b3a949f776395f4 — scope correction preserving prior CC objects; final gated code head.
-
-Consume remaining published arith exports/ABI under bp-xms before claiming full seven-format
-§13 closure or closing bp-7ni. No force-close or implicit waiver was used.
-**bp-eof remains open**; the rung-2 gate was not run by this task (downstream work remains pending).
-Switch lowering/bp-bux was already reinstated/closed before this task; no hashtable execution claim here.
-
-Run headless, TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp;
-unset DISPLAY, WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS, BROWSER; never LLVM -view-*.
-Export beads before committing .beads, commit explicit own paths with BEADS_HOOK_TIMEOUT=20.
-No push. The orchestrator owns the session worklog and any subsequent push.
+Own commits:182237c,e5f9400,02aa97c,baa8125,b8ee2ad,6dbfa3f,e1f797e,60792e3;
+the final receipt/handoff commit follows these. bp-eof was closed by c93f68a before this job.
+Run headless with project-local TMPDIR; unset DISPLAY/WAYLAND_DISPLAY/DBUS_SESSION_BUS_ADDRESS/BROWSER;
+never LLVM -view-*. Export beads before committing .beads; commit explicit own paths
+with BEADS_HOOK_TIMEOUT=20. Never push from this task.

@@ -4,15 +4,12 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 
 ## Resume
 
-Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8** (pinned in
-`SPEC_VERSIONS.toml`; the gate checks the pin). State: **M1 complete on the plan's definition**
-(2026-10-31, `docs/PLAN.md`). Resume: **bp-ivy R integration in progress; console/nested-exit/callback/asm/budget probes pass both majors; musl S2 fixed (bp-loq), LLVM18 N21 frontier bp-ozp open**. bp-7ni stays blocked on bp-xms.
-§13.1 linked helpers use §14.1 recursive CC calls and §17.4 flattened aggregate transport; private S2 graphs release before source rewrites.
-Previous completed scripts/gate exit 0: 66/66/0/0/0 each major, cells 924/924 (18), 792/792 (23); fp-rot-fastmath-reassoc agrees with zero deferrals.
-Unchanged full-width launches: 464.36s (18), 276.14s (23), 9 CC steps each; matching zero-input L 44892/70119 steps < 1000000-token limits.
-Softfloat 112/112 and 116/116: recursive tuples, six real f64 CC reversals, native i192 O0/O3 with live parent slots; frozen release interpreter hashes recorded.
-Evidence: docs/verification.json; all 299 prior hashes preserved, 305 equal pairs, 45 published matches. Earlier interrupted/prior-hash-red runs retained; no waiver of missing arith exports.
-Obligations live only in bd (`bd list`).
+Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**; M1 complete.
+Resume: **bp-ivy remains OPEN**; R console/callback/exit-prefix slices landed, next LLVM18 production rule **bp-ozp** (vector fshl); whole-musl execution is not green.
+Final scripts/gate exit0 at 60792e3: each major **66/66/0/0/0**, cells924/924 and792/792; R checks8/8 each, softfloat112/112 and116/116.
+Evidence: docs/verification.json embeds rung3 exit1/table/commands; 312 equal object pairs,45 published matches,all305 prior hashes preserved; failed attempts retained separately.
+Whole musl: six-round recognition both; LLVM23 emits verified artifacts with BD-B-ISA7/exit3, but exploratory forward faults7 at step1160 before output. General argv/startup/runtime budgets remain bp-ivy mechanics.
+**bp-7ni remains BLOCKED on bp-xms** at unchanged arith pins; bp-eof was closed at c93f68a. No capability waived, no sibling source edit, no push. Obligations live only in bd.
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
@@ -28,7 +25,7 @@ Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 
 Allocator closure: 4/4 probes per major, 11 CC vectors and five full-state reversals, with recognised/materialised hashes.
 Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
 CC calls: 2/2 probes per major, eight full-state reversals and four small-budget CC executions (§9.3), with recognised/materialised hashes.
-All 299 prior object hashes preserved; 305 equal object pairs, 45 published matches.
+All 305 prior object hashes preserved; 312 equal object pairs, 45 published matches.
 Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
@@ -174,7 +171,7 @@ Attempt receipt recorded with scripts/record-verification.py then retained under
 Whole-program R options/entry analysis, ISA effect markers, CC argv launch, logical-stack initialisation and exit propagation; pinned §1.6/§11.5 emits artifacts with BD-B-ISA7 and exit 3.
 Minimal console and nested exit probes pass independent ISA check/hash, forward and full-state reversal on LLVM18/23; later source effects after exit are skipped.
 Digest-checked BENNETT_ARITH_PINNED_ROOT relocates the immutable arith publications without a repin (182237c); musl hello still exposes S2 recurrence performance, bp-loq.
-Full gate and rung-3 receipt pending; no whole-musl success or full bp-ivy closure claimed.
+Final gated evidence is recorded under Pass25; no whole-musl success or full bp-ivy closure claimed.
 
 ### Pass 24 - 2026-11-01 - bp-loq
 R-mode S2 solves modular pointer recurrences through finite GEP indices and additive paths through bitwise identities; K=4096 and the default 30s budget unchanged.
@@ -185,4 +182,5 @@ Runtime publication SHAs 6c1741c4… / a63f0421… and pinned arith publications
 R asm rows trap only when reached with named N31 coverage; indirect callback trees and transitive global/function relocation share the production layout (§14.2/§19.5).
 Both majors: console/nested-exit/callback/asm forward + reset and source-budget 0/1/2 prefixes; host argv reply and host/device LLVM verification. General argv/envp byte storage remains explicit bp-ivy mechanics.
 Full musl: six-round recognition both; LLVM18 next N21/N27 vector fshl is bp-ozp; LLVM23 emits verified artifacts and passes release ISA check but exploratory run faults7 at step1160 before console output.
-Whole-musl startup/normal-return exit, source runtime budgets and general argv remain bp-ivy obligations; no full rung3 execution claim. Full gate and consumer receipt pending.
+Final full gate exit0: 66/66/0/0/0 each, 312 equal pairs/45 published matches/all305 prior hashes preserved; R checks8/8 each.
+Rung3 exit1 at plugin60792e3 with published musl overrides: frontend/link/LTO/audit PASS both; production18 bp-ozp,23 BD-B-ISA7; downstream BLOCKED. Full startup/argv/runtime budgets remain bp-ivy; no full hello claim.

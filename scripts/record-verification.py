@@ -70,6 +70,7 @@ def main():
     ap.add_argument('--commits', required=True, help='comma-separated landed commits')
     ap.add_argument('--gate-exit', type=int, required=True)
     ap.add_argument('--root', type=Path, default=R, help='tree whose .tmp/ and build/ the gate used')
+    ap.add_argument('--rung3-report', type=Path, help='consumer report, including failed prerequisite rows')
     a = ap.parse_args()
     assert a.gate_exit == 0, 'refusing to record a failed gate'
     tmp, build = a.root / '.tmp', a.root / 'build'
@@ -189,6 +190,26 @@ def main():
                          'published_matches': sum(bool(r['published_golden']) for r in rows),
                          'production_cross_major_pairs': cross['pairs'], 'preserved_previous_objects': len(baseline), 'rows': rows},
     }
+    if a.rung3_report:
+        report = json.loads(a.rung3_report.read_text())
+        latest['rung3'] = {'source_report': str(a.rung3_report.resolve()),
+                          'source_report_sha256': digest(a.rung3_report),
+                          'exit': int(any(row['status'] != 'PASS' for stages in report['stages'].values() for row in stages.values())),
+                          'report': report}
+    if a.name == 'bp-ivy' and (tmp/'r-hello23-execution.json').is_file():
+        obj = tmp/'reversible/23/r-hello/out/main/launch.bennett'
+        checked = read('r-hello23-check.log')
+        assert checked['object_hash'] == digest(obj), 'exploratory object changed after execution'
+        latest['whole_program_r_exploratory'] = {
+            'major': 23, 'classification': 'measured failure, not corpus agreement',
+            'object_sha256': digest(obj), 'admission': checked['status'],
+            'command': ['bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref',
+                        'run-program', str(obj), 'main', '--budget', '10000000,1048576,65536,256',
+                        '--replies', str(tmp/'reversible/23/r-console/argv.json')],
+            'result': read('r-hello23-execution.json'),
+            'execution_log_sha256': digest(tmp/'r-hello23-execution.json')}
+    failed_logs = sorted(tmp.glob('bp-ivy-gate-*-red.log'))
+    latest['prior_failed_attempts'] = [{'log': str(p.relative_to(a.root)), 'sha256': digest(p)} for p in failed_logs]
     path.write_text(json.dumps({'schema': 2, 'latest_pass': latest}, indent=2) + '\n')
     print(f"recorded pass {a.name}: {len(rows)} object pairs, {latest['object_pairs']['published_matches']} published matches, "
           "latest pass only")

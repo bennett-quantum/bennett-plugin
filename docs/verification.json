@@ -1,15 +1,20 @@
 {
   "schema": 2,
   "latest_pass": {
-    "name": "bp-7ni",
+    "name": "bp-ivy",
     "date": "2026-11-01",
     "commits": [
-      "78b0060",
-      "1bc3f36",
-      "e126501"
+      "182237c",
+      "e5f9400",
+      "02aa97c",
+      "baa8125",
+      "b8ee2ad",
+      "6dbfa3f",
+      "e1f797e",
+      "60792e3"
     ],
-    "code_head": "e126501ee07ce89913e2d0301b3a949f776395f4",
-    "recorded_at": "2026-11-01T12:36:12+00:00",
+    "code_head": "b5d58349d807b87dc9e83041e43a5907f1b04e94",
+    "recorded_at": "2026-11-01T15:04:05+00:00",
     "dialect": "0.2.10",
     "dialect_commit": "023f5a771a814270634db3be9cfde88ded69f975",
     "isa": "0.8",
@@ -19,9 +24,14 @@
       "llvm23_path": "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc",
       "llvm23_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
     },
+    "arith_gate_paths": {
+      "18": "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/arith-pinned/llvm18/bennett-arith.bc",
+      "23": "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/arith-pinned/llvm23/bennett-arith.bc"
+    },
+    "allocator_gate_root": "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/allocator-pinned",
     "plugin_sha256": {
-      "18": "799ef056d97d7d3add31daed2aadd62c84bd8e740bb0e49649c80b55ffab5a64",
-      "23": "0a4477f120993cfbf9dfdde01ea806ee38672747c995bc3c72fc09e922393dc8"
+      "18": "298469ca3ff06494ec10136ae3708f569328314ea27119dbe1f846c74ba2362f",
+      "23": "4374c539e297431ea5bd8b570e779194b2684b51fbfea12d0c8df89e2849b1fa"
     },
     "gate": {
       "command": "scripts/gate",
@@ -48,7 +58,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 11.90438993900898,
+          "seconds": 13.90155616501579,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%251) in @ht_demo_grow (milestone 1) at   %251 = icmp eq i64 %250, %0\n"
         },
@@ -2615,6 +2625,586 @@
             }
           ]
         },
+        "reversible": {
+          "cases": 8,
+          "passed": 8,
+          "evidence": [
+            {
+              "case": "r-console",
+              "ok": true,
+              "source_sha256": "05ac01e3ee42d7ca2c4d857b7c0f644030eaa04081eb6216d22a9cb54fc34ae8",
+              "recognised_sha256": "73f4e3ac1289b0e84bd33136652e7411f8e221eb2abcf1e73c4198a55cd0a26b",
+              "materialised_sha256": "72b8649ac795e2de45e2a4b379f304b5c41cf3b6225fa524886221b7497ed953",
+              "materialised_verified": true,
+              "object_sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "hi\n",
+                  "console_hex": "68690a",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "9108b3889918cbbb1d19e5133dc89c23fc6a37173804e008f5f32e8cbae0c0f3",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 62,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        3
+                      ],
+                      "bytes": "68690a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 62,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        3
+                      ],
+                      "bytes": "68690a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-start-exit",
+              "ok": true,
+              "source_sha256": "2a416b1c388f325b6e05f67270fc5f4169a2a1946202cc0fc4faa0ab55def18a",
+              "recognised_sha256": "9dfd3f3c262ee92ed0e52d433f53aea758d0f868b847f3463094616210618b70",
+              "materialised_sha256": "15f6294bc5ac0a3d76c8a2a83c1529c7a69fb06a5e10a0e873340629bee74587",
+              "materialised_verified": true,
+              "object_sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x\n",
+                  "console_hex": "780a",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4160))",
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "370d18c229a68f145a8633edb791e34add550e703335e2566d83622f3e2a9c23",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "3"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 151,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        2
+                      ],
+                      "bytes": "780a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "3"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 151,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        2
+                      ],
+                      "bytes": "780a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-callback",
+              "ok": true,
+              "source_sha256": "561610af678a1e2f9cebe871d28f8078a5224d6567db0a1a26d1fd538e74574c",
+              "recognised_sha256": "8f6f7a6a9787bdd1d2e2cac19e50eceb8508b10de81129fda47aacf9e67b026c",
+              "materialised_sha256": "f820aa59b7c59fa3f63d812e2e606f4b3e5b75b0cddb87414dfe4ab7a0f87123",
+              "materialised_verified": true,
+              "object_sha256": "9adae426b5b490d489a897afd935cd387ce216f287711710db3d80bb51868026",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x",
+                  "console_hex": "78",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4160))",
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "efe7f5be87fb4684be0a79eb667cc60069030361f9d392ec5479eb06e57eced1",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 100,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 100,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-asm",
+              "ok": true,
+              "source_sha256": "d79ff2a8027de99aa4d2369e86232991eecf5487e3eca6c7ef78e61bab345fcf",
+              "recognised_sha256": "f821cf0d61217c6d58f757b755039fc81f4be3f4f5747217ac4fbc91b4a09389",
+              "materialised_sha256": "8620b972cf9a64b0e9deb62eb00712799305c7ab9d6c87694068f5a02cab4e30",
+              "materialised_verified": true,
+              "object_sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x",
+                  "console_hex": "78",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "2bd600349ce2a62de1cf873034d6706408f57603d6e86eb3dcf110c5d1819a42",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 96,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 96,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "budget-0",
+              "ok": true,
+              "object_sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "FAILED",
+                "steps": 44,
+                "tape": []
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "budget-1",
+              "ok": true,
+              "object_sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "x",
+                "console_hex": "78",
+                "effect_tape_length": 1,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "FAILED",
+                "steps": 57,
+                "tape": [
+                  {
+                    "args": [
+                      4096,
+                      1
+                    ],
+                    "bytes": "78",
+                    "dev": "console",
+                    "op": "write"
+                  }
+                ]
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "budget-2",
+              "ok": true,
+              "object_sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "x",
+                "console_hex": "78",
+                "effect_tape_length": 1,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 62,
+                "tape": [
+                  {
+                    "args": [
+                      4096,
+                      1
+                    ],
+                    "bytes": "78",
+                    "dev": "console",
+                    "op": "write"
+                  }
+                ]
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "r-hello",
+              "ok": true,
+              "production_complete": false,
+              "source_sha256": "5a3f6372c8411384fe434163f907d336ac37049a9476417609ad0ac10e2d27d1",
+              "runtime_sha256": "6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d",
+              "arith_sha256": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+              "postlink_sha256": "8abfd4a10d72ee072ec94338ae2f3a94ab08998cdc8cbed9e2d62873ade03d18",
+              "recognised_sha256": "1d205db846194cac7892ccca3e556557d1b3b36cea16d33e4537d39c847d8a24",
+              "analysis_seconds": 1.0509827490022872,
+              "analysis_rounds": 6,
+              "diagnostic": "bennett: unimplemented: \u00a712 N21/N27 vector intrinsic lane materialisation (milestone 2) at   %129 = call <4 x i32> @llvm.fshl.v4i32(<4 x i32> %126, <4 x i32> %128, <4 x i32> <i32 8, i32 8, i32 8, i32 8>)\n",
+              "expected_unimplemented": true,
+              "bead": "bp-ozp",
+              "materialised_verified": false
+            }
+          ]
+        },
         "softfloat": {
           "cases": 112,
           "passed": 112,
@@ -2679,8 +3269,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.005011530010960996,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.004897239006822929,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -2725,8 +3315,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.006029673997545615,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.005136962980031967,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -2771,8 +3361,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.006247601006180048,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.008293660008348525,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -2817,8 +3407,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.008033695019548759,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.007630756008438766,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -2923,7 +3513,7 @@
               "ok": true,
               "detail": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
               "source_sha256": "da8aae6257c1cc3df12ddefe89a236567e452d2112e023b752f3d674ddc6c6ce",
-              "recognised_sha256": "3e79208b69ffcc6ef7ca4c32edbd89ff662afe6ddea48e4f2a69620769f1f5a8",
+              "recognised_sha256": "4bcfecfd0d7d63431176a64928bcebc29ed2bbe816719bd11bd0b602f5a04dd2",
               "materialised_sha256": "091f6aae49ffadaf834852c4ab750028460260ccf583fa0e5a3e1a11b2f3fee2",
               "materialised_verified": true,
               "object_sha256": "e873574c464d4d0c96c53ed6ff389543b58d317fa1812f66a72858e9fb4374e3"
@@ -2942,8 +3532,8 @@
                 "--budget",
                 "1000000,65536,65536,128"
               ],
-              "seconds": 464.35670758297783,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 373.6727681749908,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [
                   {
@@ -2998,7 +3588,7 @@
               "ok": true,
               "detail": "{\"object_hash\":\"89ad8a6f2e837e3cb9952334cb90b7965f180b8873823012b2a1827d6e35409e\",\"status\":\"ok\",\"symbols\":{\"C0\":{\"closure_hash\":\"3d5096e23e83ba2bed24ab00ba1bb923fec9ff0f5110bffebb222e514823388a\",\"interface_hash\":\"3d5096e23e83ba2bed24ab00ba1bb923fec9ff0f5110bffebb222e514823388a\"},\"C1\":{\"closure_hash\":\"3be392a56f367c86ed17f15ec8011a5e7d1d21a1c6193158d4abca079b2b89b5\",\"interface_hash\":\"3be392a56f367c86ed17f15ec8011a5e7d1d21a1c6193158d4abca079b2b89b5\"},\"C10\":{\"closure_hash\":\"f79758f91d8114389ce3985b2c708d5593c5e8033931f667abed1d193f75b356\",\"interface_hash\":\"f79758f91d8114389ce3985b2c708d5593c5e8033931f667abed1d193f75b356\"},\"C11\":{\"closure_hash\":\"c67b9b1c2776e162efea1931507965a920f993f7dde99e5afe7adb493bc6db7b\",\"interface_hash\":\"c67b9b1c2776e162efea1931507965a920f993f7dde99e5afe7adb493bc6db7b\"},\"C12\":{\"closure_hash\":\"3e34e16d721f425a537026c48239ddc1916d48d9181b511003e781ae480e5e49\",\"interface_hash\":\"3e34e16d721f425a537026c48239ddc1916d48d9181b511003e781ae480e5e49\"},\"C13\":{\"closure_hash\":\"b9168cc6cbf0ae42920b823dd13b0e4dd102ccd32b220dbc5371d388046c1bf3\",\"interface_hash\":\"b9168cc6cbf0ae42920b823dd13b0e4dd102ccd32b220dbc5371d388046c1bf3\"},\"C14\":{\"closure_hash\":\"1098a7abebe7be38e93a02d3fc1fe8f5abdeba90c93f1fcf7e2d95a5f6e7f766\",\"interface_hash\":\"1098a7abebe7be38e93a02d3fc1fe8f5abdeba90c93f1fcf7e2d95a5f6e7f766\"},\"C15\":{\"closure_hash\":\"7f322fdea5855f11cc47252011862b4d079be4715a983763f3b88ecae6ddc75a\",\"interface_hash\":\"7f322fdea5855f11cc47252011862b4d079be4715a983763f3b88ecae6ddc75a\"},\"C16\":{\"closure_hash\":\"9355bf8fcfc6b82237126ac694cff21d66ecce4aa8bb52a5d0722e5a427091a3\",\"interface_hash\":\"9355bf8fcfc6b82237126ac694cff21d66ecce4aa8bb52a5d0722e5a427091a3\"},\"C2\":{\"closure_hash\":\"ce06a3641bfe0b771a33233dfd8c59ed1bbfdacc24b09fdad4204859a3824548\",\"interface_hash\":\"ce06a3641bfe0b771a33233dfd8c59ed1bbfdacc24b09fdad4204859a3824548\"},\"C3\":{\"closure_hash\":\"9b0d325ec8a511187e50be3b32f36f7288f24f9f71869f9f492d6fe83fac16e8\",\"interface_hash\":\"9b0d325ec8a511187e50be3b32f36f7288f24f9f71869f9f492d6fe83fac16e8\"},\"C4\":{\"closure_hash\":\"dba7a0b0eaeeeed3a57e427bbb5d6cc42f92a7e992d0ab9972ddab81cef24626\",\"interface_hash\":\"dba7a0b0eaeeeed3a57e427bbb5d6cc42f92a7e992d0ab9972ddab81cef24626\"},\"C5\":{\"closure_hash\":\"90df1e97e70f05003d0030726f3f692c3c49d096a0b80894a52a829d3a433fff\",\"interface_hash\":\"90df1e97e70f05003d0030726f3f692c3c49d096a0b80894a52a829d3a433fff\"},\"C6\":{\"closure_hash\":\"ee7d04e53e7c2a0a1aaff7d618f4f143a9d4410a16148bbfd80873abe189b01e\",\"interface_hash\":\"ee7d04e53e7c2a0a1aaff7d618f4f143a9d4410a16148bbfd80873abe189b01e\"},\"C7\":{\"closure_hash\":\"77a72e97335e09520c2c756c68d0c24a54b6eb84c62d74b1cec3d2f9d3f16550\",\"interface_hash\":\"77a72e97335e09520c2c756c68d0c24a54b6eb84c62d74b1cec3d2f9d3f16550\"},\"C8\":{\"closure_hash\":\"b5f5f93351dea1516e350f57fdce201c7bd812f039c8f2a9093f5e2a151c1a62\",\"interface_hash\":\"b5f5f93351dea1516e350f57fdce201c7bd812f039c8f2a9093f5e2a151c1a62\"},\"C9\":{\"closure_hash\":\"1a14a6d7d47ab6986f2bfd91ddbe5d1bb0e8dd195e298ddf411cd0e9d69fdb09\",\"interface_hash\":\"1a14a6d7d47ab6986f2bfd91ddbe5d1bb0e8dd195e298ddf411cd0e9d69fdb09\"},\"G1\":{\"closure_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\",\"interface_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\"},\"G2\":{\"closure_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\",\"interface_hash\":\"152c175d592378069aaf67055e1d0ae1481a51cebce1e9f4f5d2b239ef7a253e\"},\"G3\":{\"closure_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\",\"interface_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\"},\"G4\":{\"closure_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\",\"interface_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\"},\"G5\":{\"closure_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\",\"interface_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\"},\"G6\":{\"closure_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\",\"interface_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\"},\"G7\":{\"closure_hash\":\"63fa580617df5635a585f46cc5a2a9b870df135fff9ecc5c0ba0209c64fe16f0\",\"interface_hash\":\"63fa580617df5635a585f46cc5a2a9b870df135fff9ecc5c0ba0209c64fe16f0\"},\"G8\":{\"closure_hash\":\"7937fd6872cfd394cd83c40d14666b279efe191f504a413da4aed63b9a5ce335\",\"interface_hash\":\"7937fd6872cfd394cd83c40d14666b279efe191f504a413da4aed63b9a5ce335\"},\"top\":{\"closure_hash\":\"4aa4b76a66400aca8be3af4ea11e21d68a22400b0524f03bf1c4f3045d871016\",\"interface_hash\":\"4aa4b76a66400aca8be3af4ea11e21d68a22400b0524f03bf1c4f3045d871016\"}},\"unresolved_imports\":[]}\n",
               "source_sha256": "9d8002104502aa21c71be9fef09bf7971a09c1329c7317eeb41baaf5787ac645",
-              "recognised_sha256": "b3f053f2cfb5b0542e40efd8c1be8bc6302e5f2e79ccbb52b9a396540a3a2d7d",
+              "recognised_sha256": "2fcd146ed358b2383e30f801250cfea03ee89cd4366f7f2bbcc93ff540ba84a8",
               "materialised_sha256": "a15e51cceb1109308113d0ea6eb8cd94b442b4f8f0fc23ce7e2c1f03b8bb848a",
               "materialised_verified": true,
               "object_sha256": "89ad8a6f2e837e3cb9952334cb90b7965f180b8873823012b2a1827d6e35409e"
@@ -3018,8 +3608,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 2.338651344005484,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.509015866991831,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3064,8 +3654,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 2.350187336007366,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 2.034611645998666,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3110,8 +3700,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 1.2803965719940607,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.4115948519902304,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3156,8 +3746,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 2.5261044779908843,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.4991103829815984,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3202,8 +3792,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 1.6373286690213718,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.8085292050091084,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3248,8 +3838,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 1.3647672109946143,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.4949266689945944,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -3352,7 +3942,7 @@
           "ok": 11,
           "expected_rejections": 0,
           "isa_ref": "/home/tobias/Projects/bennett-workspace/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
-          "isa_ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609"
+          "isa_ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792"
         },
         "shadow-stack": {
           "cases": 9,
@@ -3383,7 +3973,7 @@
         "analysis-performance": {
           "cases": 3,
           "passed": 3,
-          "seconds": 6.000072286988143,
+          "seconds": 4.6861633799853735,
           "rounds": 64,
           "budget_diagnostic": "bennett: unimplemented: \u00a75.2 PT4/PT5 budget exhausted at AV(%258) in @ht_demo_grow (milestone 1) at   %258 = icmp eq i64 %257, %0\n"
         },
@@ -5950,6 +6540,587 @@
             }
           ]
         },
+        "reversible": {
+          "cases": 8,
+          "passed": 8,
+          "evidence": [
+            {
+              "case": "r-console",
+              "ok": true,
+              "source_sha256": "05ac01e3ee42d7ca2c4d857b7c0f644030eaa04081eb6216d22a9cb54fc34ae8",
+              "recognised_sha256": "73f4e3ac1289b0e84bd33136652e7411f8e221eb2abcf1e73c4198a55cd0a26b",
+              "materialised_sha256": "4c1a3ca87a8312caf3397068c8b727827ae014a5019b2c11a3d6247f99b3505b",
+              "materialised_verified": true,
+              "object_sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "hi\n",
+                  "console_hex": "68690a",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "9108b3889918cbbb1d19e5133dc89c23fc6a37173804e008f5f32e8cbae0c0f3",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 62,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        3
+                      ],
+                      "bytes": "68690a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "560ef3f03d6abbb2252996803cc700aeb0ddc3ef8e3ca140169fe28d613a7c36",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 62,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        3
+                      ],
+                      "bytes": "68690a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-start-exit",
+              "ok": true,
+              "source_sha256": "2a416b1c388f325b6e05f67270fc5f4169a2a1946202cc0fc4faa0ab55def18a",
+              "recognised_sha256": "9dfd3f3c262ee92ed0e52d433f53aea758d0f868b847f3463094616210618b70",
+              "materialised_sha256": "cca2fd1545ab6be62edaa22e8a6f7069557511d92becc23bcc8e0688d2b1189c",
+              "materialised_verified": true,
+              "object_sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x\n",
+                  "console_hex": "780a",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4160))",
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "370d18c229a68f145a8633edb791e34add550e703335e2566d83622f3e2a9c23",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "3"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 151,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        2
+                      ],
+                      "bytes": "780a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "2d4c4e2e2607a115fc22b8cf2caad46dc865be05e55f99dc0a96357fc35b3e1c",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "3"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 151,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        2
+                      ],
+                      "bytes": "780a",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-callback",
+              "ok": true,
+              "source_sha256": "561610af678a1e2f9cebe871d28f8078a5224d6567db0a1a26d1fd538e74574c",
+              "recognised_sha256": "8f6f7a6a9787bdd1d2e2cac19e50eceb8508b10de81129fda47aacf9e67b026c",
+              "materialised_sha256": "8c3a1e234b9f833409bb7c8d64528048e1beb57da0da71fa70207de3df8746bf",
+              "materialised_verified": true,
+              "object_sha256": "9adae426b5b490d489a897afd935cd387ce216f287711710db3d80bb51868026",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x",
+                  "console_hex": "78",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4160))",
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "efe7f5be87fb4684be0a79eb667cc60069030361f9d392ec5479eb06e57eced1",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 100,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4160,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "a7deb7cf9354637ab051bdad902f964b8e832ed4b814dee0d06626065291227b",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 100,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "r-asm",
+              "ok": true,
+              "source_sha256": "d79ff2a8027de99aa4d2369e86232991eecf5487e3eca6c7ef78e61bab345fcf",
+              "recognised_sha256": "f821cf0d61217c6d58f757b755039fc81f4be3f4f5747217ac4fbc91b4a09389",
+              "materialised_sha256": "a22f658bc2a4c2d1aa1780884b4a24e7062827b99c7e738592713757e17c57db",
+              "materialised_verified": true,
+              "object_sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+              "runs": [
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "x",
+                  "console_hex": "78",
+                  "effect_tape_length": 1,
+                  "entry": "main",
+                  "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "equals_entry": false,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "2bd600349ce2a62de1cf873034d6706408f57603d6e86eb3dcf110c5d1819a42",
+                  "memory_equals_entry": false,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": false,
+                  "run_state": "CLOSED",
+                  "status": "COMPLETED",
+                  "steps": 96,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                },
+                {
+                  "budgets": [],
+                  "clock": 0,
+                  "console": "",
+                  "console_hex": "",
+                  "effect_tape_length": 0,
+                  "entry": "main",
+                  "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "equals_entry": true,
+                  "fault": null,
+                  "faults": [],
+                  "first_difference": null,
+                  "host_requests": [
+                    {
+                      "address": 4144,
+                      "capacity": 20,
+                      "payload": "0000000000000000000000000000000000000000",
+                      "reply": "0000000000000000000000000000000000000000",
+                      "service": "bennett.argv"
+                    }
+                  ],
+                  "measurements": [],
+                  "memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                  "memory_equals_entry": true,
+                  "results": [
+                    {
+                      "type": "i32",
+                      "value": "0"
+                    }
+                  ],
+                  "reversed": true,
+                  "run_state": "CLOSED",
+                  "status": "REVERSED",
+                  "steps": 96,
+                  "tape": [
+                    {
+                      "args": [
+                        4096,
+                        1
+                      ],
+                      "bytes": "78",
+                      "dev": "console",
+                      "op": "write"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "case": "budget-0",
+              "ok": true,
+              "object_sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "",
+                "console_hex": "",
+                "effect_tape_length": 0,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "FAILED",
+                "steps": 44,
+                "tape": []
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "budget-1",
+              "ok": true,
+              "object_sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "x",
+                "console_hex": "78",
+                "effect_tape_length": 1,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "FAILED",
+                "steps": 57,
+                "tape": [
+                  {
+                    "args": [
+                      4096,
+                      1
+                    ],
+                    "bytes": "78",
+                    "dev": "console",
+                    "op": "write"
+                  }
+                ]
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "budget-2",
+              "ok": true,
+              "object_sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+              "result": {
+                "budgets": [],
+                "clock": 0,
+                "console": "x",
+                "console_hex": "78",
+                "effect_tape_length": 1,
+                "entry": "main",
+                "entry_memory_digest": "a400c1c89d8c552e3ee136d21c19c3d1947e346ebf7faddc65c7bf0a0f87b7ea",
+                "equals_entry": false,
+                "fault": null,
+                "faults": [],
+                "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(4144))",
+                "host_requests": [
+                  {
+                    "address": 4144,
+                    "capacity": 20,
+                    "payload": "0000000000000000000000000000000000000000",
+                    "reply": "0000000000000000000000000000000000000000",
+                    "service": "bennett.argv"
+                  }
+                ],
+                "measurements": [],
+                "memory_digest": "18a41a1bec2820c2d0592501c55498d1a6a17a255aeb45c3c13c7257e4040c2c",
+                "memory_equals_entry": false,
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "reversed": false,
+                "run_state": "CLOSED",
+                "status": "COMPLETED",
+                "steps": 62,
+                "tape": [
+                  {
+                    "args": [
+                      4096,
+                      1
+                    ],
+                    "bytes": "78",
+                    "dev": "console",
+                    "op": "write"
+                  }
+                ]
+              },
+              "typed_fault_implemented": false
+            },
+            {
+              "case": "r-hello",
+              "ok": true,
+              "production_complete": false,
+              "source_sha256": "5a3f6372c8411384fe434163f907d336ac37049a9476417609ad0ac10e2d27d1",
+              "runtime_sha256": "a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632",
+              "arith_sha256": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702",
+              "postlink_sha256": "46857877d0df028b4a56ab52baf594d5929d7a202297a1cb19e3badcbef6a61c",
+              "recognised_sha256": "65fa4829fe88a7f1e3233ba0fb96e09f9e5766d1c2f69c21afa54e901363e628",
+              "analysis_seconds": 0.5738909089996014,
+              "analysis_rounds": 6,
+              "diagnostic": "bennett: blocked:BD-B-ISA7 \u00a711.5/\u00a717.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n",
+              "expected_blocked": "BD-B-ISA7",
+              "materialised_verified": true,
+              "materialised_sha256": "ce01e4853ee3a2820e8a0f1dc5a915fb84412dfd15c67447e1f71d4b4a3d71f3",
+              "object_sha256": "6bbb2290ea80882269b840cd877472b4e4619c4af3f080b0ee5f29430b0801e4"
+            }
+          ]
+        },
         "softfloat": {
           "cases": 116,
           "passed": 116,
@@ -6014,8 +7185,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.004360706021543592,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.0023219749855343252,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6060,8 +7231,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.004602819011779502,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.0025865620118565857,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6106,8 +7277,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.005310976994223893,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.00304089198471047,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6152,8 +7323,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 0.007066550984745845,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.0038917869969736785,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6258,7 +7429,7 @@
               "ok": true,
               "detail": "bennett: analysis-only: S1-S5 complete; no production artefact\n",
               "source_sha256": "da8aae6257c1cc3df12ddefe89a236567e452d2112e023b752f3d674ddc6c6ce",
-              "recognised_sha256": "a3379afb4d10a74fd45c6273a295118cc1b01fe91057f1cac3e55dde47c2b506",
+              "recognised_sha256": "f450d80a28d0a3647eea45bb2d08224b1c1fa27a8ab38d4ce74ac99c7fb9baa7",
               "materialised_sha256": "7bc22fcb6d4d77ab8e5e5aa0538b3d93a9c49f6a6ffdb07a58d278f4b492fa74",
               "materialised_verified": true,
               "object_sha256": "c3dfe4295e544410d38c0fd60e4207711c71c1386623cbed05418b9e5bd35b1a"
@@ -6277,8 +7448,8 @@
                 "--budget",
                 "1000000,65536,65536,128"
               ],
-              "seconds": 276.1403753400082,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 181.06502632400952,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [
                   {
@@ -6333,7 +7504,7 @@
               "ok": true,
               "detail": "{\"object_hash\":\"120f4827e825ea00c5f8d226152b8db7589b2d79074d9fb60a4cf59287b96c60\",\"status\":\"ok\",\"symbols\":{\"C0\":{\"closure_hash\":\"638486d955b1e0d539088dbcf4a4832f093907c4fc9db84bece5d43cbaca237a\",\"interface_hash\":\"638486d955b1e0d539088dbcf4a4832f093907c4fc9db84bece5d43cbaca237a\"},\"C1\":{\"closure_hash\":\"18f0c43341e726cf12438d25d5dfe1eaa9ca27dabb23e15d2eea9a5194aaab0c\",\"interface_hash\":\"18f0c43341e726cf12438d25d5dfe1eaa9ca27dabb23e15d2eea9a5194aaab0c\"},\"C10\":{\"closure_hash\":\"16e8ffed15c4e3d64854e027fa20396f8be1194cb8c929c3f3ddd9b4bada88d7\",\"interface_hash\":\"16e8ffed15c4e3d64854e027fa20396f8be1194cb8c929c3f3ddd9b4bada88d7\"},\"C11\":{\"closure_hash\":\"7091481136084884b9da32062a570b477b47765d37e58325aacd76a31bae2b22\",\"interface_hash\":\"7091481136084884b9da32062a570b477b47765d37e58325aacd76a31bae2b22\"},\"C12\":{\"closure_hash\":\"979c775df89ad5f2accc8011ce914765e54fa078e216ee3361f62ad986fbe8e9\",\"interface_hash\":\"979c775df89ad5f2accc8011ce914765e54fa078e216ee3361f62ad986fbe8e9\"},\"C13\":{\"closure_hash\":\"ee50871b5d3a1fe6639b7fc189993d43bd677150f6accd360941b406df71a956\",\"interface_hash\":\"ee50871b5d3a1fe6639b7fc189993d43bd677150f6accd360941b406df71a956\"},\"C14\":{\"closure_hash\":\"4fd72f1944bb5a17bbf2c03ef63e1b12ecdd86d767a2d0e91c5d83b7dff870e1\",\"interface_hash\":\"4fd72f1944bb5a17bbf2c03ef63e1b12ecdd86d767a2d0e91c5d83b7dff870e1\"},\"C15\":{\"closure_hash\":\"3bbb6ebf97b24e94e8894a09de3f35bd34ca8a46d2255a0552d5c5c3ea58ed60\",\"interface_hash\":\"3bbb6ebf97b24e94e8894a09de3f35bd34ca8a46d2255a0552d5c5c3ea58ed60\"},\"C16\":{\"closure_hash\":\"77126040610a55cb77eff19f6039f235862aee4be8961f0af331390d9abfd7bb\",\"interface_hash\":\"77126040610a55cb77eff19f6039f235862aee4be8961f0af331390d9abfd7bb\"},\"C2\":{\"closure_hash\":\"496f0409e0a27a3ea8ee50bb49ff088230f6d1a9477d3d9f336d5b592a2c3ebf\",\"interface_hash\":\"496f0409e0a27a3ea8ee50bb49ff088230f6d1a9477d3d9f336d5b592a2c3ebf\"},\"C3\":{\"closure_hash\":\"b6861a8a8e1edd1ab74add59b2f4c1dc53215971629719eeacbb49f0771aa91d\",\"interface_hash\":\"b6861a8a8e1edd1ab74add59b2f4c1dc53215971629719eeacbb49f0771aa91d\"},\"C4\":{\"closure_hash\":\"97173d71a471f64890b7611dea8c3eed525afa4ea6625af75d5c4322eee08905\",\"interface_hash\":\"97173d71a471f64890b7611dea8c3eed525afa4ea6625af75d5c4322eee08905\"},\"C5\":{\"closure_hash\":\"7c2a934c46fd360490788615f30b25333ae221132266443dd0f6a89d3f64e045\",\"interface_hash\":\"7c2a934c46fd360490788615f30b25333ae221132266443dd0f6a89d3f64e045\"},\"C6\":{\"closure_hash\":\"fe03714191f78d7d47cd31f3f16ce3e23659e75c6fea38b0dad13f9b531ae48d\",\"interface_hash\":\"fe03714191f78d7d47cd31f3f16ce3e23659e75c6fea38b0dad13f9b531ae48d\"},\"C7\":{\"closure_hash\":\"f2aa673d6c1092999ad3a16a595047c1815a1741b2739f568dbc70bd49e4a4ba\",\"interface_hash\":\"f2aa673d6c1092999ad3a16a595047c1815a1741b2739f568dbc70bd49e4a4ba\"},\"C8\":{\"closure_hash\":\"cd463d8659863ff764b105259bc8172c52f57e2cf4955550e9a006af99a8268a\",\"interface_hash\":\"cd463d8659863ff764b105259bc8172c52f57e2cf4955550e9a006af99a8268a\"},\"C9\":{\"closure_hash\":\"638e0513c136e7855b2c84d8f9b39eabcf35152d1a161412c534431ed23e5893\",\"interface_hash\":\"638e0513c136e7855b2c84d8f9b39eabcf35152d1a161412c534431ed23e5893\"},\"G1\":{\"closure_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\",\"interface_hash\":\"7840f369d29ca57f36772dc4abb2527b8bbccb575786d2312a6098964056cb60\"},\"G2\":{\"closure_hash\":\"0ea9ce24d087b70452d4e25f3bbd58bf46994171adcfc3f663f2aae2dee197a4\",\"interface_hash\":\"0ea9ce24d087b70452d4e25f3bbd58bf46994171adcfc3f663f2aae2dee197a4\"},\"G3\":{\"closure_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\",\"interface_hash\":\"9d3aca04351c878d6876df5bd35776f57012ffe2e47eee3cec4c6105684a9550\"},\"G4\":{\"closure_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\",\"interface_hash\":\"3879e146fc0259de6e55b6419ae04d56e91a94d01e7ac18d36b9aee8bf2ecbe5\"},\"G5\":{\"closure_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\",\"interface_hash\":\"ea4323cc75fa2ea4bd3e398b4503f2cb3e579936b75ea6fbc89ea8c3ed0684a8\"},\"G6\":{\"closure_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\",\"interface_hash\":\"17312273548bd6fcdcab3439db9b538f50e3a9c2c80e7c1d6198cfe1bb48d106\"},\"G7\":{\"closure_hash\":\"acee93d58e3e8ce21d2d7211e8ce322e23421d462be76e5acba045ad7a77e30d\",\"interface_hash\":\"acee93d58e3e8ce21d2d7211e8ce322e23421d462be76e5acba045ad7a77e30d\"},\"G8\":{\"closure_hash\":\"e70f3bf1945db87760a1431655f8ccb88006efcc527c4cce4e151dc57ddd4d45\",\"interface_hash\":\"e70f3bf1945db87760a1431655f8ccb88006efcc527c4cce4e151dc57ddd4d45\"},\"G9\":{\"closure_hash\":\"50056ebd424a5085a7df3453d99a62375dde738eeb3e334eb46ea1377624f951\",\"interface_hash\":\"50056ebd424a5085a7df3453d99a62375dde738eeb3e334eb46ea1377624f951\"},\"top\":{\"closure_hash\":\"453dec24ddb2b7307337e5011d325ab931e6cfcbaec72bbe67de3253256ec09a\",\"interface_hash\":\"453dec24ddb2b7307337e5011d325ab931e6cfcbaec72bbe67de3253256ec09a\"}},\"unresolved_imports\":[]}\n",
               "source_sha256": "9d8002104502aa21c71be9fef09bf7971a09c1329c7317eeb41baaf5787ac645",
-              "recognised_sha256": "349bd0c6e1a9cd1c8fc6f4867efe30e97f23e9cf37738c8f47afd75e50732fe2",
+              "recognised_sha256": "916f0b500425794ea13f57680c8c4531a7ab685c099225591e0167a04fb18cf8",
               "materialised_sha256": "5357f32f0177280dd4993c30f6eb6a9fc8ed4e11df72fe211c84ab8f37897a83",
               "materialised_verified": true,
               "object_sha256": "120f4827e825ea00c5f8d226152b8db7589b2d79074d9fb60a4cf59287b96c60"
@@ -6353,8 +7524,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 3.960615913005313,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 0.9291484800050966,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6399,8 +7570,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 3.7248894619988278,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.5655744060059078,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6445,8 +7616,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 1.7160804569721222,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.5416262980143074,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6491,8 +7662,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 1.8053051280148793,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.4811309030046687,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6537,8 +7708,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 2.973249370988924,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 1.7558686190168373,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6583,8 +7754,8 @@
                 "1000000,65536,65536,128",
                 "--reverse"
               ],
-              "seconds": 2.8142676309798844,
-              "ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609",
+              "seconds": 2.1953554610081483,
+              "ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
               "result": {
                 "budgets": [],
                 "clock": 0,
@@ -6687,7 +7858,7 @@
           "ok": 11,
           "expected_rejections": 0,
           "isa_ref": "/home/tobias/Projects/bennett-workspace/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
-          "isa_ref_sha256": "6c745ffb3d70007088a40e8b5ad965af29af281369066f38889fd94a150ef609"
+          "isa_ref_sha256": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792"
         },
         "shadow-stack": {
           "cases": 9,
@@ -8515,11 +9686,11 @@
       }
     },
     "object_pairs": {
-      "count": 305,
+      "count": 312,
       "byte_identical": true,
       "published_matches": 45,
-      "production_cross_major_pairs": 220,
-      "preserved_previous_objects": 299,
+      "production_cross_major_pairs": 227,
+      "preserved_previous_objects": 305,
       "rows": [
         {
           "object": "scalar/oracle-empty-output",
@@ -10350,8 +11521,1169 @@
           "bytes": 1285,
           "sha256": "52d4dbe21bf261f2735c6b460ce054d4360897bdba20c724ad01f7b046479567",
           "published_golden": null
+        },
+        {
+          "object": "reversible/budget-0/out/main/launch.bennett",
+          "bytes": 3980,
+          "sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/budget-1/out/main/launch.bennett",
+          "bytes": 3980,
+          "sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/budget-2/out/main/launch.bennett",
+          "bytes": 3980,
+          "sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/r-asm/out/main/launch.bennett",
+          "bytes": 4980,
+          "sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/r-callback/out/main/launch.bennett",
+          "bytes": 5332,
+          "sha256": "9adae426b5b490d489a897afd935cd387ce216f287711710db3d80bb51868026",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/r-console/out/main/launch.bennett",
+          "bytes": 3989,
+          "sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+          "published_golden": null
+        },
+        {
+          "object": "reversible/r-start-exit/out/main/launch.bennett",
+          "bytes": 7316,
+          "sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+          "published_golden": null
         }
       ]
-    }
+    },
+    "rung3": {
+      "source_report": "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/report.json",
+      "source_report_sha256": "03f75d21b9fdaa2bc467c2a93af441ea8061bf90ab3d5447d1f72f11052365a8",
+      "exit": 1,
+      "report": {
+        "manifest": {
+          "time_utc": "2026-11-01T14:59:32.062114+00:00",
+          "commands": [
+            {
+              "tag": "build/llvm18-clang-version",
+              "argv": [
+                "/usr/lib/llvm-18/bin/clang",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.024,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/llvm18-opt-version",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.017,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/llvm18-llvm-link-version",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.021,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/llvm23-clang-version",
+              "argv": [
+                "/usr/lib/llvm-23/bin/clang",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.029,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/llvm23-opt-version",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.02,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/llvm23-llvm-link-version",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "--version"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.018,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/bennett-plugin-archive",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin",
+                "archive",
+                "60792e378950c014a37bfa6061a3343c0fea09e0"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.027,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/plugin-configure",
+              "argv": [
+                "cmake",
+                "-S",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0",
+                "-B",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.465,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/plugin-build",
+              "argv": [
+                "cmake",
+                "--build",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build",
+                "-j",
+                "4"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 95.77,
+              "timeout_seconds": 1800
+            },
+            {
+              "tag": "build/bennett-runtimes-archive",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes",
+                "archive",
+                "6808622d560b2e301c635c205eecde3d932b6df5"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.006,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/bennett-arith-archive",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-arith",
+                "archive",
+                "249e6192b95c6dbbb875510c32a677ba113e9af5"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.011,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/vm-head",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd",
+                "status",
+                "--porcelain",
+                "--untracked-files=no"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.005,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/vm-build",
+              "argv": [
+                "cargo",
+                "build",
+                "--offline",
+                "--manifest-path",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/Cargo.toml",
+                "--target-dir",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.021,
+              "timeout_seconds": 600
+            },
+            {
+              "tag": "build/bennett-driver-archive",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-driver",
+                "archive",
+                "306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.006,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "build/driver-build",
+              "argv": [
+                "cargo",
+                "build",
+                "--offline",
+                "--manifest-path",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-driver-306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5/Cargo.toml",
+                "--target-dir",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-driver-306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5/target"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.022,
+              "timeout_seconds": 600
+            },
+            {
+              "tag": "18/frontend",
+              "argv": [
+                "/usr/lib/llvm-18/bin/clang",
+                "--target=x86_64-unknown-linux-musl",
+                "--sysroot=/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/musl-sysroot",
+                "-nostdinc",
+                "-isystem",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/musl-sysroot/include",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/hello.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/input.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.028,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/frontend",
+              "argv": [
+                "/usr/lib/llvm-23/bin/clang",
+                "--target=x86_64-unknown-linux-musl",
+                "--sysroot=/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/musl-sysroot",
+                "-nostdinc",
+                "-isystem",
+                "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/musl-sysroot/include",
+                "-O2",
+                "-flto",
+                "-emit-llvm",
+                "-c",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/hello.c",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/input.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.036,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/runtime-link",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/runtimes-published/llvm18/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-arith-249e6192b95c6dbbb875510c32a677ba113e9af5/dist/llvm18/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/linked.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.019,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/runtime-link",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-link",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/input.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/runtimes-published/llvm23/bennett-runtimes.bc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-arith-249e6192b95c6dbbb875510c32a677ba113e9af5/dist/llvm23/bennett-arith.bc",
+                "--only-needed",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/linked.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.027,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/postlink",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-passes=lto<O3>",
+                "-S",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/postlink.ll"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.072,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/postlink",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-passes=lto<O3>",
+                "-S",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/linked.bc",
+                "-o",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/postlink.ll"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.092,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/production",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/out",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/postlink.ll"
+              ],
+              "exit": 1,
+              "elapsed_seconds": 0.235,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/runtime-symbols",
+              "argv": [
+                "/usr/lib/llvm-18/bin/llvm-nm",
+                "--defined-only",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/runtimes-published/llvm18/bennett-runtimes.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.021,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/mode-probe",
+              "argv": [
+                "/usr/lib/llvm-18/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build/libbennett-plugin-18.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/probe-out",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/effect-console-r.ll"
+              ],
+              "exit": 3,
+              "elapsed_seconds": 4.706,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/driver-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-driver-306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5/target/debug/bennett-driver",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/driver-probe",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/effect-console-r.ll"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.002,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "contract/dialect",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-dialect-spec",
+                "show",
+                "023f5a771a814270634db3be9cfde88ded69f975:spec/Bennett-Dialect-Spec.md"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.008,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/reference-control-check",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "check",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.005,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/reference-control-forward",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.004,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/reference-control-reset",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "reverse",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.004,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/reference-replay-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621",
+                "--replay-tape",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/reference-control-tape.json"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.004,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/VM-control-check",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "check",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.01,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/VM-control-forward",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.012,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/VM-control-reset",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "reverse",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.019,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "18/VM-replay-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621",
+                "--replay-tape",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/18/VM-control-tape.json"
+              ],
+              "exit": 1,
+              "elapsed_seconds": 0.002,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/production",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/out",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/postlink.ll"
+              ],
+              "exit": 3,
+              "elapsed_seconds": 9.842,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/runtime-symbols",
+              "argv": [
+                "/usr/lib/llvm-23/bin/llvm-nm",
+                "--defined-only",
+                "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/runtimes-published/llvm23/bennett-runtimes.bc"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.019,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/mode-probe",
+              "argv": [
+                "/usr/lib/llvm-23/bin/opt",
+                "-load-pass-plugin=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-plugin-60792e378950c014a37bfa6061a3343c0fea09e0/build/libbennett-plugin-23.so",
+                "-passes=bennett",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-budget-default=10000000,1048576,65536,256,65536",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/probe-out",
+                "-disable-output",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/effect-console-r.ll"
+              ],
+              "exit": 3,
+              "elapsed_seconds": 2.901,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/driver-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung3-bennett-driver-306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5/target/debug/bennett-driver",
+                "--bennett-tier=reversible",
+                "--bennett-entry=main",
+                "-bennett-dialect=0.2.10",
+                "-bennett-isa=0.8",
+                "-bennett-out=/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/driver-probe",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/effect-console-r.ll"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.002,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "contract/dialect",
+              "argv": [
+                "git",
+                "-C",
+                "/home/tobias/Projects/bennett-workspace/bennett-dialect-spec",
+                "show",
+                "023f5a771a814270634db3be9cfde88ded69f975:spec/Bennett-Dialect-Spec.md"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.008,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/reference-control-check",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "check",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.005,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/reference-control-forward",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.004,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/reference-control-reset",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "reverse",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.003,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/reference-replay-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-isa-spec-review/reference-interpreter/target/release/bennett-isa-ref",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621",
+                "--replay-tape",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/reference-control-tape.json"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.004,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/VM-control-check",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "check",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.01,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/VM-control-forward",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.012,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/VM-control-reset",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "reverse",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621"
+              ],
+              "exit": 0,
+              "elapsed_seconds": 0.016,
+              "timeout_seconds": 300
+            },
+            {
+              "tag": "23/VM-replay-probe",
+              "argv": [
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/vm-9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd/target/debug/bennett-vm",
+                "run-cc",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/ladder/rung-3/fixtures/executor-control.bisa",
+                "effects",
+                "--entropy",
+                "0b1621",
+                "--replay-tape",
+                "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/23/VM-control-tape.json"
+              ],
+              "exit": 1,
+              "elapsed_seconds": 0.002,
+              "timeout_seconds": 300
+            }
+          ],
+          "pins": {
+            "bennett-plugin": "60792e378950c014a37bfa6061a3343c0fea09e0",
+            "bennett-vm": "9ac6d3e11b5b62f4e5f9a4c7294622a00db89bcd",
+            "bennett-runtimes": "6808622d560b2e301c635c205eecde3d932b6df5",
+            "bennett-driver": "306b6e90df85a6b0f59e1e57b04ff7fbcae37ce5",
+            "bennett-arith": "249e6192b95c6dbbb875510c32a677ba113e9af5",
+            "bennett-isa-spec": "997d70000eefba6e56ce0e4b1559a02757d15006",
+            "bennett-isa-spec-review": "ba7d13f76e73c2af4e035d3f51145d2fad76bd2f",
+            "bennett-dialect-spec": "023f5a771a814270634db3be9cfde88ded69f975"
+          },
+          "dialect": "0.2.10",
+          "isa": "0.8",
+          "budget": "10000000,1048576,65536,256",
+          "environment": {
+            "DISPLAY": null,
+            "WAYLAND_DISPLAY": null,
+            "DBUS_SESSION_BUS_ADDRESS": null,
+            "BROWSER": null,
+            "TMPDIR": "/home/tobias/Projects/bennett-workspace/bennett-conformance/.tmp"
+          },
+          "sysroots": {
+            "18": "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm18/musl-sysroot",
+            "23": "/home/tobias/Projects/bennett-workspace/bennett-runtimes/dist/llvm23/musl-sysroot"
+          },
+          "gate_sha256": "78ad291c8e638b60e54ba66c89b15958660f379b5970c81009620d71c32965c6",
+          "shared_support_sha256": "6d048b4ad212469e4ff964e4729615f0ceb81345157520108fc74827d7012981",
+          "blockers_sha256": "c45c17fa67bb93ba48b134f73a698d2f5b038a775c9811eba8a306278f43c3dd",
+          "fixtures": {
+            "hello.c": "845f417ae66e126b060ce675793ad9525d9ec02d378585d73358b114740e5112",
+            "effect-console-r.ll": "c58a54dd90ec02edac4fe7b171be303faab496b3563bce63c54a101dd0d1bd04",
+            "executor-control.bisa": "b8d9aab471f0d17191452f849e4052aa6afd0ea878316ba9db9f36126510a467"
+          },
+          "plugin_sha256": {
+            "18": "01e9ea52f7c27e723f8c45ad282ed94c3c09277f79b17c3033e6bf968c5e1db9",
+            "23": "9f07ce1bf95d109b1eaa948f3f003d617f0e1959e7a3e90071cf2f7be9a9d1e6"
+          },
+          "vm_sha256": "ab733aebb0f8630e17b530cb0e8b2fa5a633daa2ea4a10626e396d6eb0f51c73",
+          "driver_sha256": "d3bf7bd0b457c91b33f317c4a76dc4d63366ec5c2d58f1553616381057438f42",
+          "musl_stdio_sha256": {
+            "18": "36dda63d91161ecdd42755393bc7ff827dbfe82e512b630d2f2386c1acb8dbfa",
+            "23": "36dda63d91161ecdd42755393bc7ff827dbfe82e512b630d2f2386c1acb8dbfa"
+          },
+          "runtimes_sha256": {
+            "18": "6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d",
+            "23": "a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632"
+          },
+          "arith_sha256": {
+            "18": "b235c88a7f9ace6b8290397b978ab162a6a41441844ada3fd2ccccf2532a7d51",
+            "23": "1c7f40092c4d341402406a7f705cfc316a8dbfe2886069469386674d814e2702"
+          },
+          "executor_sha256": {
+            "reference": "166a25c6c22481aff71d437a236cb77ce92871726594e40a725cdd88e08c2792",
+            "VM": "ab733aebb0f8630e17b530cb0e8b2fa5a633daa2ea4a10626e396d6eb0f51c73"
+          }
+        },
+        "stages": {
+          "18": {
+            "fixtures": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "plugin build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "driver build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "musl C front end": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "runtime bitcode link": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "post-link LTO": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "reversible production": {
+              "status": "FAIL",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "18/production: exit 1\nbennett: unimplemented: \u00a712 N21/N27 vector intrinsic lane materialisation (milestone 2) at   %129 = call <4 x i32> @llvm.fshl.v4i32(<4 x i32> %126, <4 x i32> %128, <4 x i32> <i32 8, i32 8, i32 8, i32 8>)\n"
+            },
+            "launch artefacts": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reversible production"
+            },
+            "native comparison": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts, driver build"
+            },
+            "reference admission": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts"
+            },
+            "reference forward = native": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires native comparison, reference admission"
+            },
+            "reference reset": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reference forward = native"
+            },
+            "reference tape replay": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reference reset"
+            },
+            "VM admission": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts, VM build"
+            },
+            "VM forward = native": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires native comparison, VM admission"
+            },
+            "VM reset": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires VM forward = native"
+            },
+            "VM tape replay": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires VM reset"
+            },
+            "runtime libc/console audit (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "R-mode probe (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "18/mode-probe: exit 3\nbennett: blocked:BD-B-ISA7 \u00a711.5/\u00a717.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n"
+            },
+            "driver probe (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "bennett-driver-cyg"
+              ],
+              "error": "driver returned success without pipeline outputs"
+            },
+            "ISA-0.8 R contract (prerequisite)": {
+              "status": "FAIL",
+              "beads": [
+                "b-isa-spec-221"
+              ],
+              "error": "BD-B-ISA7: dialect \u00a711.5/17.6 blocks every ISA-0.8 whole-program R entry; typed pre-instruction budget fault requires ISA-7"
+            },
+            "reference device/reset control (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "reference replay API (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM device/reset control (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM replay API (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "bennett-vm-u8m"
+              ],
+              "error": "18/VM-replay-probe: exit 1\nunknown option --replay-tape\n"
+            }
+          },
+          "23": {
+            "fixtures": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "plugin build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "driver build": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "musl C front end": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "runtime bitcode link": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "post-link LTO": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "reversible production": {
+              "status": "FAIL",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "23/production: exit 3\nbennett: blocked:BD-B-ISA7 \u00a711.5/\u00a717.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n"
+            },
+            "launch artefacts": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reversible production"
+            },
+            "native comparison": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts, driver build"
+            },
+            "reference admission": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts"
+            },
+            "reference forward = native": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires native comparison, reference admission"
+            },
+            "reference reset": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reference forward = native"
+            },
+            "reference tape replay": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires reference reset"
+            },
+            "VM admission": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires launch artefacts, VM build"
+            },
+            "VM forward = native": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires native comparison, VM admission"
+            },
+            "VM reset": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires VM forward = native"
+            },
+            "VM tape replay": {
+              "status": "BLOCKED",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "Not run; requires VM reset"
+            },
+            "runtime libc/console audit (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "R-mode probe (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "UNFILED"
+              ],
+              "error": "23/mode-probe: exit 3\nbennett: blocked:BD-B-ISA7 \u00a711.5/\u00a717.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n"
+            },
+            "driver probe (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "bennett-driver-cyg"
+              ],
+              "error": "driver returned success without pipeline outputs"
+            },
+            "ISA-0.8 R contract (prerequisite)": {
+              "status": "FAIL",
+              "beads": [
+                "b-isa-spec-221"
+              ],
+              "error": "BD-B-ISA7: dialect \u00a711.5/17.6 blocks every ISA-0.8 whole-program R entry; typed pre-instruction budget fault requires ISA-7"
+            },
+            "reference device/reset control (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "reference replay API (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM device/reset control (diagnostic)": {
+              "status": "PASS",
+              "beads": [],
+              "error": ""
+            },
+            "VM replay API (diagnostic)": {
+              "status": "FAIL",
+              "beads": [
+                "bennett-vm-u8m"
+              ],
+              "error": "23/VM-replay-probe: exit 1\nunknown option --replay-tape\n"
+            }
+          }
+        }
+      }
+    },
+    "whole_program_r_exploratory": {
+      "major": 23,
+      "classification": "measured failure, not corpus agreement",
+      "object_sha256": "6bbb2290ea80882269b840cd877472b4e4619c4af3f080b0ee5f29430b0801e4",
+      "admission": "ok",
+      "command": [
+        "bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+        "run-program",
+        "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/reversible/23/r-hello/out/main/launch.bennett",
+        "main",
+        "--budget",
+        "10000000,1048576,65536,256",
+        "--replies",
+        "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/reversible/23/r-console/argv.json"
+      ],
+      "result": {
+        "budgets": [],
+        "clock": 0,
+        "console": "",
+        "console_hex": "",
+        "effect_tape_length": 0,
+        "entry": "main",
+        "entry_memory_digest": "58d3cbd33a46353814e1930d18163c3f8a8dacb1bf80677386783d010bf00743",
+        "equals_entry": false,
+        "fault": 7,
+        "faults": [
+          {
+            "code": 7,
+            "name": "FAULT_UB_MEMFAULT"
+          }
+        ],
+        "first_difference": "instances of (0, \"v0\"): None differs from Some(Ptr(2102928))",
+        "host_requests": [
+          {
+            "address": 2102928,
+            "capacity": 20,
+            "payload": "0000000000000000000000000000000000000000",
+            "reply": "0000000000000000000000000000000000000000",
+            "service": "bennett.argv"
+          }
+        ],
+        "measurements": [],
+        "memory_digest": "05978c26f4401b5d31273111d323a63a7a6d0f5b99a551304e671ae3a59aaa26",
+        "memory_equals_entry": false,
+        "results": [],
+        "reversed": false,
+        "run_state": "CLOSED",
+        "status": "FAILED",
+        "steps": 1160,
+        "tape": []
+      },
+      "execution_log_sha256": "66237c1de6facb39294a00e4ce5207cc8b6561b5615ba1103703898eede9bf23"
+    },
+    "prior_failed_attempts": [
+      {
+        "log": ".tmp/bp-ivy-gate-cc-timeout-red.log",
+        "sha256": "d75fd3ab896b8a3ed0746c10af20651a9b5355eae8b52eef77dd60962bb320b8"
+      },
+      {
+        "log": ".tmp/bp-ivy-gate-coverage-red.log",
+        "sha256": "e94a638f5c78a32b8aae17d691b404408df8ea2a29bf237e8662c0d98d61aa95"
+      },
+      {
+        "log": ".tmp/bp-ivy-gate-manifest-red.log",
+        "sha256": "0232b2764c5cd51a8268b0fd9069c459380de8bc5694f3212b7c958887d55fe4"
+      },
+      {
+        "log": ".tmp/bp-ivy-gate-prerequisite-red.log",
+        "sha256": "3096939ebb030881e54282f82a2b6122a5f9da37ca5972b321a1ff5fa3d66ce7"
+      }
+    ]
   }
 }
