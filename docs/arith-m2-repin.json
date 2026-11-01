@@ -1,0 +1,131 @@
+{
+  "classification": "completed re-pin prerequisite; full gate exit 0",
+  "bead": "bp-ehi",
+  "arith_commit": "0dea42d001ffe832493fa0711da4a59b8cc1dd10",
+  "defined_exports": {
+    "18": 1134,
+    "23": 1134
+  },
+  "bounded_two_oracle_production_seconds": {
+    "18": 209.04,
+    "23": 195.38
+  },
+  "notes": [
+    "Initial gate failed with stale nested CMake compile pins; SPEC_VERSIONS.toml is now a configure dependency.",
+    "Debug build default and extended S2 guards exhausted with expanded seven-format/libm closure.",
+    "RelWithDebInfo default guard also exhausted; bounded 180000ms S2 probes both completed production.",
+    "The numerical production tests now use the same extended S2 allowance as their direct CC probes, with a 600s outer production timeout; default compiler guard unchanged.",
+    "No failed attempt is a green receipt."
+  ],
+  "logs": [
+    {
+      "path": ".tmp/pass26-arith-gate.log",
+      "sha256": "5a97c70c5f70ccfc7b17bdc75e7200d9c13d01bda350e9763ae3f0fde0c0c357"
+    },
+    {
+      "path": ".tmp/pass26-arith-gate-green.log",
+      "sha256": "3cbc2ee56824fc7b33815c8f70788eafa1072b76831e2a1bd54551a7a00ba76a"
+    },
+    {
+      "path": ".tmp/repin-frontier18.log",
+      "sha256": "fb3250653fd3566339954ee3727f77c035caec3a32a5787cd28e8b08ec4418be"
+    },
+    {
+      "path": ".tmp/repin-optimized18.log",
+      "sha256": "ef8fb65d95a27d92bac3ded6a92642b3ab4975f9c20a5781e72d31ba0db93dda"
+    },
+    {
+      "path": ".tmp/repin-optimized-extended18.log",
+      "sha256": "1e453dba815b97c9b599863bc7f8889c374ac0351bbf3b9b769519b12bbcadf4"
+    },
+    {
+      "path": ".tmp/repin-optimized-extended23.log",
+      "sha256": "bde420a9c44b1839d08b894a125ec522ea22f0d166cadf18d723697385be9409"
+    }
+  ],
+  "llvm18_softfloat": {
+    "passed": 112,
+    "cases": 112,
+    "full_width_cc_status": "COMPLETED",
+    "full_width_cc_seconds": 1677.3816474550113
+  },
+  "independent_corpus": {
+    "command": "python3 tests/corpus_gate.py",
+    "exit": 0,
+    "summary": {
+      "18": {
+        "cases_run": 66,
+        "cells_run": 924,
+        "cells_agree": 924,
+        "cases_agree": 66,
+        "cases_deferred": 0,
+        "cases_blocked": 0,
+        "cases_diverge": 0
+      },
+      "23": {
+        "cases_run": 66,
+        "cells_run": 792,
+        "cells_agree": 792,
+        "cases_agree": 66,
+        "cases_deferred": 0,
+        "cases_blocked": 0,
+        "cases_diverge": 0
+      }
+    }
+  },
+  "zero_input_L": {
+    "18": {
+      "code": 0,
+      "payload": 0,
+      "steps": 45049
+    },
+    "23": {
+      "code": 0,
+      "payload": 0,
+      "steps": 70276
+    }
+  },
+  "llvm23_softfloat": {
+    "passed": 116,
+    "cases": 116,
+    "full_width_cc_status": "COMPLETED",
+    "full_width_cc_seconds": 1639.7701262019982
+  },
+  "full_gate": {
+    "command": "scripts/gate",
+    "exit": 0,
+    "code_head": "4f67f6de5c6f96cdde734f99d144b919792e5ff6",
+    "arith_pinned_root": null,
+    "allocator_pinned_root": "/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/allocator-pinned",
+    "log": ".tmp/pass26-arith-final-gate.log",
+    "log_sha256": "feb91af8fe3e0a5f7c4403d042c173e414fa3590f4845b4f6663093f54316446",
+    "corpus": {
+      "18": {
+        "cases_run": 66,
+        "cells_run": 924,
+        "cells_agree": 924,
+        "cases_agree": 66,
+        "cases_deferred": 0,
+        "cases_blocked": 0,
+        "cases_diverge": 0
+      },
+      "23": {
+        "cases_run": 66,
+        "cells_run": 792,
+        "cells_agree": 792,
+        "cases_agree": 66,
+        "cases_deferred": 0,
+        "cases_blocked": 0,
+        "cases_diverge": 0
+      }
+    },
+    "previous_hashes_preserved": 312,
+    "implementation_head": "fd6a9e9",
+    "metadata_only_commits_preserved": [
+      "af1e243",
+      "4f67f6d"
+    ]
+  },
+  "completed_at": "2026-11-01T16:55:03Z",
+  "verification_receipt": "docs/verification.json"
+}

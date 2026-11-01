@@ -5,9 +5,11 @@ History before 2026-10-31 and per-pass evidence: `git show de4fe2c:docs/PROGRESS
 ## Resume
 
 Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**; M1 complete.
-Resume: **Pass 26 arith M2 repin in progress**; then bp-ozp, bp-xyn, bp-xv0, R blocker audit, softfloat and rung1 in the requested order.
-Live arith 0dea42d hashes verified on both majors; contract-policy regression red on stale pins, then green with paired bitcode/manifest repin.
-Pinned dialect/ISA unchanged; full gate pending, no bead closed yet. bp-ivy and bp-7ni remain open.
+Resume: **bp-ehi CLOSED (Pass 26 arith M2 re-pin)**; next **bp-ozp**, then bp-xyn / bp-xv0 / R audit / softfloat / rung1 in the requested order.
+Live arith 0dea42d is pinned with paired immutable manifests and 1,134 verified definitions per major; BENNETT_ARITH_PINNED_ROOT is unnecessary.
+Final scripts/gate exit 0, code fd6a9e9 / receipt head4f67f6d: both **66/66/0/0/0**, cells 924/924 and 792/792; all 312 prior hashes preserved; receipt docs/verification.json.
+Softfloat 112/112 and 116/116; unchanged full-width CC launches COMPLETED in 1677.382s/1639.770s. CMake tracks pin changes and uses RelWithDebInfo; default S2 wall guard unchanged (bp-xv0).
+All original requested beads remain open/blocked; bp-is0 has the exact hello R-entry/F(1) trigger and ISA 0.9 draft resolution note. No ISA upgrade, spec/sibling source edit or push.
 
 Build and gate (headless, rule 11), repo root:
 - Push gate: `env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER scripts/pre-push` gates the
@@ -23,8 +25,8 @@ Counts (LLVM 18 and 23, each): legality gate **66 run / 66 agree / 0 deferred / 
 Allocator closure: 4/4 probes per major, 11 CC vectors and five full-state reversals, with recognised/materialised hashes.
 Aggregate rows: 3/3 cases, 15 L vectors and 3 CC launches per major, with recognised/materialised hashes.
 CC calls: 2/2 probes per major, eight full-state reversals and four small-budget CC executions (§9.3), with recognised/materialised hashes.
-All 305 prior object hashes preserved; 312 equal object pairs, 45 published matches.
-Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (5.79s/5.64s for 18/23).
+All 312 prior object hashes preserved; 312 equal object pairs, 45 published matches.
+Both recorded hashtable modules reach the S2 fixpoint in 64 rounds (1.431s/0.936s for 18/23).
 Complete suite counts and linked-pipeline evidence: `docs/verification.json`, `docs/rung2-analysis.json`.
 
 ## Passes
@@ -182,3 +184,10 @@ Both majors: console/nested-exit/callback/asm forward + reset and source-budget 
 Full musl: six-round recognition both; LLVM18 next N21/N27 vector fshl is bp-ozp; LLVM23 emits verified artifacts and passes release ISA check but exploratory run faults7 at step1160 before console output.
 Final full gate exit0: 66/66/0/0/0 each, 312 equal pairs/45 published matches/all305 prior hashes preserved; R checks8/8 each.
 Rung3 exit1 at plugin60792e3 with published musl overrides: frontend/link/LTO/audit PASS both; production18 bp-ozp,23 BD-B-ISA7; downstream BLOCKED. Full startup/argv/runtime budgets remain bp-ivy; no full hello claim.
+
+### Pass 26 - 2026-11-01 - 229e4df, 8aaf80d, fd6a9e9 (bp-ehi closed)
+Live M2 0dea42d pins match supplied 8d99956e…/59563a3a… digests; immutable manifests and llvm-nm confirm 1,134 exports each; contract regression red→green.
+Nested CMake builds missed changed compile pins: SPEC_VERSIONS.toml now invalidates configuration; RelWithDebInfo retains symbols with optimized execution.
+Expanded numerical tests use the existing extended 180000ms S2 allowance and a 600s total production timeout; default compiler wall-clock budget is unchanged, bp-xv0 remains open.
+Final full gate exit 0: each 66/66/0/0/0, softfloat 112/112 and 116/116, unchanged full-width CC COMPLETED 1677.382s/1639.770s; 312 equal pairs/45 published matches/all 312 prior hashes preserved.
+Recorded with scripts/record-verification.py; earlier failed attempts separately hashed in docs/arith-m2-repin.json. Next bp-ozp; other original beads open/blocked; no sibling source edits or push.

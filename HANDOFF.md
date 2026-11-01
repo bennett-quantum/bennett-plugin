@@ -1,78 +1,38 @@
 # Handoff
 
-Rewritten at session end with `date -u`: **2026-11-01T15:09:42Z**.
+Rewritten at session end with `date -u`: **2026-11-01T16:56:46Z**.
 
-Pinned contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**.
-M1 remains complete. **bp-ivy remains OPEN**, **bp-ozp OPEN**; bp-loq and bp-5t9 closed.
-**bp-7ni remains BLOCKED on bp-xms**; arith was not repinned. The old 606-export
-publication still lacks its staged PPCDoubleDouble/own-format libm/signaling obligations.
-No spec ambiguity was found, no spec bead filed, no sibling source edited, no push.
-The orchestrator owns the session worklog and eventual push.
+Pinned contract remains dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0.8**.
 
-## R integration and actual limits
+## Resume
 
-Whole-program R options and entry analysis now route the reachable program into R bodies.
-The CC launch requests bennett.argv, initialises the logical stack, and calls R.
-Effects use ISA device models/tapes (§11.2), with scalar memory/call/phi lowering,
-indirect compare trees and shared global/function relocation (§14.2/§17.4/§19.5).
-N31 unlisted asm traps only when reached and has named, point-bound coverage.
-Each counted R instruction has a pre-instruction source-step check (§17.6).
-Nested exit pseudo-exceptions propagate and the launch returns their status (§14.7).
-Pinned §1.6/§11.5 requires artifacts **and exit 3 BD-B-ISA7** for every R entry;
-generic exhaustion traps are blocker fallbacks, never typed-fault conformance.
+**Pass 26 prerequisite complete: bp-ehi CLOSED.** Effort was spent on adopting the larger arith publication and completing its full gate. Next implementation bead is **bp-ozp** (LLVM18 vector fshl in musl memcpy), then bp-xyn, bp-xv0, bp-xkg/bp-is0 audit, bp-xms/bp-7ni, then bp-xb8/bp-zeg/bp-75y. All original requested beads remain open/blocked; bp-ivy is still partial. No later implementation was started.
 
-This is partial bp-ivy delivery. General argv/envp byte storage is explicit unimplemented
-if the source consumes either pointer argument; current launch replies carry argc and
-unused null pointers. Full musl startup/normal-return exit cleanup, runtime source-budget
-plumbing, complete depth/heap checks and exit-frame cleanup remain on bp-ivy.
-No acceptance or scope waiver is inferred from the passing small probes.
+## Publication and build
 
-## Probes and verification
+Arith **0dea42d001ffe832493fa0711da4a59b8cc1dd10** is now pinned, including immutable manifest provenance in SPEC_VERSIONS.toml. Live hashes and llvm-nm were checked: **1,134 definitions per major**.
 
-Probes: r-console.ll, r-start-exit.ll, r-callback.ll, r-asm.ll, r-budget.ll, r-hello.c.
-Both majors pass 8/8 checks, including forward/full-state reversal, skipped post-exit
-writes, callback relocation, reached/unreached asm and budgets 0/1/2 before effects/return.
-Recognised/materialised/source/object hashes and LLVM verification are recorded.
-Full published-musl hello reaches S1–S5 in six rounds on both majors. LLVM18 stops at
-`%129 = call <4 x i32> @llvm.fshl.v4i32(...)` in memcpy: next N21/N27 rule bp-ozp.
-LLVM23 emits verified artifacts; the release checker admits the unchanged object, but
-exploratory forward returns FAILED/fault 7 at step 1160 with no console output.
-The latter is preserved as measured failure, not agreement; suspected strlen word-tail
-bounds require confirmation. Do not pad allocations or waive §17.1 bounds speculatively.
+- LLVM18: `8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1`
+- LLVM23: `59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793`
 
-Final **scripts/gate exit 0**, code head **60792e378950c014a37bfa6061a3343c0fea09e0**:
-LLVM18/23 each **66 run / 66 agree / 0 deferred / 0 blocked / 0 diverge**,
-cells 924/924 and 792/792; softfloat 112/112 and 116/116. Unchanged full-width launches
-completed in 373.673s/181.065s. 312 equal object pairs, 45 published matches,
-all 305 previous hashes preserved. Recorded with scripts/record-verification.py;
-docs/verification.json contains the full consumer report and exploratory failure.
-Final raw log: .tmp/bp-ivy-gate.log. Prior prerequisite/coverage/manifest/CC-timeout
-red logs are hashed separately; none is a green receipt. The numerical timeout was
-fixed by restricting new recurrence acceleration to R analysis, retaining old CC behavior.
+Use the live dist; **unset BENNETT_ARITH_PINNED_ROOT**. The historical allocator probe still needs BENNETT_ALLOCATOR_PINNED_ROOT=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp/allocator-pinned (runtimes 469246e, original digest checks); current musl publication remains the R-hello input.
 
-## Immutable publications and rung3
+CMake's nested builds did not invalidate their compiled arith hashes on a TOML change. SPEC_VERSIONS.toml is now a configure dependency. The superbuild uses RelWithDebInfo. Expanded numerical production/recognition probes use the existing direct-CC 180000ms S2 allowance and a 600s outer production timeout. **The default 30s wall-clock guard is unchanged; bp-xv0 remains open.** No test case, oracle width, runtime budget or CC timeout was reduced or waived.
 
-Use BENNETT_ARITH_PINNED_ROOT=$PWD/.tmp/arith-pinned for llvm18/23/bennett-arith.bc
-extracted from arith 249e619. Original b235c88a…/1c7f4009… digest checks remain;
-export metadata is read from that same git publication even with only relocated .bc files.
-The historical allocator probe additionally uses
-BENNETT_ALLOCATOR_PINNED_ROOT=$PWD/.tmp/allocator-pinned, extracted from runtimes 469246e,
-with its original digest checks. The R hello separately pins the published musl
-6c1741c4…/a63f0421… artifacts, extracted from runtimes fd0c522 for the consumer.
-No SPEC_VERSIONS.toml change or new-arith adoption occurred.
+## Verification
 
-Rung3 gate ran **once**, exit 1, with --plugin-rev=60792e3 and --runtimes18/23 pointing
-to those immutable musl copies; default pre-musl consumer pins/files were not edited.
-Evidence: ../bennett-conformance/.tmp/rung-3/20261101T145932.061259Z/.
-Frontend/link/LTO/runtime export audit PASS both; production 18 stops bp-ozp,
-production 23 and both R probes exit 3 BD-B-ISA7. The old matcher calls these UNFILED;
-known bead mappings are on bp-ivy/bp-ozp, not patched into consumer evidence.
-Native/admission/forward/reset/replay required rows remain BLOCKED. Reference control
-and replay-API diagnostics PASS; driver cyg and pinned VM replay u8m FAIL.
-ISA-0.8 R prerequisite remains red (221). No full hello/native/replay acceptance claim.
+Final **scripts/gate exit 0**, implementation **fd6a9e9**, recorder head **4f67f6d**; BENNETT_ARITH_PINNED_ROOT unset throughout. LLVM18/23 each **66/66/0/0/0**, cells 924/924 and 792/792; softfloat 112/112 and 116/116; 312 equal object pairs, 45 published matches, all 312 prior hashes preserved. Recorded with `python3 scripts/record-verification.py` in docs/verification.json (the script file itself is not executable).
 
-Own commits: 182237c, e5f9400, 02aa97c, baa8125, b8ee2ad, 6dbfa3f, e1f797e, 60792e3; receipt 1f7883a;
-the final handoff formatting commit follows these. bp-eof was closed by c93f68a before this job.
-Run headless with project-local TMPDIR; unset DISPLAY/WAYLAND_DISPLAY/DBUS_SESSION_BUS_ADDRESS/BROWSER;
-never LLVM -view-*. Export beads before committing .beads; commit explicit own paths
-with BEADS_HOOK_TIMEOUT=20. Never push from this task.
+Unchanged 64-wire/two-oracle CC launches **COMPLETED in 1677.381647455s/1639.770126202s** (18/23), original args 1000000,1000000 and budget 1000000,65536,65536,128. Successful zero-input L probes: code 0, payload 0, 45049/70276 steps. These are existing numerical witnesses under the new pin, not full seven-format bp-7ni closure. bp-7ni remains blocked on bp-xms; do the requested full scope audit before closing either.
+
+Raw final gate: `.tmp/pass26-arith-final-gate.log`. `docs/arith-m2-repin.json` records earlier failed stale-build and analysis attempts separately, their hashes, focused generation timings and a separate successful corpus invocation. None is substituted for the final full gate.
+
+## R and comparison remainders
+
+Fresh R probes retain prior behavior: whole-musl LLVM18 reaches the vector `llvm.fshl.v4i32` frontier (bp-ozp); LLVM23 emits verified objects and exit 3 BD-B-ISA7. No fresh full hello forward/native/reset/replay success is claimed. Existing exploratory fault 7, argv/envp storage, full startup/exit cleanup and runtime-budget plumbing remain bp-ivy; native materialisation/link-map work remains bp-xyn.
+
+**bp-is0 now records the precise hello trigger:** selecting whole-program R entry main requires the mandatory §17.6 pre-instruction budget point F(1), even when generous limits permit success (§11.5/§1.6). Generic trap cannot report arbitrary code 1. ISA 0.9 draft K5, §4.1/§4.9/§10 defines typed `fault C`, exact terminal code, no later source effect and retained reversible prefix; the draft explicitly gives exhaustion as `fault 1`. Migration is b-isa-spec-fuk. No 0.9 producer mode or accepted-contract change was made; independent bp-ivy/bp-xyn mechanics are not claimed resolved.
+
+Own code commits: **229e4df, 8aaf80d, fd6a9e9**; the receipt/handoff commit follows. Concurrent **af1e243/4f67f6d** add bead metadata only; verified no source/test/build/pin differences from fd6a9e9 and preserved both. No sibling source edited, no dialect ambiguity bead filed, no push. The orchestrator owns the session worklog and eventual push.
+
+Run headlessly: unset DISPLAY/WAYLAND_DISPLAY/DBUS_SESSION_BUS_ADDRESS/BROWSER; TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp. Never LLVM -view-*. Export beads before committing .beads; commit explicit paths with BEADS_HOOK_TIMEOUT=20. Never push from this implementation task.
