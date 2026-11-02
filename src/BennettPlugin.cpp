@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "NativeComparison.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -446,6 +447,10 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
             pb.registerPipelineParsingCallback(
                 [](StringRef n, ModulePassManager &pm,
                    ArrayRef<PassBuilder::PipelineElement>) {
+                  if (n == "bennett-native-comparison") {
+                    bennett::addNativeComparisonPass(pm);
+                    return true;
+                  }
                   if (n != "bennett")
                     return false;
                   pm.addPass(bennett::BennettPass());
