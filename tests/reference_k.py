@@ -89,6 +89,20 @@ loop:
 out:
  ret <2 x i16> %v
 }'''
+PT5_SETS='''@g = internal global [8 x i64] zeroinitializer
+@h = internal global [8 x i64] zeroinitializer
+define i64 @top(i1 %c) {
+ %p = select i1 %c, ptr @g, ptr @h
+ %i = ptrtoint ptr %p to i64
+ %n = select i1 %c, i64 8, i64 16
+ %d = add i64 %i, %n
+ %j = ptrtoint ptr @g to i64
+ %diff = sub i64 %i, %j
+ %neg = sub i64 100, %j
+ %r = add i64 %d, %diff
+ %s = add i64 %r, %neg
+ ret i64 %s
+}'''
 def solve(major,name,body,early=False):
  dest=R/f'.tmp/reference-k/{major}/{name}';dest.mkdir(parents=True,exist_ok=True)
  src=dest/'in.ll';src.write_text('target datalayout = "e-p:64:64"\n'+body+'\n');report=dest/'report.json'
@@ -130,6 +144,11 @@ def main():
  check('call-cycle-top',v['top'] and data['analysis_rounds']<100,{'rounds':data['analysis_rounds'],'v':v})
  data,_=solve(m,'lane-orbit',LANE_ORBIT);v=value(data,'%v','top')
  check('lane-orbit-exact',data['analysis_rounds']<100 and not v['top'],{'rounds':data['analysis_rounds'],'top':v['top']})
+ # PT5 on address sets: one displaced image per INT, a conservative one for address minus address and INT minus address.
+ data,_=solve(m,'pt5-sets',PT5_SETS)
+ v=value(data,'%d');check('pt5-displaced-exact',set(v['atoms'])=={'PTR(@g,8,0)','PTR(@g,16,0)','PTR(@h,8,0)','PTR(@h,16,0)'},v)
+ v=value(data,'%diff');check('pt5-address-difference',v['top'] and 'PTR(@g,0,-1)' in v['atoms'] and 'PTR(@h,0,-1)' in v['atoms'],v)
+ v=value(data,'%neg');check('pt5-int-minus-address',v['top'] and 'PTR(@g,0,-1)' in v['atoms'],v)
  # The flag is the only way to the earlier closure, and it says so.
  body,last=unknown_extent(40);data,err=solve(m,'early-unknown-40',body,early=True);v=value(data,last)
  check('flag-closes-early',v['top'] and len(v['atoms'])<8,{'top':v['top'],'atoms':v['atoms'][:8]})

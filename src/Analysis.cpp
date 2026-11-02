@@ -2450,13 +2450,43 @@ void Analysis::step(Instruction &i) {
     } else {
       a.top = x.top || y.top;
       unsigned pendingIntegers=0;
+      // PT5 over whole sets: an address and every INT displacement, each image once. A pair of
+      // address sets has one conservative image, not a Cartesian product of them.
+      if(i.getOpcode()==Instruction::Add || i.getOpcode()==Instruction::Sub) {
+        bool negate=i.getOpcode()==Instruction::Sub;
+        auto split=[](const AV &all,AV &pointers,bool &others) {
+          for(auto &v:all.atoms) {
+            if(v.kind==Atom::Ptr)pointers.atoms.insert(v);
+            else if(v.kind!=Atom::Int)others=true;
+          }
+        };
+        AV xp,yp;bool xo=false,yo=false;split(x,xp,xo);split(y,yp,yo);
+        bool xAddresses=!xp.atoms.empty(),yAddresses=!yp.atoms.empty();
+        AV::startAbsorbing();
+        auto image=[&](const AV &addresses,const AV &deltas,bool flip) {
+          for(auto &w:deltas.atoms)if(w.kind==Atom::Int) {
+            auto moved=displace(addresses,flip?-w.integer:w.integer,w.integer.getBitWidth(),false);
+            a.top|=moved.top;a.absorb(moved);
+          }
+        };
+        if(xAddresses)image(xp,y,negate);
+        if(yAddresses && !negate)image(yp,x,false);
+        auto conservative=[&](const AV &addresses) {
+          for(auto p:addresses.atoms) {p.offset=0;p.stride=-1;a.atoms.insert(p);}
+          numericalUnknown(a);
+        };
+        if(xAddresses && (yAddresses || yo))conservative(xp);
+        if(yAddresses && xo && !negate)conservative(yp);
+        // INT - address: PT5's conservative image of an integer operation on a pointer atom.
+        if(yAddresses && negate) {bool ints=false;for(auto &v:x.atoms)ints|=v.kind==Atom::Int;if(ints||xo)conservative(yp);}
+      }
       for (auto &v : x.atoms) {
         // For these operations the pointer transfer is independent of the
         // right atom. Emit its identical conservative image once, rather than
         // a Cartesian product of logical-stack address histories. Keep the
         // empty-domain behaviour and all INT/INT finite transfers unchanged.
-        if(v.kind==Atom::Ptr && i.getOpcode()!=Instruction::Add && i.getOpcode()!=Instruction::Sub) {
-          if(!y.atoms.empty()) {auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);}
+        if(v.kind==Atom::Ptr) {
+          if(i.getOpcode()!=Instruction::Add && i.getOpcode()!=Instruction::Sub && !y.atoms.empty()) {auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);}
           continue;
         }
         for (auto &w : y.atoms) {
@@ -2521,18 +2551,6 @@ void Analysis::step(Instruction &i) {
             }
             if (a.top)
               goto done;
-          } else if (v.kind == Atom::Ptr) {
-            if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
-                                        i.getOpcode() == Instruction::Sub)) {
-              auto delta=i.getOpcode()==Instruction::Add?w.integer:-w.integer;
-              auto moved=displaceAtoms(atom(Atom::Ptr,v.object,v.offset,v.stride),delta,delta.getBitWidth(),false);
-              a.top|=moved.top;for(auto &m:moved.atoms)a.atoms.insert(m);
-            } else {
-              auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);
-            }
-          } else if(v.kind==Atom::Int && w.kind==Atom::Ptr && i.getOpcode()==Instruction::Add) {
-            auto moved=displaceAtoms(atom(Atom::Ptr,w.object,w.offset,w.stride),v.integer,v.integer.getBitWidth(),false);
-            a.top|=moved.top;for(auto &m:moved.atoms)a.atoms.insert(m);
           }
         }
       }
