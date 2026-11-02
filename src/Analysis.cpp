@@ -1494,7 +1494,7 @@ static AV laneBinary(unsigned opcode,const AV &x,const AV &y,Module &m) {
   }
   return value;
 }
-static bool longAdditiveCycle(Value *value, Value *source,std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros=nullptr);
+static bool longAdditiveCycle(Value *value, Value *source,std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros=nullptr,unsigned *shortZeros=nullptr,bool calls=false);
 bool Analysis::composite(Instruction &i) {
   const auto &dl = M.getDataLayout();
   if(auto *call=dyn_cast<IntrinsicInst>(&i)) {
@@ -1746,10 +1746,23 @@ bool Analysis::composite(Instruction &i) {
       for(unsigned k=0;k<vector->getElementCount().getKnownMinValue();++k) {
         auto lane=field(p,{k});
         if(lane.atoms.empty() || lane.top)continue;
-        for(Value *v:p->incoming_values())
-          if(longAdditiveCycle(v,p,[&,k](Value *x){return field(x,{k});},false,(int)k)) {
+        for(Value *v:p->incoming_values()) {
+          unsigned zeros=0,finiteZeros=UINT_MAX;
+          if(longAdditiveCycle(v,p,[&,k](Value *x){return field(x,{k});},false,(int)k,&zeros,&finiteZeros)) {
             AV top;top.top=true;setField(&i,{k},top);break;
           }
+          if(finiteZeros!=UINT_MAX) {
+            // A lane's finite orbit whole, as for a scalar phi.
+            unsigned width=vector->getElementType()->getIntegerBitWidth();
+            APInt step=APInt::getOneBitSet(width,finiteZeros);
+            AV seeds=lane,whole=lane;std::set<uint64_t> residues;
+            for(auto &seed:seeds.atoms)if(seed.kind==Atom::Int && residues.insert((seed.integer&(step-1)).getLimitedValue()).second) {
+              APInt next=seed.integer;
+              do {whole.merge(integer(next));next+=step;}while(next!=seed.integer);
+            }
+            setField(&i,{k},whole);
+          }
+        }
       }
     return true;
   }
@@ -1798,7 +1811,7 @@ static void orbitPointers(AV &value,unsigned zeros) {
 // cycle with period >4096 therefore reaches normative TOP; this is exact
 // acceleration, not a precision-changing widening.
 static bool longAdditiveCycle(Value *value, Value *source,
-                              std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros) {
+                              std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros,unsigned *shortZeros,bool calls) {
   // PT3 copy edges can hide an additive recurrence behind arbitrarily many
   // phis/selects (e.g. hashtable count -> exit phi -> header phi). Following
   // those edges is exact: every traversal adds the same constant modulo W.
@@ -1817,7 +1830,9 @@ static bool longAdditiveCycle(Value *value, Value *source,
     unsigned visits=0; // Simple paths can be many; giving up only leaves the ordinary rounds.
     std::function<bool(Value *,APInt)> walk=[&](Value *v,APInt delta) {
       if(v==source) {
-        if(delta.isZero() || width-delta.countr_zero()<=12)return false;
+        if(delta.isZero())return false;
+        // Within K the orbit is exact and finite: the caller enumerates it.
+        if(width-delta.countr_zero()<=12) {if(shortZeros)*shortZeros=std::min(*shortZeros,delta.countr_zero());return false;}
         if(stepZeros)*stepZeros=delta.countr_zero();
         return true;
       }
@@ -1827,6 +1842,17 @@ static bool longAdditiveCycle(Value *value, Value *source,
         for(Value *in:p->incoming_values())if(walk(in,delta)) {found=true;break;}
       } else if(auto *s=dyn_cast<SelectInst>(v))found=walk(s->getTrueValue(),delta)||walk(s->getFalseValue(),delta);
       else if(isa<FreezeInst>(v))found=walk(cast<Instruction>(v)->getOperand(0),delta);
+      else if(auto *call=dyn_cast<CallInst>(v);calls && call) {
+        // PT9 copies every return operand of a defined callee into the result.
+        if(auto *callee=resolve(call->getCalledOperand());callee && !callee->isDeclaration() && !callee->isVarArg()) {
+          for(BasicBlock &block:*callee)if(auto *ret=dyn_cast<ReturnInst>(block.getTerminator());ret && ret->getReturnValue() && !found)found=walk(ret->getReturnValue(),delta);
+        }
+      } else if(auto *argument=dyn_cast<Argument>(v);calls && argument) {
+        // PT9 copies the argument of every direct call into the parameter.
+        Function *owner=argument->getParent();
+        for(User *user:owner->users())if(auto *call=dyn_cast<CallInst>(user);call && !found && call->getCalledOperand()==owner && argument->getArgNo()<call->arg_size())
+          found=walk(call->getArgOperand(argument->getArgNo()),delta);
+      }
       else if(auto *b=dyn_cast<BinaryOperator>(v)) {
         if(auto *c=constant(b->getOperand(1))) {
           if(b->getOpcode()==Instruction::Add)found=walk(b->getOperand(0),delta+c->getValue());
@@ -2132,10 +2158,21 @@ void Analysis::step(Instruction &i) {
       a.merge(get(v));
     if (!a.atoms.empty())
       for (Value *v : p->incoming_values()) {
-        unsigned zeros=0;
-        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry,-1,&zeros)) {
+        unsigned zeros=0,finiteZeros=UINT_MAX;
+        // Across calls only once a chain shows: the search costs more than the rounds of a few atoms.
+        bool suspect=!a.top && a.atoms.size()>=16;
+        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry,-1,&zeros,&finiteZeros,suspect)) {
           a.top = true;
           orbitPointers(a,zeros);
+        } else if(finiteZeros!=UINT_MAX && !a.top && p->getType()->isIntegerTy()) {
+          // The finite orbit, whole: one round instead of one per element.
+          unsigned width=p->getType()->getIntegerBitWidth();
+          APInt step=APInt::getOneBitSet(width,finiteZeros);
+          AV seeds=a;std::set<uint64_t> residues;
+          for(auto &seed:seeds.atoms)if(seed.kind==Atom::Int && residues.insert((seed.integer&(step-1)).getLimitedValue()).second) {
+            APInt next=seed.integer;
+            do {a.merge(integer(next));next+=step;}while(next!=seed.integer);
+          }
         }
       }
     // PT2: a full-width constant GEP recurrence denotes the complete modular

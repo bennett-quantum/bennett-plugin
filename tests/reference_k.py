@@ -66,6 +66,29 @@ define i64 @top() {
  %sum = add i64 %reached, %apart
  ret i64 %sum
 }'''
+CALL_CYCLE='''define i32 @walk(i32 %depth) {
+entry:
+ %again = icmp ne i32 %depth, 0
+ br i1 %again, label %deeper, label %leaf
+deeper:
+ %r = call i32 @walk(i32 0)
+ %next = add i32 %r, 1
+ br label %leaf
+leaf:
+ %out = phi i32 [ %next, %deeper ], [ 0, %entry ]
+ ret i32 %out
+}'''
+LANE_ORBIT='''define <2 x i16> @top() {
+entry: br label %loop
+loop:
+ %v = phi <2 x i16> [ <i16 0, i16 16>, %entry ], [ %next, %loop ]
+ %next = add <2 x i16> %v, <i16 16, i16 16>
+ %c = extractelement <2 x i16> %next, i64 0
+ %t = icmp eq i16 %c, 0
+ br i1 %t, label %out, label %loop
+out:
+ ret <2 x i16> %v
+}'''
 def solve(major,name,body,early=False):
  dest=R/f'.tmp/reference-k/{major}/{name}';dest.mkdir(parents=True,exist_ok=True)
  src=dest/'in.ll';src.write_text('target datalayout = "e-p:64:64"\n'+body+'\n');report=dest/'report.json'
@@ -102,6 +125,11 @@ def main():
  # PT12 reaches through memory, also over an edge a later step creates; an unreached object stays exact.
  data,_=solve(m,'pt12-reach',UNDEFINED_REACH)
  check('pt12-reaches-later-edge',value(data,'%reached')['top'] and not value(data,'%apart')['top'] and value(data,'%apart')['atoms']==['INT(5)'],[value(data,'%reached'),value(data,'%apart')])
+ # An additive cycle through a call's return is solved directly; a vector lane's orbit within K is whole and exact.
+ data,_=solve(m,'call-cycle',CALL_CYCLE);v=value(data,'%r','walk')
+ check('call-cycle-top',v['top'] and data['analysis_rounds']<100,{'rounds':data['analysis_rounds'],'v':v})
+ data,_=solve(m,'lane-orbit',LANE_ORBIT);v=value(data,'%v','top')
+ check('lane-orbit-exact',data['analysis_rounds']<100 and not v['top'],{'rounds':data['analysis_rounds'],'top':v['top']})
  # The flag is the only way to the earlier closure, and it says so.
  body,last=unknown_extent(40);data,err=solve(m,'early-unknown-40',body,early=True);v=value(data,last)
  check('flag-closes-early',v['top'] and len(v['atoms'])<8,{'top':v['top'],'atoms':v['atoms'][:8]})
