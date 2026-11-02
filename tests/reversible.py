@@ -56,7 +56,7 @@ def main():
  d=R/f'.tmp/reversible/{m}/r-hello';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
  runtime_root=Path(os.environ['BENNETT_ALLOCATOR_PINNED_ROOT']) if os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT') else SIBLINGS/'bennett-runtimes/dist'
  runtime=runtime_root/f'llvm{m}/bennett-runtimes.bc'
- expected={18:'6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d',23:'a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632'}
+ expected={18:'4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f',23:'bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e'}
  assert sha(runtime)==expected[m], 'runtime publication changed'
  sysroot=runtime.parent/'musl-sysroot';arith=arith_path(m);source=R/'tests/probes/r-hello.c'
  run([tool+'clang','--target=x86_64-unknown-linux-musl','--sysroot='+str(sysroot),'-nostdinc','-isystem',sysroot/'include','-O2','-flto','-emit-llvm','-c',source,'-o',d/'input.bc'])

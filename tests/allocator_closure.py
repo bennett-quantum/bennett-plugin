@@ -5,7 +5,8 @@ from pathlib import Path
 from contracts import ROOT as R, SIBLINGS
 from production import REF as DEBUG_REF
 REF = DEBUG_REF.parent.parent / 'release/bennett-isa-ref'
-RUNTIME_SHA = {18:'6c1741c4e511a08a22eff47ed4380aed626557ee66225b38a884edc83e9f319d',23:'a63f0421e1d40ebfe6bd391ffa9344db0807aa966a03eed8274e225710a54632'}
+# Published aligned-allocator runtime, 2076014f81164ca75cc8f26cfe0081c2478cfdaf.
+RUNTIME_SHA = {18:'4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f',23:'bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e'}
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--major',type=int,required=True);a=ap.parse_args()
@@ -21,7 +22,9 @@ def main():
         z=subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=120)
         assert z.returncode==0,(args,z.stdout,z.stderr)
         return z
-    for name,vectors in [('allocator-closure',[(1,175),(3,175),(7,175),(32,175),(64,'heapfault')]),('allocator-overflow',[(3,7),((1<<64)-1,'hostfault')]),('allocator-invalid',[(0,'fault'),(1,'fault')]),('allocator-bounds',[(0,'fault'),(1,'fault')])]:
+    # In this publication malloc(3) and malloc(0) each consume a 16-byte
+    # max_align_t extent. Their history contributes 32 to the byte value 171.
+    for name,vectors in [('allocator-closure',[(1,203),(3,203),(7,203),(32,203),(64,'heapfault')]),('allocator-overflow',[(3,7),((1<<64)-1,'hostfault')]),('allocator-invalid',[(0,'fault'),(1,'fault')]),('allocator-bounds',[(0,'fault'),(1,0),(2,'fault')])]:
         d=R/f'.tmp/allocator-closure/{a.major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
         run([tool+'llvm-link',R/f'tests/probes/{name}.ll',runtime,arith,'--only-needed','-o',d/'linked.bc'])
         run([tool+'opt','-passes=lto<O3>',d/'linked.bc','-o',d/'postlink.bc'])

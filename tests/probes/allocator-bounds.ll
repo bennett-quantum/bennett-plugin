@@ -9,7 +9,11 @@ define i64 @top(i64 %mode) {
   %dead = icmp eq i64 %mode, 0
   %retire = select i1 %dead, ptr %p, ptr null
   call void @free(ptr %retire)
-  %past = getelementptr i8, ptr %p, i64 4
+  ; malloc(4) owns a 16-byte ABI-rounded primitive allocation. Its padding
+  ; is live and zero-filled; byte 16 is outside the allocation.
+  %padding = icmp eq i64 %mode, 1
+  %offset = select i1 %padding, i64 4, i64 16
+  %past = getelementptr i8, ptr %p, i64 %offset
   %address = select i1 %dead, ptr %p, ptr %past
   %v = load volatile i8, ptr %address
   %result = zext i8 %v to i64
