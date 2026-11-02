@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Resolved native ELF addresses must also drive ISA pointers and images."""
 import argparse
+import copy
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ def main():
          '-passes=bennett-native-comparison',
          '-bennett-native-record=' + str(out / 'native_addresses/launch-record.json'),
          '-bennett-native-entry=native_addresses',
+         '-bennett-comparison-structure-report=' + str(d / 'expected-structure.ll'),
          '-bennett-native-report=' + str(report), out / 'device.bc', '-o', native])
     meta = json.loads(report.read_text())
     assert meta['symbols'], 'native symbol correspondence is required'
@@ -58,6 +60,7 @@ int main(void) {
     layout_file.write_text(json.dumps(layout, indent=2) + '\n')
     mapped = d / 'mapped'
     run([*producer, '-bennett-comparison-layout=' + str(layout_file),
+         '-bennett-comparison-structure-report=' + str(d / 'actual-structure.ll'),
          '-bennett-out=' + str(mapped), source, '-disable-output'])
     obj = mapped / 'native_addresses/launch.bennett'
     update_object(a.major, exe, obj)
@@ -67,7 +70,7 @@ int main(void) {
     runs = []
     for mode, expected in enumerate(native_values):
         v = json.loads(run([REF, 'run-program', obj, 'native_addresses', '--args', str(mode),
-                            '--budget', '1000,4096,128,8']).stdout)
+                            '--budget', '1000,0,128,8']).stdout)
         assert v['status'] == 'COMPLETED' and not v['faults'], v
         assert v['results'] == [dict(type='i64', value=str(expected))], (mode, expected, v)
         runs.append(dict(mode=mode, expected=expected, result=v))
@@ -77,11 +80,34 @@ int main(void) {
     actual_globals = {v['base'] for v in isa_layout['globals'].values()}
     assert layout['globals']['name:native_data']['address'] in actual_globals
     assert layout['globals']['name:native_table']['address'] in actual_globals
+    for label in ('heap', 'missing', 'alignment', 'functions', 'materialisation'):
+        bad = copy.deepcopy(layout)
+        if label == 'heap':
+            bad['heap_base'] += 4096
+        elif label == 'missing':
+            del bad['globals']['name:native_table']
+        elif label == 'alignment':
+            bad['globals']['name:native_data']['address'] += 1
+        elif label == 'functions':
+            bad['functions']['native_callback']['address'] = bad['functions']['native_addresses']['address']
+        else:
+            bad['materialised_structure_sha256'] = '0' * 64
+        path = d / f'invalid-{label}.json'
+        path.write_text(json.dumps(bad) + '\n')
+        z = subprocess.run([*producer, '-bennett-comparison-layout=' + str(path),
+                            '-bennett-out=' + str(d / f'rejected-{label}'), str(source),
+                            '-disable-output'], capture_output=True, text=True, timeout=600)
+        assert z.returncode != 0 and 'BD-E-COMPARISON-LAYOUT' in z.stderr, (label, z)
+    plain = d / 'plain-again'
+    run([*producer, '-bennett-out=' + str(plain), source, '-disable-output'])
+    for artifact in ('device.bc', 'native_addresses/launch.bennett'):
+        assert (out / artifact).read_bytes() == (plain / artifact).read_bytes(), artifact
     result = dict(major=a.major, passed=3, cases=3, runs=runs,
                   native_sha256=sha(native), executable_sha256=sha(exe),
                   materialised_sha256=sha(out / 'device.bc'),
                   layout_sha256=sha(layout_file), object_sha256=sha(obj),
                   resolved_layout=layout, native_link=state,
+                  rejection_checks=5, default_output_unchanged=True,
                   full_comparison_acceptance=False)
     (R / f'.tmp/native-layout-{a.major}.json').write_text(json.dumps(result, indent=2) + '\n')
     print(json.dumps(dict(major=a.major, passed=3, cases=3)))

@@ -18,8 +18,12 @@ namespace {
 cl::opt<std::string> NativeRecord("bennett-native-record");
 cl::opt<std::string> NativeEntry("bennett-native-entry");
 cl::opt<std::string> NativeReport("bennett-native-report");
+cl::opt<bool> NativePrepareOnly("bennett-native-prepare-only",
+    cl::desc("Publish source symbols before external native memory instrumentation"));
 cl::opt<std::string> LayoutFile("bennett-comparison-layout",
     cl::desc("Resolved comparison ELF addresses, outside source normalisation"));
+cl::opt<std::string> StructureReport("bennett-comparison-structure-report",
+    cl::desc("Optional canonical materialisation IR for address-map audits"));
 std::optional<json::Value> layout;
 std::string layoutHash;
 
@@ -40,9 +44,30 @@ std::string bits(Module &m) {
 }
 std::string structure(Module &m) {
   auto copy = CloneModule(m);
+  auto encoded=bits(m);
+  LLVMContext decodeContext;
+  auto decoded=parseBitcodeFile(MemoryBufferRef(encoded,"comparison-structure"),decodeContext);
+  if(!decoded)fail("BD-E-NATIVE-INPUT",toString(decoded.takeError()));
+  // LLVM's reader records target ABI defaults explicitly (for example i128
+  // alignment on x86). Compare the actual bitcode consumer's DataLayout.
+  copy->setDataLayout((*decoded)->getDataLayout());
   for (auto &f : *copy)
     f.setMetadata("bennett.address", nullptr);
-  return digest(bits(*copy));
+  // Bitcode use-list/attribute encoding can differ across a read/write cycle.
+  // Canonical printed IR has no input-path ModuleID and omits use-list order.
+  copy->setModuleIdentifier("");
+  std::string text;
+  raw_string_ostream out(text);
+  copy->print(out, nullptr);
+  if (!StructureReport.empty()) {
+    std::error_code ec;
+    raw_fd_ostream file(StructureReport, ec);
+    if (ec) fail("BD-E-NATIVE-OUTPUT", ec.message());
+    file << text;
+    file.flush();
+    if (file.has_error()) fail("BD-E-NATIVE-OUTPUT", "cannot write structure audit");
+  }
+  return digest(text);
 }
 uint64_t integer(const json::Object &o, StringRef field) {
   auto n = o.getInteger(field);
@@ -94,10 +119,10 @@ class Bridge {
       auto *bad = BasicBlock::Create(c, "backend.error", f);
       b.CreateCondBr(b.CreateICmpEQ(s, b.getInt32(0)), ok, bad);
       b.SetInsertPoint(bad);
-      // §10 launch statuses: not-clean=7, invalid-state=8, arg=11.
+      // §10 launch statuses: not-clean=7, arg=11. An invalid program/run
+      // state is an infrastructure/context error, not a dead source handle.
       auto *semantic = b.CreateOr(b.CreateICmpEQ(s, b.getInt32(7)),
-                                 b.CreateOr(b.CreateICmpEQ(s, b.getInt32(8)),
-                                            b.CreateICmpEQ(s, b.getInt32(11))));
+                                 b.CreateICmpEQ(s, b.getInt32(11)));
       b.CreateCondBr(semantic, error(f, true, ""), infra);
     } else
       b.CreateCondBr(b.CreateICmpEQ(s, b.getInt32(0)), ok, infra);
@@ -105,7 +130,8 @@ class Bridge {
   }
 public:
   std::string binding;
-  Bridge(Module &module, StringRef identity)
+  Bridge(Module &module, StringRef identity, std::optional<uint64_t> shadowStack,
+         std::optional<uint64_t> sourceSteps)
       : m(module), c(m.getContext()), ptr(PointerType::get(c, 0)),
         i32(Type::getInt32Ty(c)), i64(Type::getInt64Ty(c)),
         voidTy(Type::getVoidTy(c)), prefix("__bennett_native_" + identity.take_front(20).str()) {
@@ -120,6 +146,19 @@ public:
                                   GlobalValue::ExternalLinkage, binding, m);
     IRBuilder<> b(BasicBlock::Create(c, "entry", bind));
     b.CreateStore(bind->getArg(0), program);
+    if (shadowStack) {
+      auto *init=m.getFunction("__bennett_rt_ss_init");
+      if (!init || init->isDeclaration() ||
+          init->getFunctionType()!=FunctionType::get(voidTy,{i64},false))
+        fail("BD-E-NATIVE-INPUT","R entry shadow-stack initialiser missing");
+      b.CreateCall(init,{b.getInt64(*shadowStack)});
+    }
+    if (sourceSteps) {
+      auto *steps=m.getGlobalVariable("__bennett_rt_rsteps",true);
+      if(!steps || steps->getValueType()!=i64)
+        fail("BD-E-NATIVE-INPUT","R source-step state missing");
+      b.CreateStore(b.getInt64(*sourceSteps),steps);
+    }
     b.CreateRetVoid();
   }
   Function *allocate(FunctionType *type) {
@@ -127,11 +166,14 @@ public:
     IRBuilder<> b(BasicBlock::Create(c, "entry", f));
     auto *out = b.CreateAlloca(i64);
     auto *p = context(b, f);
-    auto *valid = b.CreateAnd(b.CreateICmpNE(f->getArg(1), b.getInt64(0)),
-                              b.CreateICmpULE(f->getArg(1), b.getInt64(UINT32_MAX)));
+    auto *valid = b.CreateICmpNE(f->getArg(1), b.getInt64(0));
+    auto *width = BasicBlock::Create(c, "backend.width", f);
     auto *choose = BasicBlock::Create(c, "class", f);
     auto *invalid = error(f, true, "");
-    b.CreateCondBr(valid, choose, invalid);
+    b.CreateCondBr(valid, width, invalid);
+    b.SetInsertPoint(width);
+    b.CreateCondBr(b.CreateICmpULE(f->getArg(1), b.getInt64(UINT32_MAX)), choose,
+                   error(f,false,"launch C ABI cannot represent register width; native backend extension required"));
     b.SetInsertPoint(choose);
     auto *invoke = BasicBlock::Create(c, "allocate", f);
     auto *dispatch = b.CreateSwitch(f->getArg(0), invalid);
@@ -177,6 +219,44 @@ public:
   }
 };
 
+std::string lowerNativeMarkers(Module &m, StringRef identity,
+                              std::optional<uint64_t> shadowStack,
+                              std::optional<uint64_t> sourceSteps) {
+  SmallVector<std::pair<CallBase *, Function *>> calls;
+  for (auto &f : m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
+    if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str()))
+      calls.push_back({call,g});
+  Bridge bridge(m, identity,shadowStack,sourceSteps);
+  DenseMap<Function *, Function *> replacements;
+  for (auto [call, g] : calls) {
+    auto *replacement = replacements.lookup(g);
+    if (!replacement) {
+      if (g->getName() == "__bennett_qalloc" || g->getName() == "__bennett_qborrow")
+        replacement = bridge.allocate(g->getFunctionType());
+      else if (g->getName() == "__bennett_qfree")
+        replacement = bridge.release(g->getFunctionType());
+      else if (g->getName() == "__bennett_effect_console_write")
+        replacement = cast<Function>(m.getOrInsertFunction("__bennett_rt_native_console_write",
+                                                          g->getFunctionType()).getCallee());
+      else
+        fail("BD-E-NATIVE-MARKERS", "native comparison lowering required", call);
+      replacements[g] = replacement;
+    }
+    call->setCalledFunction(replacement);
+  }
+  for (auto [old, replacement] : replacements)if(old->use_empty())old->eraseFromParent();
+  return bridge.binding;
+}
+void writeReport(StringRef text) {
+  if(NativeReport.empty())fail("BD-E-NATIVE-OUTPUT","native report path is required");
+  std::error_code ec;
+  raw_fd_ostream out(NativeReport,ec);
+  if(ec)fail("BD-E-NATIVE-OUTPUT",ec.message());
+  out << text;
+  out.flush();
+  if(out.has_error())fail("BD-E-NATIVE-OUTPUT","cannot write comparison report");
+}
+
 struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
   PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
     if (NativeRecord.empty() || NativeEntry.empty() || NativeReport.empty())
@@ -199,19 +279,35 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
     if (!device || device->getString("sha256") != identity ||
         device->getInteger("bytes") != int64_t(input->getBufferSize()))
       fail("BD-E-NATIVE-INPUT", "materialised bitcode does not match launch record");
-    auto original = parseBitcodeFile(input->getMemBufferRef(), m.getContext());
+    // A separate context preserves identified type names. Parsing a second
+    // copy into m's context can rename %struct.T to %struct.T.0 and falsely
+    // report a transformation in unchanged C materialisation.
+    LLVMContext originalContext;
+    auto original = parseBitcodeFile(input->getMemBufferRef(), originalContext);
     if (!original)
       fail("BD-E-NATIVE-INPUT", toString(original.takeError()));
     if (bits(**original) != bits(m))
       fail("BD-E-NATIVE-INPUT", "run comparison adaptation before further IR transformations");
+    auto buildBytes=read((sys::path::parent_path(NativeRecord)+"/build.json").str());
+    auto *buildArtifact=artifacts->getObject(NativeEntry+"/build.json");
+    if(!buildArtifact || buildArtifact->getString("sha256")!=digest(buildBytes->getBuffer()))
+      fail("BD-E-NATIVE-INPUT","build metadata does not match launch record");
+    auto build=json::parse(buildBytes->getBuffer());
+    if(!build)fail("BD-E-NATIVE-INPUT",toString(build.takeError()));
+    auto *buildObject=build->getAsObject();
+    if(!buildObject)fail("BD-E-NATIVE-INPUT","invalid build metadata");
+    bool reversible=buildObject->getString("mode")=="reversible";
+    std::optional<uint64_t> shadowStack,sourceSteps;
+    if(reversible) {
+      auto *initialisation=buildObject->getObject("entry_initialisation");
+      auto stack=initialisation?initialisation->getString("shadow_stack_bytes"):std::nullopt;
+      auto steps=buildObject->getString("source_step_limit");
+      uint64_t stackBytes,stepLimit;
+      if(!stack || !steps || stack->getAsInteger(10,stackBytes) || steps->getAsInteger(10,stepLimit))
+        fail("BD-E-NATIVE-INPUT","R entry initialisation metadata missing; regenerate launch artifacts");
+      shadowStack=stackBytes;sourceSteps=stepLimit;
+    }
 
-    SmallVector<std::pair<CallBase *, Function *>> calls;
-    for (auto &f : m)
-      for (auto &i : instructions(f))
-        if (auto *call = dyn_cast<CallBase>(&i))
-          if (auto *g = dyn_cast<Function>(call->getCalledOperand()->stripPointerCasts()))
-            if (markers().count(g->getName().str()))
-              calls.push_back({call, g});
     auto fingerprint = structure(m);
     // Stable, collision-resistant aliases expose private/unnamed source
     // definitions to the comparison linker without changing their bodies or
@@ -236,48 +332,101 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
       } else {
         row["kind"] = "function";
         row["source_key"] = v->getName();
+        cast<Function>(v)->addFnAttr("bennett.native.materialised.sha256", identity);
       }
       symbols.push_back(std::move(row));
     }
-    Bridge bridge(m, identity);
-    DenseMap<Function *, Function *> replacements;
-    for (auto [call, g] : calls) {
-      auto *replacement = replacements.lookup(g);
-      if (!replacement) {
-        if (g->getName() == "__bennett_qalloc" || g->getName() == "__bennett_qborrow")
-          replacement = bridge.allocate(g->getFunctionType());
-        else if (g->getName() == "__bennett_qfree")
-          replacement = bridge.release(g->getFunctionType());
-        else if (g->getName() == "__bennett_effect_console_write")
-          replacement = cast<Function>(m.getOrInsertFunction("__bennett_rt_native_console_write",
-                                                            g->getFunctionType()).getCallee());
-        else
-          fail("BD-E-NATIVE-MARKERS", "native comparison lowering required", call);
-        replacements[g] = replacement;
-      }
-      call->setCalledFunction(replacement);
-    }
-    for (auto [old, replacement] : replacements)
-      if (old->use_empty())
-        old->eraseFromParent();
+    auto binding="__bennett_native_"+identity.substr(0,20)+"_bind";
+    if(!NativePrepareOnly)binding=lowerNativeMarkers(m,identity,shadowStack,sourceSteps);
     json::Object report{{"schema", "bennett-native-comparison-1"},
                         {"materialised_sha256", identity},
                         {"materialised_structure_sha256", fingerprint},
                         {"record_sha256", digest(recordBytes->getBuffer())},
                         {"entries", json::Array{NativeEntry.getValue()}},
-                        {"binding_symbol", bridge.binding},
+                        {"binding_symbol", binding},
+                        {"phase", NativePrepareOnly?"prepared":"finalised"},
+                        {"source_mode", reversible?"reversible":"marked"},
+                        {"r_source_step_checks", false},
                         {"symbols", std::move(symbols)},
                         {"source_memory_faults_checked", false},
                         {"resolved_link_layout", false},
                         {"full_comparison_acceptance", false}};
-    std::error_code ec;
-    raw_fd_ostream out(NativeReport, ec);
-    if (ec)
-      fail("BD-E-NATIVE-OUTPUT", ec.message());
-    out << formatv("{0:2}\n", json::Value(std::move(report)));
-    out.flush();
-    if (out.has_error())
-      fail("BD-E-NATIVE-OUTPUT", "cannot write comparison report");
+    if(shadowStack)report["shadow_stack_bytes"]=std::to_string(*shadowStack);
+    if(sourceSteps)report["source_step_limit"]=std::to_string(*sourceSteps);
+    auto reportText=formatv("{0:2}\n",json::Value(std::move(report))).str();
+    if(NativePrepareOnly)
+      m.addModuleFlag(Module::Error,"bennett.native.prepared",MDString::get(m.getContext(),reportText));
+    writeReport(reportText);
+    return PreservedAnalyses::none();
+  }
+  static bool isRequired() { return true; }
+};
+struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
+  PreservedAnalyses run(Module &m,ModuleAnalysisManager &) {
+    auto *record=dyn_cast_or_null<MDString>(m.getModuleFlag("bennett.native.prepared"));
+    if(!record || m.getModuleFlag("bennett.native.finalised"))
+      fail("BD-E-NATIVE-INPUT","finalisation requires an unfinalised prepared component");
+    auto value=json::parse(record->getString());
+    if(!value)fail("BD-E-NATIVE-INPUT",toString(value.takeError()));
+    auto *report=value->getAsObject();
+    if(!report || report->getString("schema")!="bennett-native-comparison-1" ||
+        report->getString("phase")!="prepared" || !report->getString("materialised_sha256") ||
+        !report->getArray("symbols"))
+      fail("BD-E-NATIVE-INPUT","invalid prepared component metadata");
+    auto identity=*report->getString("materialised_sha256");
+    for(auto &item:*report->getArray("symbols")) {
+      auto *row=item.getAsObject();
+      auto name=row?row->getString("native_symbol"):std::nullopt;
+      auto *alias=name?dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)):nullptr;
+      if(!alias)fail("BD-E-NATIVE-INPUT","prepared source symbol correspondence was lost");
+      if(row->getString("kind")=="function") {
+        auto *f=resolve(alias);
+        if(!f || f->isDeclaration() || !f->hasFnAttribute("bennett.native.materialised.sha256") ||
+            f->getFnAttribute("bennett.native.materialised.sha256").getValueAsString()!=identity)
+          fail("BD-E-NATIVE-INPUT","prepared source function provenance was lost",alias);
+      }
+    }
+    auto limit=[&](StringRef field)->std::optional<uint64_t> {
+      auto text=report->getString(field);
+      if(!text)return std::nullopt;
+      uint64_t n;if(text->getAsInteger(10,n))fail("BD-E-NATIVE-INPUT","invalid prepared initialisation limit");
+      return n;
+    };
+    auto binding=lowerNativeMarkers(m,identity,limit("shadow_stack_bytes"),limit("source_step_limit"));
+    (*report)["binding_symbol"]=binding;
+    (*report)["phase"]="finalised";
+    // The external instrumenter owns its own receipt. This pass does not
+    // certify instrumentation merely because a prepared module was supplied.
+    (*report)["source_memory_faults_checked"]=false;
+    writeReport(formatv("{0:2}\n",*value).str());
+    m.addModuleFlag(Module::Error,"bennett.native.finalised",1);
+    return PreservedAnalyses::none();
+  }
+  static bool isRequired() { return true; }
+};
+// H modules can be linked after marked-module materialisation. Their runtime
+// console transport must be adapted without normalising them as device code or
+// replacing any protected materialised body with another runtime publication.
+struct NativeHostImportsPass : PassInfoMixin<NativeHostImportsPass> {
+  PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
+    bool component=false;
+    for(auto &f:m)component |= f.hasFnAttribute("bennett.native.materialised.sha256");
+    if(!component)fail("BD-E-NATIVE-INPUT","host import adaptation requires a materialised native component");
+    SmallVector<CallBase *> calls;
+    for(auto &f:m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
+      if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str())) {
+        if(f.hasFnAttribute("bennett.native.materialised.sha256"))
+          fail("BD-E-NATIVE-INPUT","host linking introduced markers into a protected materialised body",call);
+        if(g->getName()!="__bennett_effect_console_write")
+          fail("BD-E-NATIVE-MARKERS","native host import needs backend lowering",call);
+        calls.push_back(call);
+      }
+    for(auto *call:calls) {
+      auto *old=resolve(call->getCalledOperand());
+      auto replacement=m.getOrInsertFunction("__bennett_rt_native_console_write",old->getFunctionType());
+      call->setCalledFunction(cast<Function>(replacement.getCallee()));
+      if(old->use_empty())old->eraseFromParent();
+    }
     return PreservedAnalyses::none();
   }
   static bool isRequired() { return true; }
@@ -286,6 +435,8 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
 void addNativeComparisonPass(ModulePassManager &pm) {
   pm.addPass(NativeComparisonPass());
 }
+void addNativeHostImportsPass(ModulePassManager &pm) { pm.addPass(NativeHostImportsPass()); }
+void addNativeFinalisePass(ModulePassManager &pm) { pm.addPass(NativeFinalisePass()); }
 void initialiseComparisonLayout(Module &m) {
   layout.reset();
   layoutHash.clear();
@@ -348,7 +499,11 @@ std::optional<uint64_t> comparisonHeapBase() {
   return integer(*layout->getAsObject(), "heap_base");
 }
 void checkComparisonMaterialisation(Module &m) {
-  if (layout && structure(m) != *layout->getAsObject()->getString("materialised_structure_sha256"))
-    fail("BD-E-COMPARISON-LAYOUT", "resolved map belongs to a different materialised module");
+  if (layout) {
+    auto actual=structure(m);
+    auto expected=*layout->getAsObject()->getString("materialised_structure_sha256");
+    if (actual != expected)
+      fail("BD-E-COMPARISON-LAYOUT", ("resolved map belongs to a different materialised module: expected " + expected + ", got " + actual).str());
+  }
 }
 } // namespace bennett

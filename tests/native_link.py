@@ -10,17 +10,12 @@ import os
 from pathlib import Path
 import struct
 import subprocess
+import tomllib
 
 from contracts import ROOT as R, SIBLINGS, arith_path
-from native_comparison import sha
+from native_comparison import sha, vm_library
 
-CAPACITY = 2 * 1024 * 1024
-# Published native-only support, observed at runtime commit be6e641bd7123d748e17b85851b0a227d6de6907.
-# This is separate from the production runtime pin. Relocation still checks bytes.
-SUPPORT_SHA = {
-    18: 'c7a1306784e7f487c040b724e2074294ff687f149bf6403a9e403973a833e596',
-    23: 'f7fee923e2b06d1c4106439e46ed03936a9ee7721d3498d008e298cb5265cade',
-}
+CAPACITY = 8 * 1024 * 1024
 
 
 def run(cmd):
@@ -33,20 +28,21 @@ def support(major):
     root = Path(os.environ.get('BENNETT_NATIVE_SUPPORT_PINNED_ROOT',
                                SIBLINGS / 'bennett-runtimes/dist'))
     path = root / f'llvm{major}/musl-sysroot/lib/native-support.bc'
-    assert sha(path) == SUPPORT_SHA[major], ('native support pin changed', path)
+    pin = tomllib.loads((R / 'SPEC_VERSIONS.toml').read_text())['native_comparison']
+    assert sha(path) == pin[f'llvm{major}_support_sha256'], ('native support pin changed', path)
     return path
 
 
 def build(major, directory, native, metadata, obj, harness, runtime=None, heap_limit=4096):
     """Keep the ISA object in a fixed-size, replaceable, native-only section."""
+    os.environ['BENNETT_VM_ENGINE'] = 'interpreter'
     t = f'/usr/lib/llvm-{major}/bin/'
-    library = SIBLINGS / 'bennett-vm/target/release/libbennett_vm.so'
+    library = vm_library()
     target = json.loads((SIBLINGS / 'bennett-targets/targets/ideal-all-to-all.json').read_text())
     encoded = json.dumps(target, sort_keys=True, separators=(',', ':')).encode()
     target_literal = ','.join(map(str, encoded))
     wrapper = directory / 'launcher.c'
-    flush = next((r['native_symbol'] for r in metadata['symbols']
-                  if r['kind'] == 'function' and r['llvm_name'] == 'fflush'), None)
+    flush = '__bennett_comparison_flush_' + metadata['materialised_sha256'][:20] if runtime else None
     declarations = f'extern int {flush}(void *);' if flush else ''
     flush_call = f'if ({flush}(0)) return 125;' if flush else ''
     wrapper.write_text(f'''#include <stddef.h>
@@ -79,19 +75,30 @@ __bennett_comparison_object:
 .section .note.GNU-stack,"",@progbits
 ''')
     layout = directory / 'native-layout.ll'
-    layout.write_text(f'''@__bennett_comparison_heap_base = external global i8
-@__bennett_rt_native_layout = constant {{i64,i64,i64}} {{i64 1, i64 ptrtoint (ptr @__bennett_comparison_heap_base to i64), i64 {heap_limit}}}, align 8
+    layout.write_text(f'''@__bennett_rt_native_layout = externally_initialized constant {{i64,i64,i64}} {{i64 1, i64 0, i64 {heap_limit}}}, section ".bennett.layout", align 8
 ''')
     # Exclude native-only startup: the host test launcher owns process startup.
     # The primitive and transport bodies are the published comparison support.
     trimmed = directory / 'support.bc'
     run([t + 'llvm-extract', '--delete', '--func=_start', '--func=__bennett_rt_start',
          support(major), '-o', trimmed])
-    harness_bc = directory / 'harness.bc'
-    includes = ['-nostdinc', '-isystem', runtime.parent / 'musl-sysroot/include'] if runtime else []
-    run([t + 'clang', '-O0', '-emit-llvm', '-c', *includes, harness, '-o', harness_bc])
     seed = directory / 'seed.bc'
-    run([t + 'llvm-link', native, harness_bc, '-o', seed])
+    inputs = [native]
+    if flush:
+        postlude = directory / 'postlude.ll'
+        postlude.write_text(f'''declare i32 @fflush(ptr)
+define i32 @{flush}(ptr %stream) {{
+ %result = call i32 @fflush(ptr %stream)
+ ret i32 %result
+}}
+''')
+        inputs.append(postlude)
+    if harness:
+        harness_bc = directory / 'harness.bc'
+        includes = ['-nostdinc', '-isystem', runtime.parent / 'musl-sysroot/include'] if runtime else []
+        run([t + 'clang', '-O2', '-emit-llvm', '-c', *includes, harness, '-o', harness_bc])
+        inputs.append(harness_bc)
+    run([t + 'llvm-link', *inputs, '-o', seed])
     base = directory / 'base.bc'
     if runtime:
         run([t + 'llvm-link', seed, runtime, arith_path(major),
@@ -104,20 +111,38 @@ __bennett_comparison_object:
         run([t + 'llvm-link', base, trimmed, '--only-needed', '-o', base])
     # Keep source symbol aliases and the explicit boundary. Ordinary runtime
     # names become local so they cannot interpose on the API DSO's host libc.
-    public = ['main', metadata['binding_symbol'], *[r['native_symbol'] for r in metadata['symbols']]]
+    public = ['main', '__bennett_rt_native_layout', metadata['binding_symbol'], *[r['native_symbol'] for r in metadata['symbols']]]
+    if flush: public.append(flush)
+    imports = directory / 'imports.bc'
+    run([t + 'opt', '-load-pass-plugin=' + str(R / f'build/libbennett-plugin-{major}.so'),
+         '-passes=bennett-native-host-imports', base, '-o', imports])
+    # Host console adaptation may introduce this dependency after the earlier
+    # --only-needed closure. Pull only its real published implementation.
+    run([t + 'llvm-link', imports, trimmed, '--only-needed', '-o', imports])
     ready = directory / 'ready.bc'
     run([t + 'opt', '-passes=internalize,strip-dead-prototypes,verify',
-         '-internalize-public-api-list=' + ','.join(public), base, '-o', ready])
+         '-internalize-public-api-list=' + ','.join(public), imports, '-o', ready])
     executable = directory / 'comparison'
-    run([t + 'clang', '-O0', '-no-pie', '-fno-merge-all-constants', ready, wrapper, blob,
+    program_object = directory / 'program.o'
+    # §17.7: optimise machine code without rerunning an IR optimisation
+    # pipeline over the fixed materialised instruction stream.
+    run([t + 'llc', '-O2', '-filetype=obj', '-relocation-model=static', ready, '-o', program_object])
+    run([t + 'clang', '-O2', '-no-pie', '-fno-merge-all-constants', program_object, wrapper, blob,
          '-I' + str(SIBLINGS / 'bennett-isa-spec/include'),
-         '-Wl,--wrap=main', '-Wl,--defsym=__bennett_comparison_heap_base=(_end+4095)&-4096',
+         '-Wl,--wrap=main',
          '-L' + str(library.parent), '-lbennett_vm', '-Wl,-rpath,' + str(library.parent),
          '-o', executable])
+    names = elf_symbols(major, executable)
+    heap_base = (names['_end'] + 4095) & -4096
+    table = directory / 'native-layout.bin'
+    table.write_bytes(struct.pack('<QQQ', 1, heap_base, heap_limit))
+    run([t + 'llvm-objcopy', '--update-section=.bennett.layout=' + str(table), executable])
+    assert elf_symbols(major, executable) == names, 'native-only layout fixup changed source addresses'
     update_object(major, executable, obj)
     return executable, dict(launch_library_sha256=sha(library),
                             support_sha256=sha(support(major)),
                             program_uses_materialised_module=True,
+                            program_codegen='llc -O2', source_ir_reoptimised=False,
                             native_process_startup_acceptance=False)
 
 
@@ -130,13 +155,23 @@ def update_object(major, executable, obj):
          '--update-section=.bennett.object=' + str(section), executable])
 
 
-def resolved_layout(major, executable, metadata):
+def elf_symbols(major, executable):
     names = {}
     for line in run([f'/usr/lib/llvm-{major}/bin/llvm-nm', '--defined-only',
                      '--format=posix', executable]).stdout.splitlines():
         fields = line.split()
         if len(fields) >= 3:
             names[fields[0]] = int(fields[2], 16)
+    return names
+
+
+def resolved_layout(major, executable, metadata):
+    names = elf_symbols(major, executable)
+    table = executable.with_suffix('.layout')
+    run([f'/usr/lib/llvm-{major}/bin/llvm-objcopy',
+         '--dump-section=.bennett.layout=' + str(table), executable])
+    abi, heap_base, heap_limit = struct.unpack('<QQQ', table.read_bytes())
+    assert abi == 1 and heap_base == (names['_end'] + 4095) & -4096
     globals_, functions = {}, {}
     for row in metadata['symbols']:
         assert row['native_symbol'] in names, row
@@ -148,5 +183,5 @@ def resolved_layout(major, executable, metadata):
             functions[row['source_key']] = entry
     return dict(schema='bennett-comparison-layout-1', ptr_width=64,
                 materialised_structure_sha256=metadata['materialised_structure_sha256'],
-                data_end=names['_end'], heap_base=names['__bennett_comparison_heap_base'],
+                data_end=names['_end'], heap_base=heap_base,
                 globals=globals_, functions=functions)

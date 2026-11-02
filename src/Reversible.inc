@@ -117,6 +117,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
   json::Object record{{"dialect","0.2.10"},{"isa","0.8"},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
     {"mode","reversible"},{"verdict","blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
+  record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
   json::Object cert{{"versions",json::Object{{"isa","0.8"},{"cert","0.8"}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
   auto object=launchObject(e,record,cert);write(dir+"/launch.bennett",object);

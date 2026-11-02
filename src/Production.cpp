@@ -1230,7 +1230,7 @@ struct Entry {
         }
         if (auto *c = dyn_cast<CallBase>(&i)) {
           auto *g = resolve(c->getCalledOperand());
-          if(!g && rTier && !c->isInlineAsm()) {
+          if(!g && ccNames && !c->isInlineAsm()) {
             auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
             auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
             std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;

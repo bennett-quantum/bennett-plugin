@@ -1,0 +1,51 @@
+# Proposed additions for the gate.toml owner. Merge these env keys into its
+# existing [env]. The native-only publication has its own alias; the production
+# allocator remains at 2076014f81164ca75cc8f26cfe0081c2478cfdaf.
+[env]
+BENNETT_NATIVE_SUPPORT_PINNED_ROOT = "{sibling:bennett-runtimes-native-comparison}/dist"
+BENNETT_NATIVE_TOOL_ROOT = "{sibling:bennett-runtimes-native-comparison}"
+BENNETT_VM_NATIVE_LIBRARY = "{sibling:bennett-vm}/target/release/libbennett_vm.so"
+
+[siblings."bennett-runtimes-native-comparison"]
+repo = "bennett-runtimes"
+sha = "248e468ca505c684bbf254e52eb8148f1e530c83"
+note = "Native-only support and documented native-check CLI; independent of the production allocator pin"
+[siblings."bennett-runtimes-native-comparison".files]
+"dist/llvm18/musl-sysroot/lib/native-support.bc" = "c7a1306784e7f487c040b724e2074294ff687f149bf6403a9e403973a833e596"
+"dist/llvm23/musl-sysroot/lib/native-support.bc" = "f7fee923e2b06d1c4106439e46ed03936a9ee7721d3498d008e298cb5265cade"
+"scripts/native-check" = "bb11d8498a8403a415a77910193302b00bb1978d6ee24c0079bab5aa69ab5c2e"
+"scripts/native-check.cpp" = "a5c383379ce3dcf5a53eca274aa446e968d533c13516a64a9d80dd6e3298828d"
+[[siblings."bennett-runtimes-native-comparison".build]]
+name = "prepare published native-check CLI for both majors"
+argv = ["bash", "-c", '''
+set -euo pipefail
+mkdir -p .tmp/native-check-probe
+for major in 18 23; do
+  printf 'define i32 @main() { ret i32 0 }\n' | /usr/lib/llvm-$major/bin/llvm-as -o .tmp/native-check-probe/input-$major.bc
+  scripts/native-check "$major" .tmp/native-check-probe/input-$major.bc .tmp/native-check-probe/checked-$major.bc
+done
+''']
+outputs = [".tmp/native-check-probe/checked-18.bc", ".tmp/native-check-probe/checked-23.bc"]
+
+[siblings."bennett-vm"]
+sha = "c26a4fd5b04996ddf470837dcf81f0181401ee08"
+note = "Published stateful launch C ABI; library build only, no sibling gate"
+[[siblings."bennett-vm".build]]
+name = "launch ABI shared library"
+argv = ["cargo", "build", "--offline", "--release", "--lib", "-j4", "--target-dir", "target"]
+outputs = ["target/release/libbennett_vm.so"]
+needs = ["bennett-isa-spec"]
+
+[siblings."bennett-targets"]
+sha = "dd036711936c496f53f6f1a9bebeb686335bf7cc"
+note = "Public target description for real launch-library tests"
+[siblings."bennett-targets".files]
+"targets/ideal-all-to-all.json" = "d602ef018d413ffcdea8f0334acbb0b6dd373ba09a325665afb181fa9f6e0cbc"
+
+[siblings."bennett-conformance"]
+sha = "6e6a6f1ebd69f6e81f4f7ea2dd15ea775733e616"
+note = "Unchanged public C input fixtures only; no sibling gate"
+[siblings."bennett-conformance".files]
+"ladder/rung-2/fixtures/hashtable_marked.c" = "4b93ea1b3d9b481c2b043e8f7db6658fb5096e83f330ec8161e8a13504d4d189"
+"ladder/rung-2/fixtures/hashtable.c" = "8cbd5a3698aea0da1f7187b97be34a0ed33743394f045c49c943323f94abd4b9"
+"ladder/rung-2/fixtures/main_golden.c" = "83c6d020567460b10e0f70aec25399b34f5dda8e2c2feb47f157f71fff0e8820"

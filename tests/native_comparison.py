@@ -20,6 +20,11 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def vm_library():
+    return Path(os.environ.get('BENNETT_VM_NATIVE_LIBRARY',
+                                SIBLINGS / 'bennett-vm/target/release/libbennett_vm.so'))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--major', type=int, required=True)
@@ -84,10 +89,12 @@ def main():
 
     # A real published launch implementation supplies the register state.
     # The probe arithmetic is compiled directly to native machine code.
-    library = SIBLINGS / 'bennett-vm/target/release/libbennett_vm.so'
+    library = vm_library()
     assert library.is_file(), library
     native_library = directory / 'native.so'
-    run([tool + 'clang', '-shared', '-fPIC', native, '-L' + str(library.parent),
+    native_object = directory / 'native.o'
+    run([tool + 'llc', '-O2', '-relocation-model=pic', '-filetype=obj', native, '-o', native_object])
+    run([tool + 'clang', '-shared', '-fPIC', native_object, '-L' + str(library.parent),
          '-lbennett_vm', '-Wl,-rpath,' + str(library.parent), '-o', native_library])
     os.environ['BENNETT_VM_ENGINE'] = 'interpreter'
     backend = c.CDLL(str(library), mode=os.RTLD_GLOBAL)

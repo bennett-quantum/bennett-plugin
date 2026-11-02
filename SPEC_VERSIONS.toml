@@ -12,3 +12,11 @@ llvm18_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18
 llvm18_sha256 = "8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1"
 llvm23_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc"
 llvm23_sha256 = "59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793"
+
+# Native-only transports/tools; production runtime remains the separate allocator pin.
+[native_comparison]
+runtime_commit = "248e468ca505c684bbf254e52eb8148f1e530c83"
+llvm18_support_sha256 = "c7a1306784e7f487c040b724e2074294ff687f149bf6403a9e403973a833e596"
+llvm23_support_sha256 = "f7fee923e2b06d1c4106439e46ed03936a9ee7721d3498d008e298cb5265cade"
+checker_script_sha256 = "bb11d8498a8403a415a77910193302b00bb1978d6ee24c0079bab5aa69ab5c2e"
+checker_source_sha256 = "a5c383379ce3dcf5a53eca274aa446e968d533c13516a64a9d80dd6e3298828d"

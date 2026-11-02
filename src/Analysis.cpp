@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "AnalysisBudgetClock.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
@@ -21,34 +22,48 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 #include <numeric>
-#include <chrono>
 #include "llvm/Support/CommandLine.h"
 #include <tuple>
 using namespace llvm;
 namespace bennett {
 namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
-cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000));
+cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
+    cl::desc("S2 thread CPU allowance in milliseconds; source/ISA budgets are independent"));
 struct AnalysisBudget {
-  std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
+  AnalysisBudgetClock clock{AnalysisMilliseconds};
   const Instruction *at=nullptr;
   const char *rule="PT11 seeds";
   uint64_t ticks=0;
-  [[noreturn]] void exhausted() {
+  [[noreturn]] void exhausted(StringRef reason="S2 round limit") {
     std::string message="§5.2 "+std::string(rule)+" budget exhausted at AV(";
     raw_string_ostream out(message);
     if(at) {
       const Value *element=at;
       if(auto *store=dyn_cast<StoreInst>(at))element=store->getPointerOperand();
       if(auto *ret=dyn_cast<ReturnInst>(at);ret && ret->getReturnValue())element=ret->getReturnValue();
+      // A void instruction has no SSA result to print. In particular lifetime
+      // calls previously produced AV(<badref>) although their pointer is live.
+      if(element->getType()->isVoidTy()) {
+        element=at->getFunction();
+        if(auto *call=dyn_cast<CallBase>(at)) {
+          element=call->getCalledOperand();
+          for(auto &arg:call->args())if(arg->getType()->isPointerTy()){element=arg;break;}
+        } else for(auto &operand:at->operands())
+          if(operand->getType()->isPointerTy() || operand->getType()->isIntegerTy()) {element=operand;break;}
+      }
       element->printAsOperand(out,false);out<<") in @"<<at->getFunction()->getName();
     }
     else out<<"initial seeds)";
-    unimplemented(out.str(),1,at);
+    out<<"; compiler resource allowance: "<<reason;
+    fail("analysis-resource",out.str(),at);
   }
   void check(bool force=false) {
-    if((force || (++ticks%1024)==0) &&
-       std::chrono::steady_clock::now()-start>=std::chrono::milliseconds(AnalysisMilliseconds)) exhausted();
+    if(force || (++ticks%1024)==0) {
+      auto expired=clock.expired();
+      if(!expired)fail("analysis-resource","S2 thread CPU clock unavailable",at);
+      if(*expired)exhausted("thread CPU milliseconds");
+    }
   }
 };
 thread_local AnalysisBudget *activeBudget=nullptr;

@@ -453,6 +453,14 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                     bennett::addNativeComparisonPass(pm);
                     return true;
                   }
+                  if (n == "bennett-native-host-imports") {
+                    bennett::addNativeHostImportsPass(pm);
+                    return true;
+                  }
+                  if (n == "bennett-native-comparison-finalise") {
+                    bennett::addNativeFinalisePass(pm);
+                    return true;
+                  }
                   if (n != "bennett")
                     return false;
                   pm.addPass(bennett::BennettPass());

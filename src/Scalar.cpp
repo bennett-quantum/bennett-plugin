@@ -142,6 +142,13 @@ struct Scalar {
       if(runtimeNames()) {n="g";--constants;names[g]=n;}
       dest(n,width(g->getType())); lines.push_back(n+" = lift.addr @"+globals[g]); return n;
     }
+    if (auto *fn = dyn_cast<Function>(v)) {
+      if (auto address=comparisonFunctionAddress(*fn))
+        return constant(APInt(width(fn->getType()),*address));
+      if (!hasComparisonLayout())if(auto *md=fn->getMetadata("bennett.address"))
+        return constant(cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getValue());
+      unimplemented("§19.5 comparison function address",4,fn);
+    }
     if (auto *c = dyn_cast<ConstantFP>(v))
       return constant(c->getValueAPF().bitcastToAPInt());
     if (auto *c = dyn_cast<ConstantInt>(v))
