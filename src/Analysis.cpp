@@ -533,6 +533,7 @@ AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,
 AV Analysis::displaceAtoms(const AV &source,const APInt &delta,unsigned pointerWidth,bool gep) {
   if(delta.isZero()) return source;
   AV result;result.top=source.top;
+  bool leaves=false; // PT2's unknown-address alternative, once for the whole image.
   unsigned bits=delta.getBitWidth();
   for(auto a:source.atoms) {
     if(a.kind!=Atom::Ptr || !a.object) {result.atoms.insert(a);continue;}
@@ -554,8 +555,8 @@ AV Analysis::displaceAtoms(const AV &source,const APInt &delta,unsigned pointerW
       int64_t low=residue,high=modulus-step+residue,d=delta.getSExtValue();
       auto include=[&](__int128 offset) {
         auto p=a;
-        if(offset<INT64_MIN || offset>INT64_MAX) {p.offset=0;p.stride=-1;numericalUnknown(result);}
-        else {p.offset=(int64_t)offset;if(offset<0 || (unsigned __int128)offset>=size) numericalUnknown(result);}
+        if(offset<INT64_MIN || offset>INT64_MAX) {p.offset=0;p.stride=-1;leaves=true;}
+        else {p.offset=(int64_t)offset;if(offset<0 || (unsigned __int128)offset>=size) leaves=true;}
         result.atoms.insert(p);
       };
       if(low+d<modulus && high+d>=0) include((__int128)a.offset+d);
@@ -566,9 +567,9 @@ AV Analysis::displaceAtoms(const AV &source,const APInt &delta,unsigned pointerW
       if(a.stride>0 && bits==pointerWidth && isPowerOf2_64(a.stride)) {
         // A power-of-two residue class is closed under full-width modular addition.
         a.offset=(int64_t)(((uint64_t)a.offset+delta.sextOrTrunc(64).getZExtValue())&((uint64_t)a.stride-1));
-        numericalUnknown(result);
+        leaves=true;
       } else if(a.stride || !offset.isSignedIntN(64)) {
-        a.offset=0;a.stride=-1;numericalUnknown(result);
+        a.offset=0;a.stride=-1;leaves=true;
       } else {
         a.offset=offset.getSExtValue();
         uint64_t size=UINT64_MAX;
@@ -577,11 +578,13 @@ AV Analysis::displaceAtoms(const AV &source,const APInt &delta,unsigned pointerW
         else if(auto *alloc=dyn_cast<AllocaInst>(a.object))
           if(auto *count=dyn_cast<ConstantInt>(alloc->getArraySize()))
             size=(uint64_t)std::min<unsigned __int128>(UINT64_MAX,(unsigned __int128)count->getLimitedValue()*M.getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue());
-        if(a.offset<0 || (uint64_t)a.offset>=size)numericalUnknown(result);
+        if(a.offset<0 || (uint64_t)a.offset>=size)leaves=true;
       }
       result.atoms.insert(a);
     }
   }
+  if(leaves)numericalUnknown(result);
+  result.settle();
   return result;
 }
 Function *resolve(Value *v) {
@@ -1152,10 +1155,27 @@ AV Analysis::load(const AV &p, Type *t) {
   std::vector<const AV *> parts;
   auto &groups=p.atoms.byObject();
   parts.reserve(groups.size());
+  // Object versions only grow, so an unchanged sum means no object here changed: the whole
+  // load is its last result. Most reruns of a load after a wakeup are this case.
+  uint64_t versions=0;
+  for(auto &group:groups)if(group.first)versions+=objectVersion[group.first];
+  bool registered=false;
+  if(currentStep>=0) {
+    auto &seen=loadRegistered[currentStep];
+    registered=seen==p.atoms.uid() && seen;
+    seen=p.atoms.uid();
+  }
+  auto &whole=wholeLoads[{p.atoms.uid(),t}];
+  if(whole.keep.uid() && whole.versions==versions) {
+    if(!registered)for(auto &group:groups)if(group.first)readObject(group.first);
+    AV result=whole.result;
+    if(p.top && !result.top) {result.top=true;result.settle();}
+    return result;
+  }
   for(auto &group:groups) {
     const Value *object=group.first;
     if(!object) {r.top=true;continue;}
-    readObject(object);
+    if(!registered)readObject(object);
     uint64_t version=objectVersion[object];
     auto &memo=loadMemo[{group.second.uid(),t}];
     if(!memo.keep.uid() || memo.version!=version) {
@@ -1169,6 +1189,10 @@ AV Analysis::load(const AV &p, Type *t) {
   AV::startAbsorbing();
   for(auto *part:parts)r.absorb(*part);
   r.settle();
+  // Loading created slots only when seeding on demand, which is not a version change.
+  uint64_t after=0;
+  for(auto &group:groups)if(group.first)after+=objectVersion[group.first];
+  if(!p.top) {whole.result=r;whole.versions=after;whole.keep=p.atoms;}
   return r;
 }
 std::set<Function *> Analysis::candidates(Value *v, FunctionType *type) {
@@ -2052,14 +2076,19 @@ void Analysis::step(Instruction &i) {
         };
         for(Value *v:p->incoming_values())orbit(v,APInt(pw,0));
         if(zeros<pw && zeros<63) {
-          AV closure;closure.top=a.top;
-          for(auto atom:a.atoms) {
-            if(atom.kind==Atom::Ptr && atom.object && !atom.stride) {
-              atom.stride=int64_t(1)<<zeros;atom.offset=uint64_t(atom.offset)&(atom.stride-1);
+          // A pure function of the set and the step, reached by every rerun of this phi.
+          auto &known=phiClosures[{a.atoms.uid(),zeros}];
+          if(!known.atoms.uid()) {
+            AV closure;
+            for(auto atom:a.atoms) {
+              if(atom.kind==Atom::Ptr && atom.object && !atom.stride) {
+                atom.stride=int64_t(1)<<zeros;atom.offset=uint64_t(atom.offset)&(atom.stride-1);
+              }
+              closure.atoms.insert(atom);
             }
-            closure.merge(AV{{atom},false});
+            numericalUnknown(closure);closure.settle();known=std::move(closure);
           }
-          numericalUnknown(closure);a=std::move(closure);
+          a=known;
         }
       }
     }
@@ -2630,7 +2659,7 @@ void Analysis::run() {
     if(std::find(dirty.begin(),dirty.end(),1)==dirty.end())break;
   }
   addressTaken.clear();addressTakenKnown=false;
-  loadMemo.clear();displaceMemo.clear();storeSeen.clear();
+  loadMemo.clear();displaceMemo.clear();storeSeen.clear();wholeLoads.clear();loadRegistered.clear();phiClosures.clear();
   analysisRounds=rounds;
   // Candidate entry roots that never reach a handle operand are removed (§6.6).
   std::set<const Value *> live;

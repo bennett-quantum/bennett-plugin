@@ -121,6 +121,10 @@ class Analysis {
   std::map<std::pair<uint64_t, llvm::Type *>, LoadMemo> loadMemo;
   std::map<std::tuple<uint64_t, uint64_t, unsigned, unsigned, bool, bool>, AV> displaceMemo;
   std::unordered_map<int, std::tuple<AtomSet, AtomSet, bool>> storeSeen;
+  struct WholeLoad { AV result; uint64_t versions = 0; AtomSet keep; };
+  std::map<std::pair<uint64_t, llvm::Type *>, WholeLoad> wholeLoads;
+  std::unordered_map<int, uint64_t> loadRegistered;
+  std::map<std::pair<uint64_t, unsigned>, AV> phiClosures;
   void loadAtoms(const AtomSet &, llvm::Type *, uint64_t, AV &);
   AV displaceAtoms(const AV &, const llvm::APInt &, unsigned, bool);
   bool addressTakenKnown = false;
