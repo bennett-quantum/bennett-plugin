@@ -32,7 +32,11 @@
     std::set<const GlobalVariable *> callerWrites;
     std::set<const Value *> privateInputs;
     std::set<const Value *> descriptors;
-    for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle")descriptors.insert(getUnderlyingObject(c->getArgOperand(2)));
+    for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle") {
+      // The budget record, like the descriptor, is read at the call and never by the region.
+      descriptors.insert(getUnderlyingObject(c->getArgOperand(1)));
+      descriptors.insert(getUnderlyingObject(c->getArgOperand(2)));
+    }
     std::set<Function *> region;
     std::function<void(Function *)> regionVisit=[&](Function *fn) {
       if(!fn || fn->isDeclaration() || !region.insert(fn).second)return;

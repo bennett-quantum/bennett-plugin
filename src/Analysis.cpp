@@ -935,8 +935,10 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
         auto id=intrinsic->getIntrinsicID();
         if(id==Intrinsic::lifetime_start || id==Intrinsic::lifetime_end) continue;
       }
-      if(auto *mem=dyn_cast<MemIntrinsic>(c)) {
-        auto dst=get(mem->getDest()); auto *length=dyn_cast<ConstantInt>(mem->getLength());
+      auto *helper=c->getCalledFunction();
+      bool helperWrite=helper && (helper->getName()=="__bennett_rt_memset" || helper->getName()=="__bennett_rt_memmove");
+      if(isa<MemIntrinsic>(c) || helperWrite) { // N26's helper writes what the intrinsic wrote.
+        auto dst=get(c->getArgOperand(0)); auto *length=dyn_cast<ConstantInt>(c->getArgOperand(2));
         bool disjoint=!dst.top && length;
         for(auto &d:dst.atoms) if(d.kind==Atom::Ptr) {
           Slot written{d.object,d.offset,d.stride,length ? length->getLimitedValue() : 1,{},false};

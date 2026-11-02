@@ -17,6 +17,8 @@
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/Program.h"
 #include <cstdlib>
+#include <optional>
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <regex>
 using namespace llvm;
@@ -83,8 +85,14 @@ std::string decimal(const APInt &v) {
   return s.str().str();
 }
 uint64_t integer(AV v, const Value *at) {
-  if (v.top || v.atoms.size() != 1 || v.atoms.begin()->kind != Atom::Int)
-    unimplemented("§8.4 scalar descriptor finite dispatch", 1, at);
+  if (v.top || v.atoms.size() != 1 || v.atoms.begin()->kind != Atom::Int) {
+    std::string seen=v.top?"top":"";
+    for(auto &x:v.atoms) {
+      seen+=(seen.empty()?"":" ");
+      if(x.kind==Atom::Int)seen+=toString(x.integer,10,false);else seen+=x.kind==Atom::Ptr?"ptr":x.kind==Atom::Fn?"fn":"root";
+    }
+    unimplemented("§8.4 scalar descriptor finite dispatch (values: "+seen+")", 1, at);
+  }
   return v.atoms.begin()->integer.getLimitedValue();
 }
 const char *budgetNames[] = {"steps", "heap", "stack", "depth", "sstack"};
@@ -500,6 +508,20 @@ struct Entry {
     for(auto &g:m) { if(&g==fn)return address; address+=16; }
     llvm_unreachable("function missing from comparison link");
   }
+  // A(F) for the reference's compare trees and data relocations (§14.2, §16.4), on the
+  // private clone only: the source module's region keys are unaffected.
+  void assignAddresses(ValueToValueMapTy &vm) {
+    uint64_t address=4096;
+    for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
+    address=alignTo(address,uint64_t(4096));
+    auto *type=m.getDataLayout().getIntPtrType(m.getContext());
+    for(auto &g:m) {
+      auto *copy=cast<Function>(vm[&g]);
+      if(!copy->getMetadata("bennett.address"))
+        copy->setMetadata("bennett.address",MDNode::get(m.getContext(),ConstantAsMetadata::get(ConstantInt::get(type,address))));
+      address+=16;
+    }
+  }
   AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
   bool singletonInt(AV v) { return !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int; }
   // The same unsigned, balanced compare tree serves candidate addresses,
@@ -840,6 +862,7 @@ struct Entry {
     std::string refName = "ref";
     ValueToValueMapTy vm;
     auto clone = CloneModule(m, vm);
+    assignAddresses(vm);
     auto *cf = cast<Function>(vm[callee]);
     cf=normaliseWideABI(*clone,cf);
     normaliseScalar(*cf);
@@ -857,6 +880,7 @@ struct Entry {
     if (budget[4] != baseline[4]) {
       ValueToValueMapTy finalMap;
       auto finalModule = CloneModule(m, finalMap);
+      assignAddresses(finalMap);
       auto *finalFunction = cast<Function>(finalMap[callee]);
       finalFunction=normaliseWideABI(*finalModule,finalFunction);
       normaliseScalar(*finalFunction);
@@ -1020,15 +1044,184 @@ struct Entry {
     auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
     auto *v = c.getArgOperand(measurement ? 0 : 1);
     auto result = measurement && tagged(a.get(v)) ? fresh("i1") : "";
-    withHandle(v, [&](std::string q) { gateOn(c,q); }, false, result, &c);
+    auto *index = c.getArgOperand(measurement ? 1 : 2);
+    withHandle(v, [&](std::string q) {
+      wireIndex(index, qwidth(a.get(v), &c), &c, [&](uint64_t i) { gateOn(c,q,i); }, measurement);
+    }, false, result, &c);
     if(!result.empty())names[&c]=result;
   }
-  void gateOn(CallBase &c, std::string src) {
+  // A marker's wire index (§18.3): a literal, or at run time a compare tree over the wires of
+  // the register, whose last arm is the T-INDEX failure. A measured result joins at the end.
+  void wireIndex(Value *index, uint64_t width, CallBase *at, const std::function<void(uint64_t)> &body, bool joinsResult=false) {
+    auto known = a.get(index);
+    if (!known.top && known.atoms.size() == 1 && known.atoms.begin()->kind == Atom::Int) {
+      body(known.atoms.begin()->integer.getLimitedValue());
+      return;
+    }
+    auto value = operand(index);
+    auto id = std::to_string(dispatchBlock++), done = "wire" + id + "done";
+    auto joined = joinsResult ? fresh("i1") : "";
+    for (uint64_t k = 0; k < width; ++k) {
+      if (!known.top) {
+        bool possible = false;
+        for (auto &x : known.atoms) possible |= x.kind == Atom::Int && x.integer.getLimitedValue() == k;
+        if (!possible) continue;
+      }
+      auto constant = operand(ConstantInt::get(index->getType(), k));
+      auto eq = fresh("i1"), leaf = "wire" + std::to_string(dispatchBlock++), next = leaf + "next";
+      rows.push_back(eq + " = icmp.eq " + value + " " + constant);
+      rows.push_back("br " + eq + " ^" + leaf + "() ^" + next + "()");
+      rows.push_back("^" + leaf + "():");
+      body(k);
+      rows.push_back("br ^" + done + "(" + (joinsResult ? names.at(at) : "") + ")");
+      rows.push_back("^" + next + "():");
+    }
+    rows.push_back("trap");
+    rows.push_back("^" + done + "(" + (joinsResult ? joined + ":i1" : "") + "):");
+    if (joinsResult) names[at] = joined;
+  }
+  // gate2 and gate3 (§18.3): one action over the distinct registers named, in operand order.
+  void multiWire(CallBase &c, const char *mnemonic, std::vector<std::pair<Value *, Value *>> wires) {
+    std::vector<std::pair<std::string, uint64_t>> chosen;
+    std::function<void()> next = [&]() {
+      if (chosen.size() < wires.size()) {
+        auto &wire = wires[chosen.size()];
+        auto width = qwidth(a.get(wire.first), &c);
+        withHandle(wire.first, [&](std::string q) {
+          wireIndex(wire.second, width, &c, [&](uint64_t i) {
+            if (i >= width) fail("T-INDEX", "§18.3 gate wire index", &c);
+            chosen.push_back({q, i});
+            next();
+            chosen.pop_back();
+          });
+        });
+        return;
+      }
+      std::vector<std::string> registers, muts, widths, operands;
+      for (unsigned k = 0; k < chosen.size(); ++k) {
+        for (unsigned j = 0; j < k; ++j)
+          if (chosen[j] == chosen[k]) fail("T-ALIAS", "§18.3 a wire named twice", &c);
+        auto at = std::find(registers.begin(), registers.end(), chosen[k].first);
+        unsigned slot = at - registers.begin();
+        if (at == registers.end()) {
+          registers.push_back(chosen[k].first);
+          auto w = std::to_string(qwidth(a.get(wires[k].first), &c));
+          muts.push_back("s" + std::to_string(slot) + ":wire[" + w + "] mut");
+          widths.push_back(w);
+        }
+        operands.push_back("s" + std::to_string(slot) + "[" + std::to_string(chosen[k].second) + "]");
+      }
+      auto name = action(join(muts, ", "), "", join(widths, ","), "", std::string(mnemonic) + " " + join(operands, " "));
+      rows.push_back("action_call @" + name + " (" + join(registers, ", ") + ") () () ()");
+    };
+    next();
+  }
+  void gate2(CallBase &c) {
+    auto op = integer(a.get(c.getArgOperand(0)), &c);
+    static const char *ops[] = {"", "cx", "cz", "swap"};
+    if (op < 1 || op > 3) fail("T-OP", "§3.4 gate2 opcode", &c);
+    multiWire(c, ops[op], {{c.getArgOperand(1), c.getArgOperand(2)}, {c.getArgOperand(3), c.getArgOperand(4)}});
+  }
+  void gate3(CallBase &c) {
+    if (integer(a.get(c.getArgOperand(0)), &c) != 1) fail("T-OP", "§3.4 gate3 opcode", &c);
+    multiWire(c, "ccx", {{c.getArgOperand(1), c.getArgOperand(2)}, {c.getArgOperand(3), c.getArgOperand(4)}, {c.getArgOperand(5), c.getArgOperand(6)}});
+  }
+  // qprep (§3.2, §18.3): wire 8k+j of h ^= bit j of byte k of [src, src+n). As §8.5 releases a
+  // snapshot: @xor128 on literal 128-wire slice views, then the byte tail as X gates. Bytes of a
+  // constant global are literals, and all-zero chunks vanish; other bytes are read at run time.
+  void qprep(CallBase &c) {
+    auto *handleValue = c.getArgOperand(0);
+    auto width = qwidth(a.get(handleValue), &c);
+    auto count = a.get(c.getArgOperand(2));
+    if (count.top) unimplemented("§18.3 qprep of a byte count with no finite domain", 3, &c);
+    withHandle(handleValue, [&](std::string q) {
+      wireIndex(c.getArgOperand(2), width / 8 + 1, &c, [&](uint64_t n) {
+        if (n > width / 8) fail("T-SIZE", "§18.3 qprep byte count", &c);
+        prepareBytes(c, q, width, n);
+      });
+    });
+  }
+  // The bytes of [src, src+n) when src is one offset of one constant global with an initialiser.
+  std::optional<std::vector<uint8_t>> constantBytes(Value *source, uint64_t n) {
+    auto address = a.get(source);
+    if (address.top || address.atoms.size() != 1) return std::nullopt;
+    auto &p = *address.atoms.begin();
+    auto *g = p.kind == Atom::Ptr && !p.stride && p.object ? dyn_cast<GlobalVariable>(p.object) : nullptr;
+    if (!g || !g->isConstant() || !g->hasDefinitiveInitializer() || p.offset < 0) return std::nullopt;
+    auto *data = dyn_cast_or_null<ConstantDataArray>(ReadByteArrayFromGlobal(g, p.offset));
+    std::vector<uint8_t> bytes(n, 0);
+    if (data) {
+      if (data->getNumElements() < n) return std::nullopt;
+      auto raw = data->getRawDataValues();
+      std::copy_n(raw.bytes_begin(), n, bytes.begin());
+      return bytes;
+    }
+    // ReadByteArrayFromGlobal gives no array for an all-zero or undefined initialiser.
+    auto *value = g->getInitializer();
+    return value->isNullValue() || isa<UndefValue>(value) ? std::optional<std::vector<uint8_t>>(bytes) : std::nullopt;
+  }
+  void prepareBytes(CallBase &c, std::string q, uint64_t width, uint64_t n) {
+    auto known = constantBytes(c.getArgOperand(1), n);
+    uint64_t chunks = n / 16;
+    std::string base, fr;
+    if (!known) base = operand(c.getArgOperand(1));
+    if (chunks) {
+      snapshotRuntime();
+      fr = emit("qreg[4]", "qreg.new any 4");
+    }
+    auto word = [&](uint64_t at) {
+      uint64_t v = 0;
+      for (unsigned b = 0; b < 8; ++b) v |= uint64_t((*known)[at + b]) << (8 * b);
+      return v;
+    };
+    for (uint64_t k = 0; k < chunks; ++k) {
+      std::string lo, hi;
+      uint64_t off = k * 16;
+      if (known) {
+        uint64_t x = word(off), y = word(off + 8);
+        if (!x && !y) continue;
+        lo = number(x); hi = number(y);
+      } else {
+        auto p = addPointer(base, number(off));
+        lo = emit("i64", "load.i64 " + p);
+        hi = emit("i64", "load.i64 " + addPointer(p, number(8)));
+      }
+      auto view = emit("qreg[128]", "qreg.slice " + q + " " + std::to_string(off * 8) + " 128");
+      rows.push_back("oracle_call @xor128 " + snapshotToken + " () " + view + " " + fr + " () (" + lo + ", " + hi + ")");
+    }
+    if (chunks) rows.push_back("qreg.free " + fr);
+    auto w = std::to_string(width);
+    for (uint64_t off = chunks * 16; off < n; ++off) {
+      if (known) {
+        std::string ops;
+        for (unsigned bit = 0; bit < 8; ++bit)
+          if (((*known)[off] >> bit) & 1) ops += "x s[" + std::to_string(off * 8 + bit) + "]\n";
+        if (ops.empty()) continue;
+        ops.pop_back();
+        auto name = action("s:wire[" + w + "] mut", "", w, "", ops);
+        rows.push_back("action_call @" + name + " (" + q + ") () () ()");
+        continue;
+      }
+      auto value = emit("i8", "load.i8 " + addPointer(base, number(off)));
+      for (unsigned bit = 0; bit < 8; ++bit) {
+        auto mask = operand(ConstantInt::get(Type::getInt8Ty(m.getContext()), 1u << bit));
+        auto zero = operand(ConstantInt::get(Type::getInt8Ty(m.getContext()), 0));
+        auto set = emit("i1", "icmp.ne " + emit("i8", "and " + value + " " + mask) + " " + zero);
+        auto leaf = "prep" + std::to_string(dispatchBlock++), after = leaf + "next";
+        rows.push_back("br " + set + " ^" + leaf + "() ^" + after + "()");
+        rows.push_back("^" + leaf + "():");
+        auto name = action("s:wire[" + w + "] mut", "", w, "", "x s[" + std::to_string(off * 8 + bit) + "]");
+        rows.push_back("action_call @" + name + " (" + q + ") () () ()");
+        rows.push_back("br ^" + after + "()");
+        rows.push_back("^" + after + "():");
+      }
+    }
+  }
+  void gateOn(CallBase &c, std::string src, uint64_t i) {
     auto n = c.getCalledFunction()->getName();
     bool measurement = n == "__bennett_measure";
     auto q = a.get(c.getArgOperand(measurement ? 0 : 1));
     auto w = qwidth(q, &c);
-    auto i = integer(a.get(c.getArgOperand(measurement ? 1 : 2)), &c);
     if (i >= w)
       fail("T-INDEX", "§18.3 gate/measurement index", &c);
     if (measurement) {
@@ -1101,7 +1294,7 @@ struct Entry {
           if (auto *g = c->getCalledFunction();
               g && (g->getName() == "__bennett_oracle" || g->getName() == "__bennett_inplace" ||
                     g->getName().starts_with("llvm.lifetime.") ||
-                    g->getName().starts_with("llvm.memset.")))
+                    g->getName().starts_with("llvm.memset.") || g->getName() == "__bennett_rt_memset"))
             continue;
         unimplemented("§8.1 escaping descriptor storage", 1, u);
       }
@@ -1252,7 +1445,7 @@ struct Entry {
             unimplemented("§17.4 indirect CC call", 1, c);
           auto n = g->getName();
           if (n.starts_with("llvm.lifetime.") ||
-              (!memoryDescriptors && n.starts_with("llvm.memset.") &&
+              (!memoryDescriptors && (n.starts_with("llvm.memset.") || n == "__bennett_rt_memset") &&
                descriptorObjects.count(
                    getUnderlyingObject(c->getArgOperand(0)))))
             continue;
@@ -1308,6 +1501,12 @@ struct Entry {
             inplace(*c);
           else if (n == "__bennett_gate" || n == "__bennett_measure")
             gate(*c);
+          else if (n == "__bennett_gate2")
+            gate2(*c);
+          else if (n == "__bennett_gate3")
+            gate3(*c);
+          else if (n == "__bennett_qprep")
+            qprep(*c);
           else if(n=="__bennett_nz_alloc") {
             auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
           } else if(n=="__bennett_nz_free") {
@@ -2374,7 +2573,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     std::vector<Function *> closure{f};
     for(unsigned k=0;k<closure.size();++k)for(auto &i:instructions(*closure[k]))
       if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand());
-          g && !g->isDeclaration() && !markers().count(g->getName().str()) && !ccNames.count(g)) {
+          g && (materialiseMemoryRuntime(*g),!g->isDeclaration()) && !markers().count(g->getName().str()) && !ccNames.count(g)) {
         auto name="C"+std::to_string(closure.size()-1);
         if(name==f->getName())name+="callee";
         ccNames[g]=name;closure.push_back(g);
