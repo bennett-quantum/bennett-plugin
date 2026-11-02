@@ -4,7 +4,7 @@
 The hidden flag -bennett-analysis-check-delta recomputes every incremental load group in full and
 aborts on any difference. This test runs it over every probe and fixture program and over
 programs built to grow a loaded object round after round (stores of loaded values, partial
-overlaps, strided stores, zero-filled heap images), and requires (a) no difference, (b) the
+overlaps, strided stores, zero-filled heap images, a written constant image), and requires (a) no difference, (b) the
 incremental path was actually taken where the program grows an object, and (c) the analysis
 report is identical with and without the check.
 """
@@ -61,6 +61,29 @@ define i64 @top(i1 %c, i64 %i) {{
  ret i64 %v
 }}''','%v'
 
+def grow_constant():
+ """Stores reach a constant image through a merged pointer: its exact-byte loads lose and gain
+ contributions as the written slots grow (the per-atom path), at byte and multi-byte widths."""
+ body,q=select_chain('@s',[0,1,2,4,5])
+ return f'''@s = internal constant [8 x i8] c"abcdefgh"
+@h = internal global [8 x i8] zeroinitializer
+define i32 @top(i1 %c, i1 %d) {{
+{body}
+ %b = load i8, ptr {q}
+ %w = load i32, ptr {q}
+ %x = load i16, ptr %q2
+ %z = zext i8 %b to i32
+ %y = add i32 %z, 1
+ %t = trunc i32 %y to i8
+ %k = and i8 %t, 7
+ %dst = select i1 %d, ptr @h, ptr %q3
+ store i8 %k, ptr %dst
+ %e = getelementptr i8, ptr %dst, i64 1
+ store i8 %b, ptr %e
+ %r = add i32 %w, %y
+ ret i32 %r
+}}''','%w'
+
 def run(m,src,check,tag):
  report=R/f'.tmp/load-delta/{m}/{tag}.json'
  argv=[f'/usr/lib/llvm-{m}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{m}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-disable-output',str(src)]
@@ -77,7 +100,7 @@ def main():
  def check(name,ok,detail=''):
   results.append({'case':name,'ok':bool(ok),'detail':detail if not ok else ''})
  programs=[]
- for name,(text,_) in {'grow-global':grow_global(),'grow-heap':grow_heap()}.items():
+ for name,(text,_) in {'grow-global':grow_global(),'grow-heap':grow_heap(),'grow-constant':grow_constant()}.items():
   path=out/f'{name}.ll';path.write_text(text);programs.append((name,path,True))
  for path in sorted((R/'tests/probes').glob('*.ll'))+sorted((R/'tests/fixtures').glob('*.ll')):
   programs.append((path.parent.name+'-'+path.stem,path,False))

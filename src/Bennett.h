@@ -129,8 +129,11 @@ class Analysis {
   // PT6 per (atom group, type). Slot contents only grow, so a group whose object changed
   // since `version` takes the old result plus what the changed slots now give: the same
   // union a full pass computes. Changes that can shrink a contribution force the full pass.
+  // A constant image's integer load (PT6's exact-byte decoding) can lose a contribution as
+  // slots grow, so its group keeps one contribution per atom (`perAtom`, aligned with
+  // `atoms`) and recomputes only the atoms a changed slot overlaps.
   struct LoadMemo { AV result; uint64_t version; AtomSet keep; bool indexed = false; uint64_t rebuilds = 0;
-                    std::vector<Atom> exact, other; };
+                    std::vector<Atom> exact, other; std::vector<Atom> atoms; std::vector<AV> perAtom; };
   // Per object, the slot each version step changed; bit 31 marks a change after which a
   // contribution may differ other than by growth (a zero image's extent widened).
   std::unordered_map<const llvm::Value *, std::vector<uint32_t>> objectLog;

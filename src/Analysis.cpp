@@ -1169,13 +1169,52 @@ void Analysis::loadPair(const Atom &a, const Slot &s, Type *t, uint64_t size, AV
 // constant image's exact bytes decide (that decision can turn as slots grow).
 bool Analysis::loadDelta(LoadMemo &memo, const Value *object, Type *t, uint64_t size) {
   if (!memo.keep.uid()) return false;
-  if (auto *g = dyn_cast<GlobalVariable>(object); g && g->isConstant() && t->isIntegerTy()) {++rebuildsConstant;return false;}
+  bool perAtom = false;
+  if (auto *g = dyn_cast<GlobalVariable>(object); g && g->isConstant() && t->isIntegerTy()) {
+    if (memo.perAtom.size() != memo.atoms.size() || memo.atoms.empty()) {++rebuildsConstant;return false;}
+    perAtom = true;
+  }
   auto &log = objectLog[object];
   if (memo.version > log.size()) report_fatal_error("bennett: analysis: load memo ahead of its object");
   std::vector<uint32_t> changed(log.begin() + memo.version, log.end());
   for (uint32_t entry : changed) if (entry & 0x80000000u) {++rebuildsShrink;return false;}
   std::sort(changed.begin(), changed.end());
   changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
+  if (perAtom) {
+    // Recompute each atom a changed slot overlaps from its own slots; the group is the union.
+    std::vector<char> due(memo.atoms.size(), 0);
+    for (uint32_t n : changed) {
+      const Slot &s = slots[n];
+      if (s.object != object) report_fatal_error("bennett: analysis: slot log names another object");
+      for (size_t k = 0; k < memo.atoms.size(); ++k) {budgetTick(); if (!due[k] && overlaps(memo.atoms[k], s, size)) due[k] = 1;}
+    }
+    for (size_t k = 0; k < memo.atoms.size(); ++k) if (due[k]) {
+      AV fresh; AtomSet one; one.insert(memo.atoms[k]);
+      loadAtoms(one, t, size, fresh);
+      memo.perAtom[k] = std::move(fresh);
+    }
+    AV r;
+    AV::startAbsorbing();
+    for (auto &part : memo.perAtom) r.absorb(part);
+    r.settle();
+    ++loadDeltas;
+    if (CheckLoadDelta) {
+      AV full;
+      loadAtoms(memo.keep, t, size, full);
+      if (full.top != r.top || full.atoms.uid() != r.atoms.uid()) {
+        std::string message;raw_string_ostream out(message);
+        out << "bennett: analysis: per-atom PT6 differs from the full pass on ";
+        object->printAsOperand(out, false);
+        out << ": " << r.atoms.size() << " atoms top=" << r.top << " vs " << full.atoms.size() << " atoms top=" << full.top;
+        report_fatal_error(Twine(out.str()));
+      }
+    }
+    // A recomputed atom can contribute less than before: then the whole-load union that
+    // assumed growth must start over (as after a rebuild).
+    {AV grown = r; if (grown.merge(memo.result)) ++memo.rebuilds;}
+    memo.result = std::move(r);
+    return true;
+  }
   if (!memo.indexed) {
     for (auto &a : memo.keep) (a.stride == 0 ? memo.exact : memo.other).push_back(a);
     std::sort(memo.exact.begin(), memo.exact.end(), [](const Atom &x, const Atom &y) {return x.offset < y.offset;});
@@ -1300,7 +1339,21 @@ AV Analysis::load(const AV &p, Type *t) {
       if(loadDelta(memo,object,t,size))memo.version=version;
       else {
         AV fresh;
-        loadAtoms(group.second,t,size,fresh);
+        memo.atoms.clear();memo.perAtom.clear();
+        if(auto *g=dyn_cast<GlobalVariable>(object);g && g->isConstant() && t->isIntegerTy()) {
+          // One contribution per atom, so that later changes recompute only the atoms they touch.
+          AV::startAbsorbing();
+          std::vector<AV> parts;std::vector<Atom> atoms;
+          for(auto &a:group.second) {AV part;AtomSet one;one.insert(a);loadAtoms(one,t,size,part);atoms.push_back(a);parts.push_back(std::move(part));}
+          AV::startAbsorbing();
+          for(auto &part:parts)fresh.absorb(part);
+          fresh.settle();
+          if(CheckLoadDelta) {
+            AV full;loadAtoms(group.second,t,size,full);
+            if(full.top!=fresh.top || full.atoms.uid()!=fresh.atoms.uid())report_fatal_error("bennett: analysis: per-atom PT6 differs from the full pass on a constant image");
+          }
+          memo.atoms=std::move(atoms);memo.perAtom=std::move(parts);
+        } else loadAtoms(group.second,t,size,fresh);
         // loadAtoms may reach back into the memo table only through other entries; std::map keeps references.
         memo.result=std::move(fresh);memo.version=version;memo.keep=group.second;memo.indexed=false;memo.exact.clear();memo.other.clear();
         ++memo.rebuilds;++loadRebuilds;
@@ -2386,15 +2439,16 @@ void Analysis::step(Instruction &i) {
     else if (isa<MemTransferInst>(c) || n=="__bennett_rt_memmove") {
       AV src = get(c->getArgOperand(1)), dst = get(c->getArgOperand(0));
       auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
-      // Only slots of source objects can copy. Fix the list first: stores grow slots.
-      std::vector<size_t> sources;
-      {
-        std::set<const Value *> objects;
-        for(auto &p:src.atoms)if(p.kind==Atom::Ptr)objects.insert(p.object);
-        for(auto *object:objects) {auto of=slotsOf(object);sources.insert(sources.end(),of.begin(),of.end());}
-        std::sort(sources.begin(),sources.end());
-      }
       if(!len) {
+        // Only slots of source objects can copy. Fix the list first: stores grow slots. (The
+        // known-length branch reads, and registers, each source object through overlappingSlots.)
+        std::vector<size_t> sources;
+        {
+          std::set<const Value *> objects;
+          for(auto &p:src.atoms)if(p.kind==Atom::Ptr)objects.insert(p.object);
+          for(auto *object:objects) {auto of=slotsOf(object);sources.insert(sources.end(),of.begin(),of.end());}
+          std::sort(sources.begin(),sources.end());
+        }
         // Unknown length: each destination atom takes (Z,*) with top and the slot's ROOTs.
         // Distinct (ROOTs, width) pairs are all that matter, however many slots share them.
         std::set<std::pair<uint64_t,uint64_t>> seenValues,done;
