@@ -166,7 +166,17 @@ class Analysis {
   void seedOnDemand(const llvm::Value *);
   std::vector<Slot> slots;
   using SlotKey = std::tuple<const llvm::Value *, int64_t, int64_t, uint64_t, bool, bool>;
-  std::map<SlotKey, size_t> slotIndex;
+  struct SlotKeyHash {
+    size_t operator()(const SlotKey &k) const {
+      uint64_t h = (uint64_t)(uintptr_t)std::get<0>(k);
+      for (uint64_t w : {(uint64_t)std::get<1>(k), (uint64_t)std::get<2>(k), std::get<3>(k),
+                         (uint64_t)std::get<4>(k) * 2 + std::get<5>(k)})
+        h = (h ^ w) * 0x9E3779B97F4A7C15ull, h ^= h >> 29;
+      return (size_t)h;
+    }
+  };
+  // Never iterated: only lookups, so its order cannot reach a result.
+  std::unordered_map<SlotKey, size_t, SlotKeyHash> slotIndex;
   unsigned analysisRounds = 0;
   std::map<const llvm::Value *, std::map<int64_t, std::vector<size_t>>> exactSlots;
   std::map<const llvm::Value *, std::vector<size_t>> otherSlots;
