@@ -2,6 +2,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/TargetParser/Triple.h"
 using namespace llvm;
 namespace bennett {
 Value *n22Packing(Value *v) {
@@ -260,8 +262,11 @@ void normaliseWideFP(Function &f) {
 }
 
 namespace bennett {
+#include "Varargs.inc"
 Function *normaliseWideABI(Module &m,Function *root) {
   auto &ctx=m.getContext();
+  // N23 precedes N22's signature work; a variadic signature has no carrier to widen.
+  normaliseVarargs(m,root);
   std::function<Type *(Type *)> shape=[&](Type *t)->Type * {
     if(wide(t)) {SmallVector<Type *> fields;unsigned n=t->getIntegerBitWidth();for(unsigned k=0;k<(n+63)/64;++k)fields.push_back(IntegerType::get(ctx,std::min(64u,n-64*k)));return StructType::get(ctx,fields);}
     if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque()) {SmallVector<Type *> fields;bool change=false;for(auto *e:s->elements()){auto *v=shape(e);change|=v!=e;fields.push_back(v);}if(change)return StructType::get(ctx,fields,s->isPacked());}

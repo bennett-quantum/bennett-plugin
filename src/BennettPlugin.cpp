@@ -316,6 +316,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     if (NormaliseOnly || Comparison) {
       if(Comparison || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m);
       if(!Comparison)normaliseWideABI(m);
+      else {Function *none=nullptr;normaliseVarargs(m,none);} // N23 is part of the materialised module (§17.7).
       for (Function &f : m) if (!f.isDeclaration() && !f.hasFnAttribute("bennett.native.comparison.runtime")) normaliseScalar(f,!Comparison);
       for(auto &f:m)if(!f.use_empty())materialiseIntegerRuntime(f);
       if(Comparison)prepareNativeComparison(m);

@@ -1270,6 +1270,18 @@ void Analysis::bind(CallBase &c, Function *f) {
     }
     ++i;
   }
+  // N23's value effect: the variadic arguments are stored in a va block at §14.3's offsets. S2
+  // holds one block per variadic definition, standing for every call's block of that callee.
+  if(f->isVarArg()) {
+    const auto &dl=M.getDataLayout();uint64_t offset=0;
+    for(unsigned k=f->arg_size();k<c.arg_size();++k) {
+      auto *t=c.getArgOperand(k)->getType();
+      offset=alignTo(offset,std::max<uint64_t>(8,dl.getABITypeAlign(t).value()));
+      uint64_t bytes=dl.getTypeStoreSize(t).getKnownMinValue();
+      store(get(c.getArgOperand(k)),atom(Atom::Ptr,f,offset),bytes);
+      offset+=alignTo(bytes,8);
+    }
+  }
   for (BasicBlock &b : *f)
     if (auto *r = dyn_cast<ReturnInst>(b.getTerminator()))
       if (r->getReturnValue()) {
@@ -2068,6 +2080,29 @@ void Analysis::step(Instruction &i) {
     StringRef n = f ? f->getName() : StringRef();
     if (n == "__bennett_qalloc" || n == "__bennett_qborrow")
       a = atom(Atom::Root, c);
+    else if(auto *vi=dyn_cast<IntrinsicInst>(c);vi && (vi->getIntrinsicID()==Intrinsic::vastart || vi->getIntrinsicID()==Intrinsic::vacopy)) {
+      // N23: va_start writes the target's va_list over the block; va_copy copies the record.
+      {
+        Triple triple(M.getTargetTriple());
+        if(triple.getArch()!=Triple::UnknownArch && triple.getArch()!=Triple::x86_64)
+          unimplemented("§14.3 S2 va_list row for this target ABI",2,c);
+      }
+      auto ap=get(c->getArgOperand(0));
+      auto at=[&](const AV &base,int64_t d) {AV p;p.top=base.top;for(auto x:base.atoms) {if(x.kind==Atom::Ptr)x.offset+=d;p.atoms.insert(x);}return p;};
+      if(vi->getIntrinsicID()==Intrinsic::vastart) {
+        store(integer(APInt(32,48)),ap,4);
+        store(integer(APInt(32,176)),at(ap,4),4);
+        store(atom(Atom::Ptr,c->getFunction()),at(ap,8),8);
+        store(integer(APInt(64,0)),at(ap,16),8);
+      } else {
+        auto from=get(c->getArgOperand(1));
+        auto *i32=Type::getInt32Ty(M.getContext());auto *ptr=PointerType::get(M.getContext(),0);
+        store(load(at(from,0),i32),at(ap,0),4);
+        store(load(at(from,4),i32),at(ap,4),4);
+        store(load(at(from,8),ptr),at(ap,8),8);
+        store(load(at(from,16),ptr),at(ap,16),8);
+      }
+    }
     else if (isa<MemTransferInst>(c) || n=="__bennett_rt_memmove") {
       AV src = get(c->getArgOperand(1)), dst = get(c->getArgOperand(0));
       auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));

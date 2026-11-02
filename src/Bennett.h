@@ -193,6 +193,7 @@ void materialiseFPBits(llvm::Function &);
 void normaliseWideFP(llvm::Function &);
 llvm::Value *n22Packing(llvm::Value *);
 llvm::Function *normaliseWideABI(llvm::Module &, llvm::Function *root = nullptr);
+void normaliseVarargs(llvm::Module &, llvm::Function *&root);
 void linkArith(llvm::Module &);
 void prepareNativeComparison(llvm::Module &);
 void requireSoftFloat(llvm::Function &);

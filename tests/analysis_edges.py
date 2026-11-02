@@ -3,6 +3,27 @@
 import argparse,json,subprocess
 from contracts import ROOT as R
 CASES={
+# N23's value effect (§14.3): va_start points overflow_arg_area at the va block, whose slots hold
+# the call's variadic arguments, so an inline va_arg's memory path reads them.
+'vararg-values':('''%va = type { i32, i32, ptr, ptr }
+declare void @llvm.va_start(ptr)
+define internal i32 @sum(i32 %n, ...) {
+ %ap = alloca %va
+ call void @llvm.va_start(ptr %ap)
+ %gp = load i32, ptr %ap
+ %fpp = getelementptr i8, ptr %ap, i64 4
+ %fp = load i32, ptr %fpp
+ %ovp = getelementptr i8, ptr %ap, i64 8
+ %ov = load ptr, ptr %ovp
+ %v0 = load i32, ptr %ov
+ %ov1 = getelementptr i8, ptr %ov, i64 8
+ %v1 = load i64, ptr %ov1
+ ret i32 %v0
+}
+define i32 @top() {
+ %r = call i32 (i32, ...) @sum(i32 2, i32 20, i64 300)
+ ret i32 %r
+}''',[('sum','%gp',{'INT(0)','INT(48)'}),('sum','%fp',{'INT(0)','INT(176)'}),('sum','%v0',{'INT(20)'}),('sum','%v1',{'INT(300)'})]),
 # PT2 lane by lane (bp-1bb): a vector GEP computes each lane as the scalar GEP of that lane's base and indices.
 'vector-gep-scalar-base':('''@g = internal global [4 x i64] zeroinitializer
 define void @top() {
