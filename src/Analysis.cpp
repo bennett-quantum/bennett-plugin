@@ -1469,6 +1469,7 @@ static AV laneBinary(unsigned opcode,const AV &x,const AV &y,Module &m) {
   }
   return value;
 }
+static bool longAdditiveCycle(Value *value, Value *source,std::function<AV(Value *)> facts, bool bitwise, int lane);
 bool Analysis::composite(Instruction &i) {
   const auto &dl = M.getDataLayout();
   if(auto *call=dyn_cast<IntrinsicInst>(&i)) {
@@ -1716,6 +1717,15 @@ bool Analysis::composite(Instruction &i) {
   if (auto *p = dyn_cast<PHINode>(&i)) {
     for (Value *v : p->incoming_values())
       copyFields(&i, v);
+    if(auto *vector=dyn_cast<VectorType>(p->getType());vector && vector->getElementType()->isIntegerTy())
+      for(unsigned k=0;k<vector->getElementCount().getKnownMinValue();++k) {
+        auto lane=field(p,{k});
+        if(lane.atoms.empty() || lane.top)continue;
+        for(Value *v:p->incoming_values())
+          if(longAdditiveCycle(v,p,[&,k](Value *x){return field(x,{k});},false,(int)k)) {
+            AV top;top.top=true;setField(&i,{k},top);break;
+          }
+      }
     return true;
   }
   if (auto *s = dyn_cast<SelectInst>(&i)) {
@@ -1742,32 +1752,63 @@ bool Analysis::composite(Instruction &i) {
     return false; // PT9 binds leaf paths below.
   unimplemented("§5 PT10 composite operation", 1, &i);
 }
+// A value in an additive orbit carries each pointer's whole orbit too (PT5's conservative
+// image): (X,*), with the unknown-address alternative.
+static void orbitPointers(AV &value) {
+  bool any=false;AV closed;closed.top=value.top;
+  for(auto x:value.atoms) {
+    if(x.kind==Atom::Ptr && x.object && x.stride!=-1) {x.offset=0;x.stride=-1;any=true;}
+    closed.atoms.insert(x);
+  }
+  if(!any)return;
+  numericalUnknown(closed);closed.settle();value=std::move(closed);
+}
 // Solve additive integer cycles directly. Flow-insensitive PT3/PT5/PT7 includes
 // every iteration, even when a source branch bounds executions. An additive
 // cycle with period >4096 therefore reaches normative TOP; this is exact
 // acceleration, not a precision-changing widening.
 static bool longAdditiveCycle(Value *value, Value *source,
-                              std::function<AV(Value *)> facts, bool bitwise = false) {
+                              std::function<AV(Value *)> facts, bool bitwise, int lane) {
   // PT3 copy edges can hide an additive recurrence behind arbitrarily many
   // phis/selects (e.g. hashtable count -> exit phi -> header phi). Following
   // those edges is exact: every traversal adds the same constant modulo W.
-  if(source->getType()->isIntegerTy()) {
-    unsigned width=source->getType()->getIntegerBitWidth();
+  // A step that is a finite set is the same orbit: PT3 unions every choice, so
+  // any nonzero element keeps adding (and K then gives top, §5.1). A vector lane
+  // follows elementwise operations in that lane (N21).
+  auto *scalar=source->getType()->getScalarType();
+  if(scalar->isIntegerTy()) {
+    unsigned width=scalar->getIntegerBitWidth();
+    auto constant=[&](Value *v)->ConstantInt * {
+      if(lane<0)return dyn_cast<ConstantInt>(v);
+      auto *c=dyn_cast<Constant>(v);
+      return c?dyn_cast_or_null<ConstantInt>(c->getAggregateElement((unsigned)lane)):nullptr;
+    };
     std::set<Value *> path;
+    unsigned visits=0; // Simple paths can be many; giving up only leaves the ordinary rounds.
     std::function<bool(Value *,APInt)> walk=[&](Value *v,APInt delta) {
       if(v==source)return !delta.isZero() && width-delta.countr_zero()>12;
-      if(v->getType()!=source->getType() || !path.insert(v).second)return false;
+      if(v->getType()!=source->getType() || ++visits>4096 || !path.insert(v).second)return false;
       bool found=false;
       if(auto *p=dyn_cast<PHINode>(v)) {
         for(Value *in:p->incoming_values())if(walk(in,delta)) {found=true;break;}
       } else if(auto *s=dyn_cast<SelectInst>(v))found=walk(s->getTrueValue(),delta)||walk(s->getFalseValue(),delta);
       else if(isa<FreezeInst>(v))found=walk(cast<Instruction>(v)->getOperand(0),delta);
       else if(auto *b=dyn_cast<BinaryOperator>(v)) {
-        if(auto *c=dyn_cast<ConstantInt>(b->getOperand(1))) {
+        if(auto *c=constant(b->getOperand(1))) {
           if(b->getOpcode()==Instruction::Add)found=walk(b->getOperand(0),delta+c->getValue());
           if(b->getOpcode()==Instruction::Sub)found=walk(b->getOperand(0),delta-c->getValue());
-        } else if(b->getOpcode()==Instruction::Add)
-          if(auto *c=dyn_cast<ConstantInt>(b->getOperand(0)))found=walk(b->getOperand(1),delta+c->getValue());
+        } else if(auto *c=b->getOpcode()==Instruction::Add?constant(b->getOperand(0)):nullptr)found=walk(b->getOperand(1),delta+c->getValue());
+        else if(b->getOpcode()==Instruction::Add || b->getOpcode()==Instruction::Sub) {
+          for(unsigned k=0;k<(b->getOpcode()==Instruction::Add?2u:1u) && !found;++k) {
+            auto other=facts(b->getOperand(1-k));
+            unsigned tried=0;
+            for(auto &atom:other.atoms) {
+              if(atom.kind!=Atom::Int || atom.integer.getBitWidth()!=width)continue;
+              if(++tried>16)break;
+              if(walk(b->getOperand(k),b->getOpcode()==Instruction::Add?delta+atom.integer:delta-atom.integer)) {found=true;break;}
+            }
+          }
+        }
         // PT3's independent operand union admits an additive path through a
         // bitwise identity already in the other operand's finite domain.
         // musl mode |= mode-1 starts with zero, so its abstract store equation
@@ -1785,6 +1826,7 @@ static bool longAdditiveCycle(Value *value, Value *source,
     };
     if(walk(value,APInt(width,0)))return true;
   }
+  if(lane>=0)return false;
   auto *b = dyn_cast<BinaryOperator>(value);
   if (!b || !b->getType()->isIntegerTy())
     return false;
@@ -2028,9 +2070,11 @@ void Analysis::step(Instruction &i) {
       for (Value *operand : b->operands())
         if (auto *l = dyn_cast<LoadInst>(operand);
             l && l->getPointerOperand() == s->getPointerOperand() &&
-            longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry) &&
-            !get(l).atoms.empty())
+            longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry,-1) &&
+            !get(l).atoms.empty()) {
           written.top = true;
+          orbitPointers(written);
+        }
     // PT7 distributes over address atoms: with the value unchanged since this store last
     // ran, only new addresses can add a fact. A second store never removes one.
     AV addresses=get(s->getPointerOperand());
@@ -2051,8 +2095,10 @@ void Analysis::step(Instruction &i) {
       a.merge(get(v));
     if (!a.atoms.empty())
       for (Value *v : p->incoming_values())
-        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry))
+        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry,-1)) {
           a.top = true;
+          orbitPointers(a);
+        }
     // PT2: a full-width constant GEP recurrence denotes the complete modular
     // additive orbit. Solve it as a residue class, rather than allocating one
     // memory slot per iteration (musl strlen/memcpy pointer induction).

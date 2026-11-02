@@ -3,6 +3,58 @@
 import argparse,json,subprocess
 from contracts import ROOT as R
 CASES={
+# An additive cycle whose step is a finite set is the same orbit: past K it is top at once (bp-fj1).
+'additive-set-step':('''define internal i32 @cycle(i1 %c) {
+entry: br label %loop
+loop:
+ %n = phi i32 [ 0, %entry ], [ %copy, %loop ]
+ %step = zext i1 %c to i32
+ %sum = add i32 %n, %step
+ %copy = select i1 %c, i32 %sum, i32 %n
+ br label %loop
+}
+define i32 @top() {
+ %r = call i32 @cycle(i1 true)
+ ret i32 %r
+}''',[]),
+'additive-vector-lane':('''define internal <2 x i64> @cycle() {
+entry: br label %loop
+loop:
+ %v = phi <2 x i64> [ zeroinitializer, %entry ], [ %next, %loop ]
+ %next = add <2 x i64> %v, <i64 1, i64 2>
+ br label %loop
+}
+define <2 x i64> @top() {
+ %r = call <2 x i64> @cycle()
+ ret <2 x i64> %r
+}''',[]),
+'additive-pointer-integer':('''@g = internal global [8 x i64] zeroinitializer
+define internal i64 @cycle() {
+entry:
+ %base = ptrtoint ptr @g to i64
+ br label %loop
+loop:
+ %n = phi i64 [ %base, %entry ], [ %sum, %loop ]
+ %sum = add i64 %n, 1
+ br label %loop
+}
+define i64 @top() {
+ %r = call i64 @cycle()
+ ret i64 %r
+}''',[]),
+# A set-valued step of zero is no cycle: the set stays exact.
+'additive-zero-set-step':('''define internal i32 @cycle(i1 %c) {
+entry: br label %loop
+loop:
+ %n = phi i32 [ 7, %entry ], [ %sum, %loop ]
+ %step = select i1 %c, i32 0, i32 0
+ %sum = add i32 %n, %step
+ br label %loop
+}
+define i32 @top() {
+ %r = call i32 @cycle(i1 true)
+ ret i32 %r
+}''',[('cycle','%n',{'INT(7)'})]),
 # N23's value effect (§14.3): va_start points overflow_arg_area at the va block, whose slots hold
 # the call's variadic arguments, so an inline va_arg's memory path reads them.
 'vararg-values':('''%va = type { i32, i32, ptr, ptr }
@@ -234,6 +286,9 @@ def main():
   ok=x.returncode==0;data=json.loads(report.read_text()) if ok else {}
   for fn,val,atoms in wants:ok=ok and any(v['function']==fn and v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data.get('values',[]))
   if name=='additive-copy-cycle':ok=ok and data.get('analysis_rounds',100)<10 and any(v['value']=='%n' and v['top'] for v in data.get('values',[]))
+  if name in ('additive-set-step','additive-vector-lane','additive-pointer-integer'):
+   # Solved directly, not by one element per round up to K.
+   ok=ok and data.get('analysis_rounds',100)<20 and any(v['value'] in ('%n','%v') and v['top'] for v in data.get('values',[]))
   if name=='host-tiers':ok=ok and all(f['tiers']==['H'] for f in data.get('functions',[]))
   results.append({'case':name,'ok':ok,'diagnostic':x.stderr.strip() if x.returncode else ''})
  result={'major':a.major,'cases':len(results),'passed':sum(r['ok'] for r in results),'results':results};(R/f'.tmp/analysis-edges-{a.major}.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2));return any(not r['ok'] for r in results)
