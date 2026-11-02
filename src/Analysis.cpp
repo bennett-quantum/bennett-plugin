@@ -98,7 +98,12 @@ struct AtomSetRep : std::enable_shared_from_this<AtomSetRep> {
 namespace {
 struct AtomHash {
   size_t operator()(const Atom &a) const {
-    return (size_t)hash_combine(a.kind,a.object,a.offset,a.stride,a.numerical,hash_value(a.integer));
+    // Called for every atom a transfer builds, so a plain multiplicative mix. The integer's
+    // low word is enough to spread INT atoms; AtomSame settles any collision.
+    uint64_t h=(uint64_t)a.kind*2+a.numerical;
+    for(uint64_t word:{(uint64_t)(uintptr_t)a.object,(uint64_t)a.offset,(uint64_t)a.stride,a.integer.getRawData()[0],(uint64_t)a.integer.getBitWidth()})
+      h=(h^word)*0x9E3779B97F4A7C15ull,h^=h>>29;
+    return (size_t)h;
   }
 };
 struct AtomSame {
@@ -171,6 +176,35 @@ RepPtr internIds(std::vector<uint32_t> &&ids) {
 const std::vector<uint32_t> noIds;
 const std::vector<uint32_t> &idsOf(const RepPtr &r) {return r?r->ids:noIds;}
 uint64_t uidOf(const RepPtr &r) {return r?r->uid:0;}
+// The bytes of an abstract object when a literal size fixes them, else UINT64_MAX. EXT is
+// every address. Cached for the solve: the module does not change while it runs.
+std::unordered_map<const Value *,uint64_t> &extentCache() {
+  static auto *cache=new std::unordered_map<const Value *,uint64_t>;return *cache;
+}
+uint64_t objectExtent(const Value *object) {
+  if(!object)return UINT64_MAX;
+  auto &cache=extentCache();
+  auto found=cache.find(object);
+  if(found!=cache.end())return found->second;
+  uint64_t extent=UINT64_MAX;
+  if(auto *g=dyn_cast<GlobalVariable>(object)) {
+    if(g->getParent())extent=g->getParent()->getDataLayout().getTypeAllocSize(g->getValueType()).getKnownMinValue();
+  } else if(auto *alloc=dyn_cast<AllocaInst>(object)) {
+    if(auto *count=dyn_cast<ConstantInt>(alloc->getArraySize());count && alloc->getFunction() && alloc->getFunction()->getParent())
+      extent=count->getLimitedValue()*alloc->getFunction()->getParent()->getDataLayout().getTypeAllocSize(alloc->getAllocatedType()).getKnownMinValue();
+  } else if(auto *call=dyn_cast<CallBase>(object)) {
+    if(auto *callee=call->getCalledFunction()) {
+      auto name=callee->getName();
+      if((name=="malloc" || name=="__bennett_nz_alloc") && call->arg_size()>=1)
+        if(auto *size=dyn_cast<ConstantInt>(call->getArgOperand(0)))extent=size->getLimitedValue();
+      if(name=="calloc" && call->arg_size()==2)
+        if(auto *n=dyn_cast<ConstantInt>(call->getArgOperand(0)))
+          if(auto *size=dyn_cast<ConstantInt>(call->getArgOperand(1)))extent=n->getLimitedValue()*size->getLimitedValue();
+    }
+  }
+  cache.emplace(object,extent);
+  return extent;
+}
 // Canonical form: under top no INT atoms; more than K INT atoms become top (§5.1); (X,*)
 // has offset 0 and replaces every explicit offset of the same provenance.
 void canonical(std::vector<uint32_t> &ids,bool &top) {
@@ -252,32 +286,41 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
   }
   // A chain of displaced addresses (a pointer recurrence through memory, or a copy between
   // offsets of one object) denotes PT2's modular orbit, which only ends after 2^60 or so
-  // elements. Past K offsets of one provenance (the bound §5.1 sets on an index set, so an
-  // index domain within K keeps its exact offsets), take the orbit: the residue
-  // class of the differences' lowest set bit, with PT2's unknown-address alternative.
-  constexpr size_t OffsetChain=4096;
-  size_t pointers=firstInt-ids.begin();
+  // elements. Take the orbit, the residue class of the differences' lowest set bit with PT2's
+  // unknown-address alternative, once a chain shows: past K offsets of one provenance, the
+  // bound §5.1 sets on an index set, so an index domain within K keeps its exact offsets; past
+  // 4 offsets outside the object, which are no valid accesses; past 32 offsets of an object
+  // of no known extent, where nothing tells an index from a chain. Sound, and coarser than an
+  // unbounded reference: bp-fj1 records the dialect gap.
+  constexpr size_t OffsetChain=4096,LeftObject=4,NoExtent=32;
+  size_t pointers=firstStar-ids.begin();
   bool chained=false;
-  if(pointers>OffsetChain) {
-    // A count per object bounds the count per provenance, and costs one table read per atom.
-    llvm::DenseMap<const Value *,uint32_t> counts;
-    for(auto it=ids.begin();it!=firstInt && !chained;++it) {
-      if(*it&StarBit)break;
+  if(pointers>LeftObject) {
+    struct Tally {uint32_t total=0,outside=0;uint64_t extent=0;bool known=false;};
+    llvm::DenseMap<const Value *,Tally> counts;
+    for(auto it=ids.begin();it!=firstStar && !chained;++it) {
       const Atom &a=table.atoms[*it&IndexMask];
-      if(a.kind==Atom::Ptr)chained=++counts[a.object]>OffsetChain;
+      if(a.kind!=Atom::Ptr)continue;
+      auto &t=counts[a.object];
+      if(!t.known) {t.known=true;t.extent=objectExtent(a.object);}
+      ++t.total;
+      if((uint64_t)a.offset>t.extent)++t.outside; // One past the end is an ordinary address.
+      chained=t.total>OffsetChain || t.outside>LeftObject || (t.extent==UINT64_MAX && t.total>NoExtent);
     }
   }
   if(chained) {
     struct Provenance {const Value *object;bool numerical;bool operator<(const Provenance &o) const {
       return object!=o.object?std::less<const Value *>{}(object,o.object):numerical<o.numerical;}};
     std::map<Provenance,std::vector<uint32_t>> parts;
-    for(auto it=ids.begin();it!=firstInt;++it) {
-      if(*it&StarBit)continue;
+    for(auto it=ids.begin();it!=firstStar;++it) {
       const Atom &a=table.atoms[*it&IndexMask];
       if(a.kind==Atom::Ptr)parts[{a.object,a.numerical}].push_back(*it);
     }
     std::vector<uint32_t> doomed,added;
-    for(auto &part:parts)if(part.second.size()>OffsetChain) {
+    for(auto &part:parts) {
+      uint64_t extent=objectExtent(part.first.object),outside=0;
+      for(uint32_t id:part.second)outside+=(uint64_t)table.atoms[id&IndexMask].offset>extent;
+      if(part.second.size()<=OffsetChain && outside<=LeftObject && !(extent==UINT64_MAX && part.second.size()>NoExtent))continue;
       uint64_t low=0;const Atom &first=table.atoms[part.second[0]&IndexMask];
       for(uint32_t id:part.second) {
         const Atom &a=table.atoms[id&IndexMask];
@@ -325,7 +368,10 @@ std::unordered_map<UnionKey,UnionResult,UnionHash> &unionMemo() {
 const Atom &AtomSet::iterator::operator*() const {return atomTable().atoms[*at&IndexMask];}
 void AtomSet::normalise() const {
   if(tail.empty())return;
-  std::sort(tail.begin(),tail.end(),idLess);
+  // Only INT ids need the table; the rest order by value.
+  auto ints=std::partition(tail.begin(),tail.end(),[](uint32_t id){return !(id&IntBit);});
+  std::sort(tail.begin(),ints);
+  std::sort(ints,tail.end(),idLess);
   tail.erase(std::unique(tail.begin(),tail.end()),tail.end());
   auto &old=idsOf(rep);
   std::vector<uint32_t> joined;joined.reserve(old.size()+tail.size());
@@ -397,7 +443,7 @@ void AV::settle() {
   if(!r)return;
   bool stars=r->firstStar!=r->firstInt;
   size_t ints=r->ids.size()-r->firstInt;
-  if(!stars && !(top && ints) && !(!top && ints>4096) && r->firstStar<=4096)return;
+  if(!stars && !(top && ints) && !(!top && ints>4096) && r->firstStar<=4)return;
   auto ids=r->ids;
   canonical(ids,top);
   atoms.rep=internIds(std::move(ids));
@@ -782,8 +828,26 @@ void Analysis::touchValue(const Value *v) {
 void Analysis::touchObject(const Value *o) {
   changed=true;
   ++objectVersion[o];
-  if(auto it=objectReaders.find(o);it!=objectReaders.end())for(int r:it->second)dirty[r]=1;
+  // A step may write one object thousands of times: wake its readers once, when it ends.
+  touchedObjects.insert(o);
+  if(currentStep<0)wakeReaders();
+}
+void Analysis::wakeReaders() {
+  if(touchedObjects.empty())return;
+  // An object with very many readers is woken at the end of the sweep: they all run once
+  // then, and a load the sweep reaches first sees the store anyway. The fixpoint is the same.
+  for(auto *o:touchedObjects)
+    if(auto it=objectReaders.find(o);it!=objectReaders.end()) {
+      if(it->second.size()>256 && currentStep>=0)sweepObjects.insert(o);
+      else for(int r:it->second)dirty[r]=1;
+    }
   for(int r:anySlotReaders)dirty[r]=1;
+  touchedObjects.clear();
+}
+void Analysis::wakeSweepReaders() {
+  for(auto *o:sweepObjects)
+    if(auto it=objectReaders.find(o);it!=objectReaders.end())for(int r:it->second)dirty[r]=1;
+  sweepObjects.clear();
 }
 void Analysis::mergeValue(const Value *v,const AV &a) {
   if(values[v].merge(a))touchValue(v);
@@ -2255,6 +2319,7 @@ void Analysis::step(Instruction &i) {
 }
 void Analysis::run() {
   BudgetScope scope;
+  extentCache().clear();
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
@@ -2407,6 +2472,7 @@ void Analysis::run() {
       dirty[id]=0;currentStep=(int)id;changed=false;++ran;
       auto before=std::chrono::steady_clock::now();
       step(*order[id]);
+      wakeReaders();
       if(changed) {lastChanged=order[id];lastRule=scope.budget.rule;}
       if(AnalysisTrace) {
         auto now=std::chrono::steady_clock::now();
@@ -2432,6 +2498,7 @@ void Analysis::run() {
       }
     }
     currentStep=-1;
+    wakeSweepReaders();
     bool pending=std::find(dirty.begin(),dirty.end(),1)!=dirty.end();
     if(AnalysisTrace) {
       uint64_t atoms=0,largest=0,slotAtoms=0;const Value *big=nullptr;

@@ -128,6 +128,9 @@ class Analysis {
   void readObject(const llvm::Value *o) { if (currentStep >= 0) objectReaders[o].insert(currentStep); }
   void touchValue(const llvm::Value *);
   void touchObject(const llvm::Value *);
+  void wakeReaders();
+  void wakeSweepReaders();
+  std::unordered_set<const llvm::Value *> touchedObjects, sweepObjects;
   void mergeValue(const llvm::Value *, const AV &);
   std::vector<size_t> slotsOf(const llvm::Value *);
   std::vector<Slot> slots;
