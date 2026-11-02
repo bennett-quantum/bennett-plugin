@@ -8,7 +8,9 @@ Contract: dialect **0.2.10 @ 023f5a771a814270634db3be9cfde88ded69f975**, ISA **0
 Rung 4 (branch rung4-plugin, 2026-11-02): bp-vsa closed; bp-fj1 open. The default analysis follows §5.1's K alone
 (advisor ruling on b-dialect-spec-5u3); `-bennett-analysis-early-chain-close` is NON-REFERENCE and says so. With the
 solver speedups 44f50aa..1cdfb01 (checked by tests/load_delta.py), the reference runs out of memory in round 3 on the
-N16 SQLite closure; the flagged mode reaches its fixpoint in about 21 minutes. Evidence and the council proposal:
+N16 SQLite closure; the flagged mode reaches its fixpoint in about 21 minutes. Production analyses twice (before and
+after normalisation): a flagged production run passed the first fixpoint, including bp-1bb's vector-GEP witness, and
+was stopped in the second by a 4,000 s wrapper timeout. Evidence and the council proposal:
 docs/notes/2026-11-02-bp-fj1-reference-k-evidence.md. Not yet in scripts/gate: tests/vector_lanes.py, cc_markers.py,
 varargs.py, reference_k.py, load_delta.py.
 Resume: **bp-ehi CLOSED (Pass 26 arith M2 re-pin)**; next **bp-ozp**, then bp-xyn / bp-xv0 / R audit / softfloat / rung1 in the requested order.
