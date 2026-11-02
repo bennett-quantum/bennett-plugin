@@ -182,6 +182,14 @@ uint64_t uidOf(const RepPtr &r) {return r?r->uid:0;}
 std::unordered_map<const Value *,uint64_t> &extentCache() {
   static auto *cache=new std::unordered_map<const Value *,uint64_t>;return *cache;
 }
+// One GEP's image over a finite index domain is exact PT2, however far it reaches: only a merge
+// where an offset can feed back (memory, a phi, a parameter) can be a chain.
+bool closeChains=true;
+struct ExactImage {
+  bool previous=closeChains;
+  ExactImage() {closeChains=false;}
+  ~ExactImage() {closeChains=previous;}
+};
 std::unordered_set<const Value *> &collapsedObjects() {
   static auto *objects=new std::unordered_set<const Value *>;return *objects;
 }
@@ -299,7 +307,7 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
   constexpr size_t OffsetChain=4096,LeftObject=4,NoExtent=32;
   size_t pointers=firstStar-ids.begin();
   bool chained=false;
-  if(pointers>LeftObject) {
+  if(closeChains && pointers>LeftObject) {
     struct Tally {uint32_t total=0,outside=0;uint64_t extent=0;bool known=false;};
     llvm::DenseMap<const Value *,Tally> counts;
     for(auto it=ids.begin();it!=firstStar && !chained;++it) {
@@ -359,7 +367,7 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
   if(top)ids.erase(firstInt,ids.end());
 }
 struct UnionKey {
-  uint64_t a,b;bool top;
+  uint64_t a,b;unsigned top; // Bit 1: chains closed.
   bool operator==(const UnionKey &o) const {return a==o.a && b==o.b && top==o.top;}
 };
 struct UnionHash {
@@ -448,7 +456,7 @@ void AV::settle() {
   if(!r)return;
   bool stars=r->firstStar!=r->firstInt;
   size_t ints=r->ids.size()-r->firstInt;
-  if(!stars && !(top && ints) && !(!top && ints>4096) && r->firstStar<=4)return;
+  if(!stars && !(top && ints) && !(!top && ints>4096) && (r->firstStar<=4 || !closeChains))return;
   auto ids=r->ids;
   canonical(ids,top);
   atoms.rep=internIds(std::move(ids));
@@ -478,7 +486,7 @@ bool AV::merge(const AV &v) {
   bool wasTop=top;
   top|=v.top;
   if(&v==this || (atoms.rep==v.atoms.rep && top==wasTop))return top!=wasTop;
-  UnionKey key{uidOf(atoms.rep),uidOf(v.atoms.rep),top};
+  UnionKey key{uidOf(atoms.rep),uidOf(v.atoms.rep),(top?1u:0u)|(closeChains?2u:0u)};
   auto &memo=unionMemo();
   auto found=memo.find(key);
   if(found==memo.end()) {
@@ -524,7 +532,7 @@ AV Analysis::convert(const AV &source,Type *from,Type *to,unsigned opcode) {
 AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,bool gep) {
   if(delta.isZero()) return source;
   if(delta.getBitWidth()>64)return displaceAtoms(source,delta,pointerWidth,gep);
-  std::tuple<uint64_t,uint64_t,unsigned,unsigned,bool,bool> key{source.atoms.uid(),delta.getZExtValue(),delta.getBitWidth(),pointerWidth,gep,source.top};
+  std::tuple<uint64_t,uint64_t,unsigned,unsigned,bool,bool> key{source.atoms.uid(),delta.getZExtValue(),delta.getBitWidth(),pointerWidth|(closeChains?1u<<16:0u),gep,source.top};
   auto found=displaceMemo.find(key);
   if(found!=displaceMemo.end())return found->second;
   if(displaceMemo.size()>1000000)displaceMemo.clear();
@@ -1894,6 +1902,7 @@ void Analysis::vectorGEP(GetElementPtrInst &g) {
       order.push_back(index);
       indices.push_back({vector?field(index,{k}):get(index),scale,index->getType()->getScalarSizeInBits()});
     }
+    ExactImage exact;
     setField(&g,{k},gepImage(base,off,indices,pointerBits));
   }
 }
@@ -2007,6 +2016,7 @@ void Analysis::step(Instruction &i) {
       }
       indices.push_back({index,entry.second,entry.first->getType()->getIntegerBitWidth()});
     }
+    ExactImage exact;
     mergeValue(&i,gepImage(base,off,indices,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
     return;
   } else if (auto *l = dyn_cast<LoadInst>(&i))
