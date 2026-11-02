@@ -34,6 +34,7 @@ namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000));
 cl::opt<bool> AnalysisTrace("bennett-analysis-trace",cl::desc("Print solver progress per round to stderr"));
+cl::opt<unsigned> TraceChangesFrom("bennett-analysis-trace-changes",cl::init(UINT_MAX),cl::desc("With the trace, name the first changing steps of each round from this one on"));
 struct AnalysisBudget {
   std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
   const Instruction *at=nullptr;
@@ -2582,6 +2583,7 @@ void Analysis::run() {
     if(seedsDue)solveSeeds();
     const Instruction *lastChanged=nullptr;const char *lastRule=nullptr;uint64_t ran=0;
     auto lastReport=std::chrono::steady_clock::now();
+    unsigned tracedChanges=0;
     for(size_t id=0;id<order.size();++id)if(dirty[id]) {
       dirty[id]=0;currentStep=(int)id;changed=false;++ran;
       auto before=std::chrono::steady_clock::now();
@@ -2589,6 +2591,18 @@ void Analysis::run() {
       wakeReaders();
       if(changed) {lastChanged=order[id];lastRule=scope.budget.rule;}
       if(AnalysisTrace) {
+        if(changed && rounds>=TraceChangesFrom && tracedChanges++<40) {
+          errs()<<"bennett: analysis:   changed @"<<order[id]->getFunction()->getName()<<" "<<*order[id];
+          if(!order[id]->getType()->isVoidTy()) {
+            auto now=values[order[id]];errs()<<" -> "<<now.atoms.size()<<" atoms top="<<now.top;
+            unsigned shown=0;
+            for(auto &x:now.atoms)if(++shown>now.atoms.size()-4) {
+              if(x.kind==Atom::Int)errs()<<" INT("<<x.integer.getLimitedValue()<<")";
+              else {errs()<<" ["<<x.kind<<" off "<<x.offset<<" st "<<x.stride<<"]";}
+            }
+          }
+          errs()<<"\n";
+        }
         auto now=std::chrono::steady_clock::now();
         auto spent=std::chrono::duration_cast<std::chrono::milliseconds>(now-before).count();
         if(spent>=1000) {
