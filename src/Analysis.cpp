@@ -499,6 +499,12 @@ void AV::absorb(const AV &v) {
   v.atoms.normalise();
   if(!v.atoms.rep || !absorbedSets.insert(v.atoms.rep->uid).second)return;
   if(absorbedIn.size()<atomTable().atoms.size())absorbedIn.resize(atomTable().atoms.size()*2,0);
+  if(!atoms.rep && atoms.tail.empty()) {
+    // The first set of a union is adopted as it is: only atoms new to it need sorting.
+    atoms.rep=v.atoms.rep;
+    for(uint32_t id:v.atoms.rep->ids)absorbedIn[id&IndexMask]=absorbGeneration;
+    return;
+  }
   for(uint32_t id:v.atoms.rep->ids) {
     auto &stamp=absorbedIn[id&IndexMask];
     if(stamp!=absorbGeneration) {stamp=absorbGeneration;atoms.tail.push_back(id);}
@@ -1175,8 +1181,9 @@ bool Analysis::loadDelta(LoadMemo &memo, const Value *object, Type *t, uint64_t 
     std::sort(memo.exact.begin(), memo.exact.end(), [](const Atom &x, const Atom &y) {return x.offset < y.offset;});
     memo.indexed = true;
   }
-  AV r = memo.result;
+  AV r;
   AV::startAbsorbing();
+  r.absorb(memo.result);
   bool partial = false;
   for (uint32_t n : changed) {
     const Slot &s = slots[n];
@@ -2395,8 +2402,7 @@ void Analysis::step(Instruction &i) {
           uint64_t bytes=slots[source].bytes;
           if(!seenValues.insert({slots[source].value.atoms.uid(),bytes}).second)continue;
           AV partial;partial.top=true;
-          if(slots[source].value.roots())
-            for(auto &x:slots[source].value.atoms)if(x.kind==Atom::Root)partial.atoms.insert(x);
+          if(slots[source].value.roots())partial.atoms=slots[source].value.atoms.rootsOnly();
           if(!done.insert({partial.atoms.uid(),bytes}).second)continue;
           for(auto &d:dst.atoms)if(d.kind==Atom::Ptr)store(partial,atom(Atom::Ptr,d.object,d.offset,-1),bytes);
         }
@@ -2411,7 +2417,7 @@ void Analysis::step(Instruction &i) {
         uint64_t length=len->getZExtValue();
         auto rootsOf=[](const AV &value) {
           AV partial;partial.top=true;
-          if(value.roots())for(auto &x:value.atoms)if(x.kind==Atom::Root)partial.atoms.insert(x);
+          if(value.roots())partial.atoms=value.atoms.rootsOnly();
           return partial;
         };
         bool someStrided=false;
