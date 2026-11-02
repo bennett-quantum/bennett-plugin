@@ -98,6 +98,7 @@ struct Slot {
   AV value;
   bool filled = false;
   bool numerical = false;
+  uint64_t scannedAtoms = 0;
 };
 class Analysis {
   llvm::Module &M;
@@ -114,7 +115,13 @@ class Analysis {
   std::vector<char> dirty;
   std::unordered_map<const llvm::Value *, std::unordered_set<int>> valueReaders;
   std::unordered_map<const llvm::Value *, std::unordered_set<int>> objectReaders;
-  std::unordered_set<int> anySlotReaders;
+  std::unordered_set<int> objectGraphReaders;
+  std::unordered_map<const llvm::Value *, std::unordered_set<const llvm::Value *>> objectGraph;
+  std::unordered_set<const llvm::Value *> objectGraphNodes, clobberedObjects;
+  std::vector<const llvm::Value *> objectGraphOrder;
+  size_t clobberedUpTo = 0;
+  bool objectGraphGrew = false;
+  void noteSlotEdges(size_t);
   std::vector<llvm::Function *> addressTaken;
   std::unordered_map<const llvm::Value *, uint64_t> objectVersion;
   struct LoadMemo { AV result; uint64_t version; AtomSet keep; };

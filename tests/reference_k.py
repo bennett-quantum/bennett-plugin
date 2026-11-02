@@ -54,6 +54,18 @@ define i64 @top() {
  %r = call i64 @cycle()
  ret i64 %r
 }'''
+UNDEFINED_REACH='''declare void @ext(ptr)
+@x = internal global ptr null
+@y = internal global i64 5
+@z = internal global i64 5
+define i64 @top() {
+ call void @ext(ptr @x)
+ store ptr @y, ptr @x
+ %reached = load i64, ptr @y
+ %apart = load i64, ptr @z
+ %sum = add i64 %reached, %apart
+ ret i64 %sum
+}'''
 def solve(major,name,body,early=False):
  dest=R/f'.tmp/reference-k/{major}/{name}';dest.mkdir(parents=True,exist_ok=True)
  src=dest/'in.ll';src.write_text('target datalayout = "e-p:64:64"\n'+body+'\n');report=dest/'report.json'
@@ -87,6 +99,9 @@ def main():
  # An additive cycle of step 8 is exactly the class of its step: PT5 leaves no reason for (X,*).
  data,_=solve(m,'integer-orbit',INTEGER_ORBIT);v=value(data,'%n','cycle')
  check('integer-orbit-residue',v['top'] and 'PTR(@g,0,8)' in v['atoms'] and 'PTR(@g,0,-1)' not in v['atoms'],v)
+ # PT12 reaches through memory, also over an edge a later step creates; an unreached object stays exact.
+ data,_=solve(m,'pt12-reach',UNDEFINED_REACH)
+ check('pt12-reaches-later-edge',value(data,'%reached')['top'] and not value(data,'%apart')['top'] and value(data,'%apart')['atoms']==['INT(5)'],[value(data,'%reached'),value(data,'%apart')])
  # The flag is the only way to the earlier closure, and it says so.
  body,last=unknown_extent(40);data,err=solve(m,'early-unknown-40',body,early=True);v=value(data,last)
  check('flag-closes-early',v['top'] and len(v['atoms'])<8,{'top':v['top'],'atoms':v['atoms'][:8]})

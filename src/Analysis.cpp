@@ -862,8 +862,11 @@ void Analysis::wakeReaders() {
       if(it->second.size()>256 && currentStep>=0)sweepObjects.insert(o);
       else for(int r:it->second)dirty[r]=1;
     }
-  for(int r:anySlotReaders)dirty[r]=1;
   touchedObjects.clear();
+  if(objectGraphGrew) {
+    objectGraphGrew=false;
+    for(int r:objectGraphReaders)dirty[r]=1;
+  }
 }
 void Analysis::wakeSweepReaders() {
   for(auto *o:sweepObjects)
@@ -941,7 +944,22 @@ static bool overlaps(const Atom &p, const Slot &s, uint64_t size) {
   if(distance<0) distance+=stride;
   return distance < s.bytes || distance+size>stride;
 }
+// PT12's reach over memory depends only on which objects a slot of which object can address: an
+// edge appears once, however many times the sets holding it grow.
+void Analysis::noteSlotEdges(size_t n) {
+  auto &s=slots[n];
+  uint64_t uid=s.value.atoms.uid();
+  if(objectGraphNodes.insert(s.object).second) {objectGraphOrder.push_back(s.object);objectGraphGrew=true;}
+  if(uid==s.scannedAtoms)return;
+  s.scannedAtoms=uid;
+  auto &targets=objectGraph[s.object];
+  for(auto &p:s.value.atoms)if(p.kind==Atom::Ptr && targets.insert(p.object).second) {
+    objectGraphGrew=true;
+    if(objectGraphNodes.insert(p.object).second)objectGraphOrder.push_back(p.object);
+  }
+}
 void Analysis::indexSlot(size_t n) {
+  noteSlotEdges(n);
   auto &s=slots[n];
   if(!s.stride && !s.filled) {
     exactSlots[s.object][s.offset].push_back(n);
@@ -1006,7 +1024,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             unionMemo().clear();displaceMemo.clear(); // Their results predate the collapse.
           }
         }
-      } else if(slots[it->second].value.merge(v))touchObject(a.object);
+      } else if(slots[it->second].value.merge(v)) {noteSlotEdges(it->second);touchObject(a.object);}
     }
 }
 AV Analysis::read(Value *base, uint64_t offset, Type *t) {
@@ -1279,25 +1297,28 @@ void Analysis::bind(CallBase &c, Function *f) {
     if(c.getType()->isAggregateType() || c.getType()->isVectorTy())
       for(auto &leaf:leaves(c.getType(),M.getDataLayout()))setField(&c,leaf.path,unknown);
     else mergeValue(&c,unknown);
-    if(currentStep>=0)anySlotReaders.insert(currentStep);
-    std::set<const Value *> reachable;bool opaque=false;
+    if(currentStep>=0)objectGraphReaders.insert(currentStep);
+    // PT12: every slot reachable from the pointer arguments gets top. (X,*) top holds for good, so
+    // an object once clobbered needs nothing more; an unknown address reaches every object.
+    std::vector<const Value *> reachable;std::unordered_set<const Value *> visited;bool opaque=false;
     for(Value *v:c.args())if(v->getType()->isPointerTy()) {
       auto address=get(v);opaque|=address.top;
       for(auto &p:address.atoms)if(p.kind==Atom::Ptr) {
-        if(!p.object)opaque=true;else reachable.insert(p.object);
+        if(!p.object)opaque=true;else if(visited.insert(p.object).second)reachable.push_back(p.object);
       }
     }
-    bool more=true;
-    while(more) {
-      more=false;
-      for(auto &slot:slots)if(opaque || reachable.count(slot.object))
-        for(auto &p:slot.value.atoms)if(p.kind==Atom::Ptr) {
-          if(!p.object && !opaque){opaque=true;more=true;}
-          else more|=reachable.insert(p.object).second;
-        }
+    for(size_t next=0;next<reachable.size() && !opaque;++next) {
+      auto found=objectGraph.find(reachable[next]);
+      if(found==objectGraph.end())continue;
+      for(auto *target:found->second) {
+        if(!target) {opaque=true;break;}
+        if(visited.insert(target).second)reachable.push_back(target);
+      }
     }
-    if(opaque)for(auto &slot:slots)reachable.insert(slot.object);
-    for(auto *object:reachable)store(unknown,atom(Atom::Ptr,object,0,-1),1);
+    auto clobber=[&](const Value *object) {if(clobberedObjects.insert(object).second)store(unknown,atom(Atom::Ptr,object,0,-1),1);};
+    for(auto *object:reachable)clobber(object);
+    // Clobbering may name a new object: the list is walked by index.
+    if(opaque)for(;clobberedUpTo<objectGraphOrder.size();++clobberedUpTo)clobber(objectGraphOrder[clobberedUpTo]);
     return;
   }
   seedsDue|=edges[c.getFunction()].insert(f).second;
