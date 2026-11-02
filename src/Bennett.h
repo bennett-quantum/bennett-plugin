@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -34,14 +35,16 @@ struct Atom {
   bool numerical = false;
   bool operator<(const Atom &b) const;
 };
-// A set of interned atoms, held as a sorted id vector: union is a linear merge of
-// integers (bp-fj1, SQLite carries millions of atoms). An id carries two flag bits, so
-// the (X,*) and INT segments are found without touching the atom table:
+// A set of interned atoms (bp-fj1; SQLite carries millions). Sets are hash-consed: equal
+// sets share one immutable sorted id vector, so copying and comparing are O(1) and unions
+// and displacements can be memoised. An id carries two flag bits, so the segments are found
+// without touching the atom table:
 //   ordinary atoms (by id), then (X,*) atoms (by id), then INT atoms (by width, value).
 // Iteration therefore gives INT atoms in ascending order, as dispatch tables expect.
+struct AtomSetRep;
 class AtomSet {
-  mutable std::vector<uint32_t> ids;
-  mutable size_t ordered = 0;
+  mutable std::shared_ptr<const AtomSetRep> rep;
+  mutable std::vector<uint32_t> tail;
   void normalise() const;
   friend struct AV;
 public:
@@ -64,18 +67,25 @@ public:
   AtomSet() = default;
   AtomSet(std::initializer_list<Atom> list) { for (auto &a : list) insert(a); }
   void insert(const Atom &);
-  iterator begin() const { normalise(); return iterator(ids.data()); }
-  iterator end() const { normalise(); return iterator(ids.data() + ids.size()); }
-  size_t size() const { normalise(); return ids.size(); }
-  bool empty() const { return ids.empty(); }
+  iterator begin() const;
+  iterator end() const;
+  size_t size() const;
+  bool empty() const { return !size(); }
   size_t count(const Atom &) const;
   void eraseIf(const std::function<bool(const Atom &)> &);
+  // Identity of this exact set: equal sets have equal uids. 0 is the empty set.
+  uint64_t uid() const;
+  bool hasRoot() const;
+  // The pointer atoms of this set, one set per object (nullptr is EXT).
+  const std::vector<std::pair<const llvm::Value *, AtomSet>> &byObject() const;
+  // The atoms of this set not in another.
+  AtomSet minus(const AtomSet &) const;
 };
 struct AV {
   AtomSet atoms;
   bool top = false;
   bool merge(const AV &v);
-  // Sequential merges of many sets, ending in one canonicalisation.
+  // One union of many sets, ending in settle(): startAbsorbing() opens it.
   static void startAbsorbing();
   void absorb(const AV &v);
   void settle();
@@ -106,6 +116,13 @@ class Analysis {
   std::unordered_map<const llvm::Value *, std::unordered_set<int>> objectReaders;
   std::unordered_set<int> anySlotReaders;
   std::vector<llvm::Function *> addressTaken;
+  std::unordered_map<const llvm::Value *, uint64_t> objectVersion;
+  struct LoadMemo { AV result; uint64_t version; AtomSet keep; };
+  std::map<std::pair<uint64_t, llvm::Type *>, LoadMemo> loadMemo;
+  std::map<std::tuple<uint64_t, uint64_t, unsigned, unsigned, bool, bool>, AV> displaceMemo;
+  std::unordered_map<int, std::tuple<AtomSet, AtomSet, bool>> storeSeen;
+  void loadAtoms(const AtomSet &, llvm::Type *, uint64_t, AV &);
+  AV displaceAtoms(const AV &, const llvm::APInt &, unsigned, bool);
   bool addressTakenKnown = false;
   void readValue(const llvm::Value *v) { if (currentStep >= 0) valueReaders[v].insert(currentStep); }
   void readObject(const llvm::Value *o) { if (currentStep >= 0) objectReaders[o].insert(currentStep); }

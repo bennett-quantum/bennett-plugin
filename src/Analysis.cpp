@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
@@ -85,8 +86,16 @@ bool Atom::operator<(const Atom &b) const {
   if(numerical!=b.numerical)return numerical<b.numerical;
   return integer.ult(b.integer);
 }
-namespace {
 constexpr uint32_t StarBit=0x40000000u,IntBit=0x80000000u,IndexMask=0x3fffffffu,NoCover=0xffffffffu;
+struct AtomSetRep : std::enable_shared_from_this<AtomSetRep> {
+  std::vector<uint32_t> ids;
+  uint64_t hash=0,uid=0;
+  size_t firstStar=0,firstInt=0;
+  mutable bool grouped=false;
+  mutable int rootsKnown=-1;
+  mutable std::vector<std::pair<const Value *,AtomSet>> groups;
+};
+namespace {
 struct AtomHash {
   size_t operator()(const Atom &a) const {
     return (size_t)hash_combine(a.kind,a.object,a.offset,a.stride,a.numerical,hash_value(a.integer));
@@ -108,7 +117,7 @@ struct AtomTable {
     if(atoms.size()>IndexMask)unimplemented("§5.1 atom table exhausted",1);
     uint32_t id=(uint32_t)atoms.size();
     if(a.kind==Atom::Int)id|=IntBit;
-    else if(a.kind==Atom::Ptr && a.stride==-1)id|=StarBit;
+    else if(a.kind==Atom::Ptr && a.stride)id|=StarBit;
     atoms.push_back(a);covers.push_back(NoCover);
     index.emplace(a,id);
     return id;
@@ -125,7 +134,8 @@ struct AtomTable {
     return result;
   }
 };
-AtomTable &atomTable() {static AtomTable table;return table;}
+// Both tables live for the process: a set may die during static destruction.
+AtomTable &atomTable() {static auto *table=new AtomTable;return *table;}
 bool idLess(uint32_t x,uint32_t y) {
   if(!(x&y&IntBit))return x<y;
   auto &table=atomTable().atoms;
@@ -134,106 +144,306 @@ bool idLess(uint32_t x,uint32_t y) {
   if(a.integer!=b.integer)return a.integer.ult(b.integer);
   return (x&IndexMask)<(y&IndexMask);
 }
+using RepPtr=std::shared_ptr<const AtomSetRep>;
+std::unordered_map<uint64_t,std::vector<std::weak_ptr<AtomSetRep>>> &repTable() {
+  static auto *table=new std::unordered_map<uint64_t,std::vector<std::weak_ptr<AtomSetRep>>>;return *table;
+}
+uint64_t nextRepUid=1;
+// The canonical set for sorted, duplicate-free ids.
+RepPtr internIds(std::vector<uint32_t> &&ids) {
+  if(ids.empty())return nullptr;
+  uint64_t hash=0xcbf29ce484222325ull;
+  for(uint32_t id:ids)hash=(hash^id)*0x100000001b3ull;
+  auto &bucket=repTable()[hash];
+  for(auto it=bucket.begin();it!=bucket.end();) {
+    auto live=it->lock();
+    if(!live) {it=bucket.erase(it);continue;}
+    if(live->ids==ids)return live;
+    ++it;
+  }
+  auto made=std::make_shared<AtomSetRep>();
+  made->ids=std::move(ids);made->hash=hash;made->uid=nextRepUid++;
+  made->firstStar=std::lower_bound(made->ids.begin(),made->ids.end(),StarBit)-made->ids.begin();
+  made->firstInt=std::lower_bound(made->ids.begin(),made->ids.end(),IntBit)-made->ids.begin();
+  bucket.push_back(made);
+  return made;
+}
+const std::vector<uint32_t> noIds;
+const std::vector<uint32_t> &idsOf(const RepPtr &r) {return r?r->ids:noIds;}
+uint64_t uidOf(const RepPtr &r) {return r?r->uid:0;}
+// Canonical form: under top no INT atoms; more than K INT atoms become top (§5.1); (X,*)
+// has offset 0 and replaces every explicit offset of the same provenance.
+void canonical(std::vector<uint32_t> &ids,bool &top) {
+  auto &table=atomTable();
+  auto firstStar=std::lower_bound(ids.begin(),ids.end(),StarBit);
+  auto firstInt=std::lower_bound(firstStar,ids.end(),IntBit);
+  if(firstStar!=firstInt) {
+    // Atoms denoting offsets already denoted are the same set, spelled shorter: (X,*) holds
+    // every offset, a residue class holds its members and its refinements, and all residues
+    // of a power-of-two step together are the class of half that step.
+    struct Classes {bool star=false;std::vector<std::pair<uint64_t,uint64_t>> residues;};
+    llvm::DenseMap<uint32_t,Classes> classes;
+    for(auto it=firstStar;it!=firstInt;++it) {
+      const Atom &a=table.atoms[*it&IndexMask];
+      auto &c=classes[table.cover(*it)];
+      if(a.stride==-1 || a.stride==1)c.star=true;
+      else if(!isPowerOf2_64(a.stride))c.residues.push_back({0,0}),c.star=true; // Conservative: no such class is built now.
+      else c.residues.push_back({(uint64_t)a.stride,(uint64_t)a.offset&((uint64_t)a.stride-1)});
+    }
+    for(auto &entry:classes) {
+      auto &c=entry.second;
+      if(c.star) {c.residues.clear();continue;}
+      std::sort(c.residues.begin(),c.residues.end());
+      c.residues.erase(std::unique(c.residues.begin(),c.residues.end()),c.residues.end());
+      // Join sibling classes upward, largest step first.
+      for(bool joined=true;joined;) {
+        joined=false;
+        for(size_t n=0;n<c.residues.size() && !joined;++n) {
+          auto [step,rest]=c.residues[n];
+          if(step<2)continue;
+          std::pair<uint64_t,uint64_t> sibling{step,rest^(step>>1)};
+          if(std::binary_search(c.residues.begin(),c.residues.end(),sibling)) {
+            auto parent=std::make_pair(step>>1,rest&((step>>1)-1));
+            c.residues.erase(std::remove_if(c.residues.begin(),c.residues.end(),[&](auto &x){return x==sibling || x==std::make_pair(step,rest);}),c.residues.end());
+            c.residues.insert(std::lower_bound(c.residues.begin(),c.residues.end(),parent),parent);
+            joined=true;
+          }
+        }
+      }
+      if(c.residues.size()==1 && c.residues[0].first==1) {c.star=true;c.residues.clear();continue;}
+      // Drop a class inside a coarser one (steps ascend in the sorted list).
+      std::vector<std::pair<uint64_t,uint64_t>> kept;
+      for(auto &r:c.residues) {
+        bool inside=false;
+        for(auto &k:kept)inside|=(r.second&(k.first-1))==k.second;
+        if(!inside)kept.push_back(r);
+      }
+      c.residues=std::move(kept);
+    }
+    std::vector<uint32_t> kept;kept.reserve(ids.size());
+    for(auto it=ids.begin();it!=firstStar;++it) {
+      uint32_t c=table.cover(*it);
+      if(c!=NoCover) {
+        auto found=classes.find(c);
+        if(found!=classes.end()) {
+          if(found->second.star)continue;
+          uint64_t offset=(uint64_t)table.atoms[*it&IndexMask].offset;bool inside=false;
+          for(auto &r:found->second.residues)inside|=(offset&(r.first-1))==r.second;
+          if(inside)continue;
+        }
+      }
+      kept.push_back(*it);
+    }
+    std::vector<uint32_t> flagged;
+    for(auto &entry:classes) {
+      const Atom &base=table.atoms[entry.first&IndexMask];
+      if(entry.second.star) {flagged.push_back(entry.first);continue;}
+      for(auto &r:entry.second.residues) {
+        Atom x=base;x.stride=(int64_t)r.first;x.offset=(int64_t)r.second;
+        flagged.push_back(table.intern(x));
+      }
+    }
+    std::sort(flagged.begin(),flagged.end());
+    kept.insert(kept.end(),flagged.begin(),flagged.end());
+    kept.insert(kept.end(),firstInt,ids.end());
+    ids=std::move(kept);
+    firstStar=std::lower_bound(ids.begin(),ids.end(),StarBit);
+    firstInt=std::lower_bound(firstStar,ids.end(),IntBit);
+  }
+  // A chain of displaced addresses (a pointer recurrence through memory, or a copy between
+  // offsets of one object) denotes PT2's modular orbit, which only ends after 2^60 or so
+  // elements. Past K offsets of one provenance (the bound §5.1 sets on an index set, so an
+  // index domain within K keeps its exact offsets), take the orbit: the residue
+  // class of the differences' lowest set bit, with PT2's unknown-address alternative.
+  constexpr size_t OffsetChain=4096;
+  size_t pointers=firstInt-ids.begin();
+  bool chained=false;
+  if(pointers>OffsetChain) {
+    // A count per object bounds the count per provenance, and costs one table read per atom.
+    llvm::DenseMap<const Value *,uint32_t> counts;
+    for(auto it=ids.begin();it!=firstInt && !chained;++it) {
+      if(*it&StarBit)break;
+      const Atom &a=table.atoms[*it&IndexMask];
+      if(a.kind==Atom::Ptr)chained=++counts[a.object]>OffsetChain;
+    }
+  }
+  if(chained) {
+    struct Provenance {const Value *object;bool numerical;bool operator<(const Provenance &o) const {
+      return object!=o.object?std::less<const Value *>{}(object,o.object):numerical<o.numerical;}};
+    std::map<Provenance,std::vector<uint32_t>> parts;
+    for(auto it=ids.begin();it!=firstInt;++it) {
+      if(*it&StarBit)continue;
+      const Atom &a=table.atoms[*it&IndexMask];
+      if(a.kind==Atom::Ptr)parts[{a.object,a.numerical}].push_back(*it);
+    }
+    std::vector<uint32_t> doomed,added;
+    for(auto &part:parts)if(part.second.size()>OffsetChain) {
+      uint64_t low=0;const Atom &first=table.atoms[part.second[0]&IndexMask];
+      for(uint32_t id:part.second) {
+        const Atom &a=table.atoms[id&IndexMask];
+        if(a.stride>0)low|=(uint64_t)a.stride;
+        low|=(uint64_t)a.offset-(uint64_t)first.offset;
+      }
+      Atom closed=first;
+      unsigned zeros=low?llvm::countr_zero(low):63;
+      if(zeros==0) {closed.offset=0;closed.stride=-1;}
+      else {closed.stride=int64_t(1)<<zeros;closed.offset=(int64_t)((uint64_t)first.offset&((uint64_t)closed.stride-1));}
+      doomed.insert(doomed.end(),part.second.begin(),part.second.end());
+      added.push_back(table.intern(closed));
+    }
+    if(!added.empty()) {
+      Atom unknown{Atom::Ptr,nullptr,0,-1,APInt(1,0)};unknown.numerical=true;
+      added.push_back(table.intern(unknown));
+      top=true;
+      std::sort(doomed.begin(),doomed.end());
+      std::vector<uint32_t> kept;
+      for(uint32_t id:ids)if(!std::binary_search(doomed.begin(),doomed.end(),id))kept.push_back(id);
+      kept.insert(kept.end(),added.begin(),added.end());
+      std::sort(kept.begin(),kept.end(),idLess);
+      kept.erase(std::unique(kept.begin(),kept.end()),kept.end());
+      ids=std::move(kept);
+      // A class of step 2^k may itself be (X,*) now, which absorbs the object's rest.
+      canonical(ids,top);
+      return;
+    }
+  }
+  if(!top && (size_t)(ids.end()-firstInt)>4096)top=true;
+  if(top)ids.erase(firstInt,ids.end());
+}
+struct UnionKey {
+  uint64_t a,b;bool top;
+  bool operator==(const UnionKey &o) const {return a==o.a && b==o.b && top==o.top;}
+};
+struct UnionHash {
+  size_t operator()(const UnionKey &k) const {return (k.a*0x9E3779B97F4A7C15ull)^(k.b*0xC2B2AE3D27D4EB4Full)^k.top;}
+};
+struct UnionResult {RepPtr result;bool top;};
+std::unordered_map<UnionKey,UnionResult,UnionHash> &unionMemo() {
+  static auto *memo=new std::unordered_map<UnionKey,UnionResult,UnionHash>;return *memo;
+}
 }
 const Atom &AtomSet::iterator::operator*() const {return atomTable().atoms[*at&IndexMask];}
 void AtomSet::normalise() const {
-  if(ordered==ids.size())return;
-  auto middle=ids.begin()+ordered;
-  std::sort(middle,ids.end(),idLess);
-  std::inplace_merge(ids.begin(),middle,ids.end(),idLess);
-  ids.erase(std::unique(ids.begin(),ids.end()),ids.end());
-  ordered=ids.size();
+  if(tail.empty())return;
+  std::sort(tail.begin(),tail.end(),idLess);
+  tail.erase(std::unique(tail.begin(),tail.end()),tail.end());
+  auto &old=idsOf(rep);
+  std::vector<uint32_t> joined;joined.reserve(old.size()+tail.size());
+  std::set_union(old.begin(),old.end(),tail.begin(),tail.end(),std::back_inserter(joined),idLess);
+  rep=internIds(std::move(joined));
+  tail.clear();
 }
-void AtomSet::insert(const Atom &a) {ids.push_back(atomTable().intern(a));}
+void AtomSet::insert(const Atom &a) {tail.push_back(atomTable().intern(a));}
+AtomSet::iterator AtomSet::begin() const {normalise();return iterator(idsOf(rep).data());}
+AtomSet::iterator AtomSet::end() const {normalise();auto &ids=idsOf(rep);return iterator(ids.data()+ids.size());}
+size_t AtomSet::size() const {normalise();return idsOf(rep).size();}
+uint64_t AtomSet::uid() const {normalise();return uidOf(rep);}
+bool AtomSet::hasRoot() const {
+  normalise();
+  if(!rep)return false;
+  if(rep->rootsKnown<0) {
+    bool found=false;auto &table=atomTable().atoms;
+    for(uint32_t id:rep->ids)if(table[id&IndexMask].kind==Atom::Root) {found=true;break;}
+    rep->rootsKnown=found;
+  }
+  return rep->rootsKnown>0;
+}
 size_t AtomSet::count(const Atom &a) const {
   normalise();
+  auto &ids=idsOf(rep);
   return std::binary_search(ids.begin(),ids.end(),atomTable().intern(a),idLess)?1:0;
 }
 void AtomSet::eraseIf(const std::function<bool(const Atom &)> &doomed) {
   normalise();
   auto &table=atomTable().atoms;
-  ids.erase(std::remove_if(ids.begin(),ids.end(),[&](uint32_t id){return doomed(table[id&IndexMask]);}),ids.end());
-  ordered=ids.size();
+  std::vector<uint32_t> kept;
+  for(uint32_t id:idsOf(rep))if(!doomed(table[id&IndexMask]))kept.push_back(id);
+  rep=internIds(std::move(kept));
 }
-// Canonical form: under top no INT atoms; more than K INT atoms become top (§5.1); (X,*)
-// has offset 0 and replaces every explicit offset of the same provenance.
-void AV::settle() {
-  auto &ids=atoms.ids;
-  atoms.normalise();
-  auto &table=atomTable();
-  auto firstStar=std::lower_bound(ids.begin(),ids.end(),StarBit);
-  auto firstInt=std::lower_bound(firstStar,ids.end(),IntBit);
-  if(firstStar!=firstInt) {
-    std::vector<uint32_t> stars;bool moved=false;
-    for(auto it=firstStar;it!=firstInt;++it) {
-      uint32_t c=table.cover(*it);
-      moved|=c!=*it;stars.push_back(c);
+const std::vector<std::pair<const Value *,AtomSet>> &AtomSet::byObject() const {
+  normalise();
+  static const std::vector<std::pair<const Value *,AtomSet>> none;
+  if(!rep)return none;
+  if(!rep->grouped) {
+    auto &table=atomTable().atoms;
+    std::unordered_map<const Value *,std::vector<uint32_t>> parts;std::vector<const Value *> order;
+    for(uint32_t id:rep->ids) {
+      const Atom &a=table[id&IndexMask];
+      if(a.kind!=Atom::Ptr)continue;
+      auto &part=parts[a.object];
+      if(part.empty())order.push_back(a.object);
+      part.push_back(id);
     }
-    std::sort(stars.begin(),stars.end());
-    stars.erase(std::unique(stars.begin(),stars.end()),stars.end());
-    std::vector<uint32_t> kept;kept.reserve(ids.size());
-    for(auto it=ids.begin();it!=firstStar;++it) {
-      uint32_t c=table.cover(*it);
-      if(c==NoCover || !std::binary_search(stars.begin(),stars.end(),c))kept.push_back(*it);
+    rep->groups.reserve(order.size());
+    for(auto *object:order) {
+      AtomSet group;group.rep=internIds(std::move(parts[object]));
+      rep->groups.push_back({object,std::move(group)});
     }
-    kept.insert(kept.end(),stars.begin(),stars.end());
-    kept.insert(kept.end(),firstInt,ids.end());
-    ids=std::move(kept);atoms.ordered=ids.size();
-    firstInt=std::lower_bound(ids.begin(),ids.end(),IntBit);
-    (void)moved;
+    rep->grouped=true;
   }
-  if(!top && (size_t)(ids.end()-firstInt)>4096)top=true;
-  if(top) {ids.erase(firstInt,ids.end());atoms.ordered=ids.size();}
+  return rep->groups;
+}
+AtomSet AtomSet::minus(const AtomSet &other) const {
+  normalise();other.normalise();
+  auto &x=idsOf(rep);auto &y=idsOf(other.rep);
+  std::vector<uint32_t> left;
+  std::set_difference(x.begin(),x.end(),y.begin(),y.end(),std::back_inserter(left),idLess);
+  AtomSet result;result.rep=internIds(std::move(left));
+  return result;
+}
+void AV::settle() {
+  atoms.normalise();
+  auto &r=atoms.rep;
+  if(!r)return;
+  bool stars=r->firstStar!=r->firstInt;
+  size_t ints=r->ids.size()-r->firstInt;
+  if(!stars && !(top && ints) && !(!top && ints>4096) && r->firstStar<=4096)return;
+  auto ids=r->ids;
+  canonical(ids,top);
+  atoms.rep=internIds(std::move(ids));
 }
 // One union of many sets costs its total input, not a sort of the duplicates: an atom
-// joins once per generation. startAbsorbing() opens a generation.
+// joins once per generation, and an identical set once.
 static std::vector<uint32_t> absorbedIn;
 static uint32_t absorbGeneration=0;
+static std::unordered_set<uint64_t> absorbedSets;
 void AV::startAbsorbing() {
   if(++absorbGeneration==0) {std::fill(absorbedIn.begin(),absorbedIn.end(),0);absorbGeneration=1;}
+  absorbedSets.clear();
 }
 void AV::absorb(const AV &v) {
   top|=v.top;
+  v.atoms.normalise();
+  if(!v.atoms.rep || !absorbedSets.insert(v.atoms.rep->uid).second)return;
   if(absorbedIn.size()<atomTable().atoms.size())absorbedIn.resize(atomTable().atoms.size()*2,0);
-  for(uint32_t id:v.atoms.ids) { // Unordered tails are harmless: membership only.
+  for(uint32_t id:v.atoms.rep->ids) {
     auto &stamp=absorbedIn[id&IndexMask];
-    if(stamp!=absorbGeneration) {stamp=absorbGeneration;atoms.ids.push_back(id);}
+    if(stamp!=absorbGeneration) {stamp=absorbGeneration;atoms.tail.push_back(id);}
   }
 }
 bool AV::merge(const AV &v) {
   budgetTick();
-  bool change=v.top && !top;
-  top|=v.top;
-  if(&v==this) {
-    if(change)settle();
-    return change;
-  }
   v.atoms.normalise();atoms.normalise();
-  auto &mine=atoms.ids;auto &theirs=v.atoms.ids;
-  auto theirEnd=theirs.end();
-  if(top)theirEnd=std::lower_bound(theirs.begin(),theirs.end(),IntBit);
-  // Nothing new is the common case at a fixpoint, and copies nothing.
-  bool anyStar=std::lower_bound(theirs.begin(),theirEnd,StarBit)!=std::lower_bound(theirs.begin(),theirEnd,IntBit);
-  bool contained=!anyStar;
-  if(contained) {
-    if((size_t)(theirEnd-theirs.begin())*16<mine.size()) {
-      for(auto it=theirs.begin();it!=theirEnd && contained;++it)contained=std::binary_search(mine.begin(),mine.end(),*it,idLess);
-    } else contained=std::includes(mine.begin(),mine.end(),theirs.begin(),theirEnd,idLess);
+  bool wasTop=top;
+  top|=v.top;
+  if(&v==this || (atoms.rep==v.atoms.rep && top==wasTop))return top!=wasTop;
+  UnionKey key{uidOf(atoms.rep),uidOf(v.atoms.rep),top};
+  auto &memo=unionMemo();
+  auto found=memo.find(key);
+  if(found==memo.end()) {
+    auto &mine=idsOf(atoms.rep);auto &theirs=idsOf(v.atoms.rep);
+    std::vector<uint32_t> joined;joined.reserve(mine.size()+theirs.size());
+    std::set_union(mine.begin(),mine.end(),theirs.begin(),theirs.end(),std::back_inserter(joined),idLess);
+    bool resultTop=top;
+    canonical(joined,resultTop);
+    if(memo.size()>2000000)memo.clear();
+    found=memo.emplace(key,UnionResult{internIds(std::move(joined)),resultTop}).first;
   }
-  if(contained && !change)return false;
-  std::vector<uint32_t> before=mine;
-  std::vector<uint32_t> joined;joined.reserve(mine.size()+(theirEnd-theirs.begin()));
-  std::set_union(mine.begin(),mine.end(),theirs.begin(),theirEnd,std::back_inserter(joined),idLess);
-  mine=std::move(joined);atoms.ordered=mine.size();
-  settle();
-  return change || mine!=before;
+  bool change=found->second.result!=atoms.rep || found->second.top!=wasTop;
+  atoms.rep=found->second.result;top=found->second.top;
+  return change;
 }
-bool AV::roots() const {
-  for (auto &a : atoms)
-    if (a.kind == Atom::Root)
-      return true;
-  return false;
-}
+bool AV::roots() const {return atoms.hasRoot();}
 static void numericalUnknown(AV &result) {
   Atom ext{Atom::Ptr,nullptr,0,-1,APInt(1,0)};
   ext.numerical=true;
@@ -261,6 +471,16 @@ AV Analysis::convert(const AV &source,Type *from,Type *to,unsigned opcode) {
   return result;
 }
 AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,bool gep) {
+  if(delta.isZero()) return source;
+  if(delta.getBitWidth()>64)return displaceAtoms(source,delta,pointerWidth,gep);
+  std::tuple<uint64_t,uint64_t,unsigned,unsigned,bool,bool> key{source.atoms.uid(),delta.getZExtValue(),delta.getBitWidth(),pointerWidth,gep,source.top};
+  auto found=displaceMemo.find(key);
+  if(found!=displaceMemo.end())return found->second;
+  if(displaceMemo.size()>1000000)displaceMemo.clear();
+  // The result holds a reference to its set; the source's uid is never reused.
+  return displaceMemo.emplace(key,displaceAtoms(source,delta,pointerWidth,gep)).first->second;
+}
+AV Analysis::displaceAtoms(const AV &source,const APInt &delta,unsigned pointerWidth,bool gep) {
   if(delta.isZero()) return source;
   AV result;result.top=source.top;
   unsigned bits=delta.getBitWidth();
@@ -293,7 +513,11 @@ AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,
       if(low+d<0) include((__int128)a.offset+d+modulus);
     } else {
       auto offset=APInt(bits,a.offset,true)+delta;
-      if(a.stride || !offset.isSignedIntN(64)) {
+      if(a.stride>0 && bits==pointerWidth && isPowerOf2_64(a.stride)) {
+        // A power-of-two residue class is closed under full-width modular addition.
+        a.offset=(int64_t)(((uint64_t)a.offset+delta.sextOrTrunc(64).getZExtValue())&((uint64_t)a.stride-1));
+        numericalUnknown(result);
+      } else if(a.stride || !offset.isSignedIntN(64)) {
         a.offset=0;a.stride=-1;numericalUnknown(result);
       } else {
         a.offset=offset.getSExtValue();
@@ -557,6 +781,7 @@ void Analysis::touchValue(const Value *v) {
 }
 void Analysis::touchObject(const Value *o) {
   changed=true;
+  ++objectVersion[o];
   if(auto it=objectReaders.find(o);it!=objectReaders.end())for(int r:it->second)dirty[r]=1;
   for(int r:anySlotReaders)dirty[r]=1;
 }
@@ -640,8 +865,11 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   return result;
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
-  for (auto &a : p.atoms)
-    if (a.kind == Atom::Ptr) {
+  for (auto atomAt : p.atoms)
+    if (atomAt.kind == Atom::Ptr) {
+      // (X,*) denotes one location set whatever offset spelled it (§5.1).
+      if(atomAt.stride==-1)atomAt.offset=0;
+      const Atom &a=atomAt;
       // Initial zero images with the same start are nested intervals. Their
       // exact union is the largest extent, not a new slot for every loop round.
       if(filled && !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int && v.atoms.begin()->integer.isZero()) {
@@ -734,17 +962,10 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
   }
   return read(base,offset,type);
 }
-AV Analysis::load(const AV &p, Type *t) {
-  AV r;
+// PT6 for the atoms of one object. Pure in those atoms, the type and the object's slots.
+void Analysis::loadAtoms(const AtomSet &group, Type *t, uint64_t size, AV &r) {
   AV::startAbsorbing();
-  uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
-  r.top = p.top;
-  for (auto &a : p.atoms)
-    if (a.kind == Atom::Ptr) {
-      if (!a.object) {
-        r.top = true;
-        continue;
-      }
+  for (auto &a : group) {
       bool partial = false;
       for (size_t n:overlappingSlots(a,size)) {
           auto &s=slots[n];
@@ -821,7 +1042,32 @@ AV Analysis::load(const AV &p, Type *t) {
       }
       if (partial)
         r.top = true;
+  }
+  r.settle();
+}
+AV Analysis::load(const AV &p, Type *t) {
+  AV r;
+  uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
+  r.top = p.top;
+  std::vector<const AV *> parts;
+  auto &groups=p.atoms.byObject();
+  parts.reserve(groups.size());
+  for(auto &group:groups) {
+    const Value *object=group.first;
+    if(!object) {r.top=true;continue;}
+    readObject(object);
+    uint64_t version=objectVersion[object];
+    auto &memo=loadMemo[{group.second.uid(),t}];
+    if(!memo.keep.uid() || memo.version!=version) {
+      AV fresh;
+      loadAtoms(group.second,t,size,fresh);
+      // loadAtoms may reach back into the memo table only through other entries; std::map keeps references.
+      memo.result=std::move(fresh);memo.version=version;memo.keep=group.second;
     }
+    parts.push_back(&memo.result);
+  }
+  AV::startAbsorbing();
+  for(auto *part:parts)r.absorb(*part);
   r.settle();
   return r;
 }
@@ -1448,7 +1694,10 @@ AV Analysis::gepImage(const AV &base,const APInt &off,const std::vector<GEPIndex
     for(auto p:a.atoms)
       if(p.kind==Atom::Ptr) {
         if(values.top) {
+          // Scaling wraps modulo 2^I (PT2): the image of an unknown index is every
+          // multiple of the scale's lowest set bit, whatever its odd factor.
           p.stride=p.stride==-1?-1:std::gcd(p.stride,std::abs(entry.scale.getSExtValue()));
+          if(p.stride>0)p.stride=p.stride&-p.stride;
           if(p.stride==1)p.stride=-1;
           r.atoms.insert(p);
         }
@@ -1635,7 +1884,18 @@ void Analysis::step(Instruction &i) {
             longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry) &&
             !get(l).atoms.empty())
           written.top = true;
-    store(written, get(s->getPointerOperand()),
+    // PT7 distributes over address atoms: with the value unchanged since this store last
+    // ran, only new addresses can add a fact. A second store never removes one.
+    AV addresses=get(s->getPointerOperand());
+    AV fresh=addresses;
+    written.settle();
+    if(currentStep>=0 && !virtualFP) {
+      auto seen=storeSeen.find(currentStep);
+      if(seen!=storeSeen.end() && std::get<1>(seen->second).uid()==written.atoms.uid() && std::get<2>(seen->second)==written.top)
+        fresh.atoms=addresses.atoms.minus(std::get<0>(seen->second));
+      storeSeen[currentStep]={addresses.atoms,written.atoms,written.top};
+    }
+    store(written, fresh,
           M.getDataLayout()
               .getTypeStoreSize(s->getValueOperand()->getType())
               .getKnownMinValue());
@@ -1649,7 +1909,7 @@ void Analysis::step(Instruction &i) {
     // PT2: a full-width constant GEP recurrence denotes the complete modular
     // additive orbit. Solve it as a residue class, rather than allocating one
     // memory slot per iteration (musl strlen/memcpy pointer induction).
-    if(ReversibleEntry && p->getType()->isPointerTy()) {
+    if(p->getType()->isPointerTy()) {
       auto pw=M.getDataLayout().getPointerTypeSizeInBits(p->getType());
       if(pw==M.getDataLayout().getIndexTypeSizeInBits(p->getType())) {
         std::set<Value *> path;unsigned zeros=pw;
@@ -1736,37 +1996,57 @@ void Analysis::step(Instruction &i) {
         for(auto *object:objects) {auto of=slotsOf(object);sources.insert(sources.end(),of.begin(),of.end());}
         std::sort(sources.begin(),sources.end());
       }
-      for (size_t source : sources) {
-        Slot s=slots[source];
-        for (auto &p : src.atoms)
-          if (p.kind == Atom::Ptr && p.object == s.object)
-            for (auto &d : dst.atoms)
-              if (d.kind == Atom::Ptr) {
-                if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
-                  int64_t lo=std::max(p.offset,s.offset);
-                  __int128 hi=std::min((__int128)p.offset+len->getZExtValue(),(__int128)s.offset+s.bytes);
-                  if(hi>lo) store(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);
-                } else if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
-                    s.offset >= p.offset &&
-                    s.offset + (int64_t)s.bytes <=
-                        p.offset + (int64_t)len->getZExtValue())
-                  store(
-                      s.value,
-                      atom(Atom::Ptr, d.object, d.offset + s.offset - p.offset),
-                      s.bytes, s.filled);
-                else if (!len || overlaps(p, s, len->getZExtValue())) {
-                  AV partial;
-                  partial.top = true;
-                  for (auto &x : s.value.atoms)
-                    if (x.kind == Atom::Root)
-                      partial.atoms.insert(x);
-                  if(len && !p.stride && !d.stride && !s.stride) {
-                    auto lo=std::max((__int128)p.offset,(__int128)s.offset);
-                    auto hi=std::min((__int128)p.offset+len->getLimitedValue(),(__int128)s.offset+s.bytes);
-                    store(partial,atom(Atom::Ptr,d.object,d.offset+(int64_t)(lo-p.offset)),hi-lo);
-                  } else store(partial, atom(Atom::Ptr, d.object, d.offset, -1),s.bytes);
-                }
-              }
+      if(!len) {
+        // Unknown length: each destination atom takes (Z,*) with top and the slot's ROOTs.
+        // Distinct (ROOTs, width) pairs are all that matter, however many slots share them.
+        std::set<std::pair<uint64_t,uint64_t>> seenValues,done;
+        for(size_t source:sources) {
+          uint64_t bytes=slots[source].bytes;
+          if(!seenValues.insert({slots[source].value.atoms.uid(),bytes}).second)continue;
+          AV partial;partial.top=true;
+          if(slots[source].value.roots())
+            for(auto &x:slots[source].value.atoms)if(x.kind==Atom::Root)partial.atoms.insert(x);
+          if(!done.insert({partial.atoms.uid(),bytes}).second)continue;
+          for(auto &d:dst.atoms)if(d.kind==Atom::Ptr)store(partial,atom(Atom::Ptr,d.object,d.offset,-1),bytes);
+        }
+        sources.clear();
+      } else {
+        // PT8 at a known length. A slot of a source atom lands at a fixed distance from each
+        // destination atom, so gather what lands at each distance first: every (source,
+        // destination) pair writes the same facts as this, for |dst| x len stores.
+        struct Landing {int64_t distance;uint64_t bytes;bool filled;uint64_t value;
+          bool operator<(const Landing &o) const {return std::tie(distance,bytes,filled,value)<std::tie(o.distance,o.bytes,o.filled,o.value);}};
+        std::map<Landing,AV> exact;std::map<uint64_t,AV> anywhere;
+        uint64_t length=len->getZExtValue();
+        auto rootsOf=[](const AV &value) {
+          AV partial;partial.top=true;
+          if(value.roots())for(auto &x:value.atoms)if(x.kind==Atom::Root)partial.atoms.insert(x);
+          return partial;
+        };
+        bool someStrided=false;
+        for(auto &d:dst.atoms)someStrided|=d.kind==Atom::Ptr && d.stride;
+        for(auto &p:src.atoms)if(p.kind==Atom::Ptr)
+          for(size_t n:overlappingSlots(p,length)) {
+            const Slot &slot=slots[n];
+            if(p.stride || slot.stride) {anywhere[slot.bytes].merge(rootsOf(slot.value));continue;}
+            if(someStrided)anywhere[slot.bytes].merge(rootsOf(slot.value));
+            if(slot.filled) {
+              int64_t lo=std::max(p.offset,slot.offset);
+              __int128 hi=std::min((__int128)p.offset+length,(__int128)slot.offset+slot.bytes);
+              if(hi>lo)exact.emplace(Landing{lo-p.offset,(uint64_t)(hi-lo),true,slot.value.atoms.uid()*2+slot.value.top},slot.value);
+            } else if(slot.offset>=p.offset && slot.offset+(int64_t)slot.bytes<=p.offset+(int64_t)length) {
+              exact[Landing{slot.offset-p.offset,slot.bytes,false,0}].merge(slot.value);
+            } else {
+              auto lo=std::max((__int128)p.offset,(__int128)slot.offset);
+              auto hi=std::min((__int128)p.offset+length,(__int128)slot.offset+slot.bytes);
+              exact[Landing{(int64_t)(lo-p.offset),(uint64_t)(hi-lo),false,0}].merge(rootsOf(slot.value));
+            }
+          }
+        for(auto &d:dst.atoms)if(d.kind==Atom::Ptr) {
+          if(!d.stride)for(auto &landing:exact)
+            store(landing.second,atom(Atom::Ptr,d.object,d.offset+landing.first.distance),landing.first.bytes,landing.first.filled);
+          for(auto &wide:anywhere)store(wide.second,atom(Atom::Ptr,d.object,0,-1),wide.first);
+        }
       }
     } else if (isa<MemSetInst>(c) || n=="__bennett_rt_memset") {
       auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
@@ -1872,6 +2152,7 @@ void Analysis::step(Instruction &i) {
         a.merge(integer(APInt(m->getBitWidth(), k)));
     } else {
       a.top = x.top || y.top;
+      unsigned pendingIntegers=0;
       for (auto &v : x.atoms) {
         // For these operations the pointer transfer is independent of the
         // right atom. Emit its identical conservative image once, rather than
@@ -1936,27 +2217,31 @@ void Analysis::step(Instruction &i) {
             default:
               valid = false;
             }
-            if (valid)
-              a.merge(integer(r));
+            if (valid) {
+              a.atoms.insert({Atom::Int, nullptr, 0, 0, r});
+              // K is reached long before a wide product ends; stop there, as §5.1 does.
+              if(++pendingIntegers>=4096) {pendingIntegers=0;a.settle();}
+            }
             if (a.top)
               goto done;
           } else if (v.kind == Atom::Ptr) {
             if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
                                         i.getOpcode() == Instruction::Sub)) {
               auto delta=i.getOpcode()==Instruction::Add?w.integer:-w.integer;
-              a.merge(displace(atom(Atom::Ptr,v.object,v.offset,v.stride),delta,
-                               delta.getBitWidth(),false));
+              auto moved=displaceAtoms(atom(Atom::Ptr,v.object,v.offset,v.stride),delta,delta.getBitWidth(),false);
+              a.top|=moved.top;for(auto &m:moved.atoms)a.atoms.insert(m);
             } else {
               auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);
             }
           } else if(v.kind==Atom::Int && w.kind==Atom::Ptr && i.getOpcode()==Instruction::Add) {
-            a.merge(displace(atom(Atom::Ptr,w.object,w.offset,w.stride),v.integer,
-                             v.integer.getBitWidth(),false));
+            auto moved=displaceAtoms(atom(Atom::Ptr,w.object,w.offset,w.stride),v.integer,v.integer.getBitWidth(),false);
+            a.top|=moved.top;for(auto &m:moved.atoms)a.atoms.insert(m);
           }
         }
       }
     }
   done:;
+    a.settle();
     if (isa<ICmpInst>(i) && a.atoms.empty() &&
         (x.top || y.top || !x.atoms.empty() || !y.atoms.empty())) {
       a.top = false;
@@ -2129,7 +2414,18 @@ void Analysis::run() {
         }
         if(now-lastReport>std::chrono::seconds(20)) {
           lastReport=now;
-          errs()<<"bennett: analysis:   round "<<rounds<<" position "<<id<<"/"<<order.size()<<" ran "<<ran<<" steps\n";
+          errs()<<"bennett: analysis:   round "<<rounds<<" position "<<id<<"/"<<order.size()<<" ran "<<ran<<" steps, "<<slots.size()<<" slots\n";
+          struct Extent {uint64_t count=0,atoms=0;int64_t low=INT64_MAX,high=INT64_MIN;};
+          std::map<const Value *,Extent> extents;
+          for(auto &slot:slots) {auto &e=extents[slot.object];++e.count;e.atoms+=slot.value.atoms.size();e.low=std::min(e.low,slot.offset);e.high=std::max(e.high,slot.offset);}
+          std::vector<std::pair<uint64_t,const Value *>> rank;for(auto &e:extents)rank.push_back({e.second.count,e.first});
+          std::sort(rank.rbegin(),rank.rend());
+          for(unsigned n=0;n<rank.size() && n<4;++n) {
+            auto &e=extents[rank[n].second];
+            errs()<<"bennett: analysis:     "<<e.count<<" slots "<<e.atoms<<" atoms offsets ["<<e.low<<","<<e.high<<"] in ";
+            if(rank[n].second) {rank[n].second->printAsOperand(errs(),false);if(auto *at=dyn_cast<Instruction>(rank[n].second))errs()<<" in @"<<at->getFunction()->getName();}else errs()<<"EXT";
+            errs()<<"\n";
+          }
         }
       }
     }
@@ -2153,6 +2449,18 @@ void Analysis::run() {
       errs()<<"bennett: analysis: round "<<rounds<<" ran "<<ran<<" steps, "<<std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-scope.budget.start).count()<<" ms, "<<slots.size()<<" slots, "<<slotAtoms<<" slot atoms, "<<atoms<<" value atoms, largest "<<largest;
       if(big && big->hasName())errs()<<" %"<<big->getName();
       errs()<<"\n";
+      if(big) {
+        const AV &wide=values[big];std::map<const Value *,uint64_t> perObject;uint64_t kinds[4]={0,0,0,0},numerical=0,residue=0;
+        for(auto &x:wide.atoms) {kinds[x.kind==Atom::Int?0:x.kind==Atom::Ptr?1:x.kind==Atom::Fn?2:3]++;if(x.kind==Atom::Ptr) {perObject[x.object]++;numerical+=x.numerical;residue+=x.stride>0;}}
+        errs()<<"bennett: analysis:   largest: int "<<kinds[0]<<" ptr "<<kinds[1]<<" fn "<<kinds[2]<<" root "<<kinds[3]<<" numerical "<<numerical<<" residue "<<residue<<" objects "<<perObject.size()<<"\n";
+        std::vector<std::pair<uint64_t,const Value *>> rank;for(auto &e:perObject)rank.push_back({e.second,e.first});
+        std::sort(rank.rbegin(),rank.rend());
+        for(unsigned n=0;n<rank.size() && n<10;++n) {
+          errs()<<"bennett: analysis:     "<<rank[n].first<<" offsets of ";
+          if(rank[n].second) {rank[n].second->printAsOperand(errs(),false);if(auto *at=dyn_cast<Instruction>(rank[n].second))errs()<<" in @"<<at->getFunction()->getName();}else errs()<<"EXT";
+          errs()<<"\n";
+        }
+      }
     }
     if(++rounds>=MaxAnalysisRounds && pending) {
       scope.budget.at=lastChanged;scope.budget.rule=lastRule?lastRule:"PT11 seeds";
@@ -2163,6 +2471,7 @@ void Analysis::run() {
     if(std::find(dirty.begin(),dirty.end(),1)==dirty.end())break;
   }
   addressTaken.clear();addressTakenKnown=false;
+  loadMemo.clear();displaceMemo.clear();storeSeen.clear();
   analysisRounds=rounds;
   // Candidate entry roots that never reach a handle operand are removed (§6.6).
   std::set<const Value *> live;
