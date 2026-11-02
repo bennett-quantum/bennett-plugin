@@ -35,6 +35,10 @@ cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000));
 cl::opt<bool> AnalysisTrace("bennett-analysis-trace",cl::desc("Print solver progress per round to stderr"));
 cl::opt<unsigned> TraceChangesFrom("bennett-analysis-trace-changes",cl::init(UINT_MAX),cl::desc("With the trace, name the first changing steps of each round from this one on"));
+// Past 4 offsets outside an object, or 32 of one with no literal extent, and past max(64, extent/4)
+// written slots: a precision change dialect §5.1 does not grant (advisor ruling on
+// b-dialect-spec-5u3). Results under it are not the reference analysis and must be labelled so.
+cl::opt<bool> EarlyChainClose("bennett-analysis-early-chain-close",cl::init(false),cl::desc("NOT the reference analysis: close offset chains and collapse objects earlier than the spec's K"));
 struct AnalysisBudget {
   std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
   const Instruction *at=nullptr;
@@ -299,15 +303,16 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
   // A chain of displaced addresses (a pointer recurrence through memory, or a copy between
   // offsets of one object) denotes PT2's modular orbit, which only ends after 2^60 or so
   // elements. Take the orbit, the residue class of the differences' lowest set bit with PT2's
-  // unknown-address alternative, once a chain shows: past K offsets of one provenance, the
-  // bound §5.1 sets on an index set, so an index domain within K keeps its exact offsets; past
-  // 4 offsets outside the object, which are no valid accesses; past 32 offsets of an object
-  // of no known extent, where nothing tells an index from a chain. Sound, and coarser than an
-  // unbounded reference: bp-fj1 records the dialect gap.
-  constexpr size_t OffsetChain=4096,LeftObject=4,NoExtent=32;
+  // unknown-address alternative, past K offsets of one provenance: the bound §5.1 sets on an
+  // index set, so an index domain within K keeps its exact offsets. §5.1 states K for INT atoms
+  // only; b-dialect-spec-5u3 asks it to state the offset bound too.
+  // Only under -bennett-analysis-early-chain-close (not the reference): also past 4 offsets
+  // outside the object, and past 32 of an object of no literal extent.
+  constexpr size_t OffsetChain=4096,EarlyLeftObject=4,EarlyNoExtent=32;
+  const size_t LeftObject=EarlyChainClose?EarlyLeftObject:SIZE_MAX,NoExtent=EarlyChainClose?EarlyNoExtent:SIZE_MAX;
   size_t pointers=firstStar-ids.begin();
   bool chained=false;
-  if(closeChains && pointers>LeftObject) {
+  if(closeChains && pointers>std::min<size_t>(OffsetChain,LeftObject)) {
     struct Tally {uint32_t total=0,outside=0;uint64_t extent=0;bool known=false;};
     llvm::DenseMap<const Value *,Tally> counts;
     for(auto it=ids.begin();it!=firstStar && !chained;++it) {
@@ -456,7 +461,7 @@ void AV::settle() {
   if(!r)return;
   bool stars=r->firstStar!=r->firstInt;
   size_t ints=r->ids.size()-r->firstInt;
-  if(!stars && !(top && ints) && !(!top && ints>4096) && (r->firstStar<=4 || !closeChains))return;
+  if(!stars && !(top && ints) && !(!top && ints>4096) && (r->firstStar<=(EarlyChainClose?4u:4096u) || !closeChains))return;
   auto ids=r->ids;
   canonical(ids,top);
   atoms.rep=internIds(std::move(ids));
@@ -964,10 +969,9 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto atomAt : p.atoms)
     if (atomAt.kind == Atom::Ptr) {
       seedOnDemand(atomAt.object);
-      // Past as many written slots as its extent could hold distinct 4-byte fields (64 with no
-      // known extent), an object's offsets say nothing: a wide pointer writes each at each
-      // width. Collapse it to the (X,*) §5.2 already has for an unknown offset: a later load
-      // overlaps that slot, so PT6 gives the non-handle top with explicit ROOTs kept.
+      // Only under -bennett-analysis-early-chain-close (not the reference): past as many written
+      // slots as its extent could hold distinct 4-byte fields (64 with no known extent), collapse
+      // an object to (X,*), so that a later load overlaps that slot and PT6 gives top.
       if(atomAt.object && collapsedObjects().count(atomAt.object)) {atomAt.offset=0;atomAt.stride=-1;}
       // (X,*) denotes one location set whatever offset spelled it (§5.1).
       if(atomAt.stride==-1)atomAt.offset=0;
@@ -994,7 +998,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
         touchObject(a.object);
-        if(a.object && !filled && a.stride!=-1 && !collapsedObjects().count(a.object)) {
+        if(EarlyChainClose && a.object && !filled && a.stride!=-1 && !collapsedObjects().count(a.object)) {
           uint64_t extent=objectExtent(a.object);
           uint64_t limit=extent==UINT64_MAX?64:std::max<uint64_t>(64,extent/4);
           if(++writtenSlots[a.object]>limit) {
@@ -1469,7 +1473,7 @@ static AV laneBinary(unsigned opcode,const AV &x,const AV &y,Module &m) {
   }
   return value;
 }
-static bool longAdditiveCycle(Value *value, Value *source,std::function<AV(Value *)> facts, bool bitwise, int lane);
+static bool longAdditiveCycle(Value *value, Value *source,std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros=nullptr);
 bool Analysis::composite(Instruction &i) {
   const auto &dl = M.getDataLayout();
   if(auto *call=dyn_cast<IntrinsicInst>(&i)) {
@@ -1752,12 +1756,17 @@ bool Analysis::composite(Instruction &i) {
     return false; // PT9 binds leaf paths below.
   unimplemented("§5 PT10 composite operation", 1, &i);
 }
-// A value in an additive orbit carries each pointer's whole orbit too (PT5's conservative
-// image): (X,*), with the unknown-address alternative.
-static void orbitPointers(AV &value) {
+// A value in an additive orbit of step 2^zeros*odd carries each pointer's whole orbit too: PT5's
+// modular image is the residue class of that step, with the unknown-address alternative. All of it
+// is in the least fixpoint; another cycle's smaller step joins by the ordinary transfers.
+static void orbitPointers(AV &value,unsigned zeros) {
   bool any=false;AV closed;closed.top=value.top;
   for(auto x:value.atoms) {
-    if(x.kind==Atom::Ptr && x.object && x.stride!=-1) {x.offset=0;x.stride=-1;any=true;}
+    if(x.kind==Atom::Ptr && x.object && x.stride!=-1 && (!x.stride || zeros>=63 || x.stride>(int64_t(1)<<zeros))) {
+      if(zeros==0 || zeros>=63) {x.offset=0;x.stride=-1;}
+      else {x.stride=int64_t(1)<<zeros;x.offset=(int64_t)((uint64_t)x.offset&((uint64_t)x.stride-1));}
+      any=true;
+    }
     closed.atoms.insert(x);
   }
   if(!any)return;
@@ -1768,7 +1777,7 @@ static void orbitPointers(AV &value) {
 // cycle with period >4096 therefore reaches normative TOP; this is exact
 // acceleration, not a precision-changing widening.
 static bool longAdditiveCycle(Value *value, Value *source,
-                              std::function<AV(Value *)> facts, bool bitwise, int lane) {
+                              std::function<AV(Value *)> facts, bool bitwise, int lane,unsigned *stepZeros) {
   // PT3 copy edges can hide an additive recurrence behind arbitrarily many
   // phis/selects (e.g. hashtable count -> exit phi -> header phi). Following
   // those edges is exact: every traversal adds the same constant modulo W.
@@ -1786,7 +1795,11 @@ static bool longAdditiveCycle(Value *value, Value *source,
     std::set<Value *> path;
     unsigned visits=0; // Simple paths can be many; giving up only leaves the ordinary rounds.
     std::function<bool(Value *,APInt)> walk=[&](Value *v,APInt delta) {
-      if(v==source)return !delta.isZero() && width-delta.countr_zero()>12;
+      if(v==source) {
+        if(delta.isZero() || width-delta.countr_zero()<=12)return false;
+        if(stepZeros)*stepZeros=delta.countr_zero();
+        return true;
+      }
       if(v->getType()!=source->getType() || ++visits>4096 || !path.insert(v).second)return false;
       bool found=false;
       if(auto *p=dyn_cast<PHINode>(v)) {
@@ -1842,8 +1855,10 @@ static bool longAdditiveCycle(Value *value, Value *source,
   auto vs = facts(other);
   for (auto &x : vs.atoms)
     if (x.kind == Atom::Int && !x.integer.isZero() &&
-        x.integer.getBitWidth() - x.integer.countr_zero() > 12)
+        x.integer.getBitWidth() - x.integer.countr_zero() > 12) {
+      if(stepZeros)*stepZeros=x.integer.countr_zero();
       return true;
+    }
   return false;
 }
 // PT2's image of one base and index set. Accumulate the complete Cartesian index
@@ -2069,11 +2084,12 @@ void Analysis::step(Instruction &i) {
     if (auto *b = dyn_cast<BinaryOperator>(s->getValueOperand()))
       for (Value *operand : b->operands())
         if (auto *l = dyn_cast<LoadInst>(operand);
-            l && l->getPointerOperand() == s->getPointerOperand() &&
-            longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry,-1) &&
-            !get(l).atoms.empty()) {
-          written.top = true;
-          orbitPointers(written);
+            l && l->getPointerOperand() == s->getPointerOperand()) {
+          unsigned zeros=0;
+          if(longAdditiveCycle(b, l, [&](Value *v) { return get(v); },ReversibleEntry,-1,&zeros) && !get(l).atoms.empty()) {
+            written.top = true;
+            orbitPointers(written,zeros);
+          }
         }
     // PT7 distributes over address atoms: with the value unchanged since this store last
     // ran, only new addresses can add a fact. A second store never removes one.
@@ -2094,11 +2110,13 @@ void Analysis::step(Instruction &i) {
     for (Value *v : p->incoming_values())
       a.merge(get(v));
     if (!a.atoms.empty())
-      for (Value *v : p->incoming_values())
-        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry,-1)) {
+      for (Value *v : p->incoming_values()) {
+        unsigned zeros=0;
+        if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry,-1,&zeros)) {
           a.top = true;
-          orbitPointers(a);
+          orbitPointers(a,zeros);
         }
+      }
     // PT2: a full-width constant GEP recurrence denotes the complete modular
     // additive orbit. Solve it as a residue class, rather than allocating one
     // memory slot per iteration (musl strlen/memcpy pointer induction).
@@ -2475,6 +2493,7 @@ void Analysis::step(Instruction &i) {
 void Analysis::run() {
   BudgetScope scope;
   extentCache().clear();collapsedObjects().clear();unionMemo().clear();
+  if(EarlyChainClose)errs()<<"bennett: analysis: -bennett-analysis-early-chain-close: NOT the reference analysis of dialect §5; every result of this run is labelled so\n";
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
@@ -2640,6 +2659,8 @@ void Analysis::run() {
     const Instruction *lastChanged=nullptr;const char *lastRule=nullptr;uint64_t ran=0;
     auto lastReport=std::chrono::steady_clock::now();
     unsigned tracedChanges=0;
+    struct OpcodeCost {uint64_t runs=0,changed=0;double ms=0;};
+    std::map<std::string,OpcodeCost> opcodeCost;
     for(size_t id=0;id<order.size();++id)if(dirty[id]) {
       dirty[id]=0;currentStep=(int)id;changed=false;++ran;
       auto before=std::chrono::steady_clock::now();
@@ -2647,6 +2668,8 @@ void Analysis::run() {
       wakeReaders();
       if(changed) {lastChanged=order[id];lastRule=scope.budget.rule;}
       if(AnalysisTrace) {
+        auto &cost=opcodeCost[order[id]->getOpcodeName()];
+        cost.runs++;cost.changed+=changed;cost.ms+=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-before).count();
         if(changed && rounds>=TraceChangesFrom && tracedChanges++<40) {
           errs()<<"bennett: analysis:   changed @"<<order[id]->getFunction()->getName()<<" "<<*order[id];
           if(!order[id]->getType()->isVoidTy()) {
@@ -2692,6 +2715,13 @@ void Analysis::run() {
         if(pointers>largest) {largest=pointers;big=entry.first;}
       }
       errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<"\n";
+      {
+        std::vector<std::pair<double,std::string>> ranked;for(auto &e:opcodeCost)ranked.push_back({e.second.ms,e.first});
+        std::sort(ranked.rbegin(),ranked.rend());
+        errs()<<"bennett: analysis:   cost";
+        for(unsigned n=0;n<ranked.size() && n<7;++n) {auto &e=opcodeCost[ranked[n].second];errs()<<" "<<ranked[n].second<<":"<<(uint64_t)e.ms<<"ms/"<<e.runs<<"/"<<e.changed;}
+        errs()<<"\n";
+      }
       for(auto &slot:slots)slotAtoms+=slot.value.atoms.size();
       uint64_t kinds[4]={0,0,0,0},strided=0,valueTop=0,slotTop=0;std::map<const Value *,uint64_t> byObject;
       for(auto &slot:slots) {slotTop+=slot.value.top;byObject[slot.object]+=slot.value.atoms.size();for(auto &x:slot.value.atoms) {kinds[x.kind==Atom::Int?0:x.kind==Atom::Ptr?1:x.kind==Atom::Fn?2:3]++;strided+=x.kind==Atom::Ptr && x.stride;}}
@@ -3027,12 +3057,14 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.10"},
+  json::Object report{{"dialect", "0.2.10"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"analysis_rounds", analysisRounds},
                       {"functions", std::move(funcs)},
                       {"regions", std::move(regions)},
                       {"values", std::move(vals)}};
+  if(EarlyChainClose)report["non_reference"]="-bennett-analysis-early-chain-close";
+  return report;
 }
 } // namespace bennett
