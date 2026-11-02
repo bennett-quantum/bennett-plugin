@@ -134,6 +134,7 @@ class Analysis {
   void mergeValue(const llvm::Value *, const AV &);
   std::vector<size_t> slotsOf(const llvm::Value *);
   std::unordered_set<const llvm::Value *> lazySeeds;
+  std::unordered_map<const llvm::Value *, uint64_t> writtenSlots;
   void seedOnDemand(const llvm::Value *);
   std::vector<Slot> slots;
   using SlotKey = std::tuple<const llvm::Value *, int64_t, int64_t, uint64_t, bool, bool>;

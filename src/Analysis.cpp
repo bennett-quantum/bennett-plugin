@@ -181,6 +181,9 @@ uint64_t uidOf(const RepPtr &r) {return r?r->uid:0;}
 std::unordered_map<const Value *,uint64_t> &extentCache() {
   static auto *cache=new std::unordered_map<const Value *,uint64_t>;return *cache;
 }
+std::unordered_set<const Value *> &collapsedObjects() {
+  static auto *objects=new std::unordered_set<const Value *>;return *objects;
+}
 uint64_t objectExtent(const Value *object) {
   if(!object)return UINT64_MAX;
   auto &cache=extentCache();
@@ -305,7 +308,7 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
       if(!t.known) {t.known=true;t.extent=objectExtent(a.object);}
       ++t.total;
       if((uint64_t)a.offset>t.extent)++t.outside; // One past the end is an ordinary address.
-      chained=t.total>OffsetChain || t.outside>LeftObject || (t.extent==UINT64_MAX && t.total>NoExtent);
+      chained=t.total>OffsetChain || t.outside>LeftObject || (t.extent==UINT64_MAX && t.total>NoExtent) || collapsedObjects().count(a.object);
     }
   }
   if(chained) {
@@ -320,7 +323,8 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
     for(auto &part:parts) {
       uint64_t extent=objectExtent(part.first.object),outside=0;
       for(uint32_t id:part.second)outside+=(uint64_t)table.atoms[id&IndexMask].offset>extent;
-      if(part.second.size()<=OffsetChain && outside<=LeftObject && !(extent==UINT64_MAX && part.second.size()>NoExtent))continue;
+      bool collapsed=collapsedObjects().count(part.first.object);
+      if(!collapsed && part.second.size()<=OffsetChain && outside<=LeftObject && !(extent==UINT64_MAX && part.second.size()>NoExtent))continue;
       uint64_t low=0;const Atom &first=table.atoms[part.second[0]&IndexMask];
       for(uint32_t id:part.second) {
         const Atom &a=table.atoms[id&IndexMask];
@@ -329,7 +333,7 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
       }
       Atom closed=first;
       unsigned zeros=low?llvm::countr_zero(low):63;
-      if(zeros==0) {closed.offset=0;closed.stride=-1;}
+      if(zeros==0 || collapsed) {closed.offset=0;closed.stride=-1;}
       else {closed.stride=int64_t(1)<<zeros;closed.offset=(int64_t)((uint64_t)first.offset&((uint64_t)closed.stride-1));}
       doomed.insert(doomed.end(),part.second.begin(),part.second.end());
       added.push_back(table.intern(closed));
@@ -948,6 +952,11 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto atomAt : p.atoms)
     if (atomAt.kind == Atom::Ptr) {
       seedOnDemand(atomAt.object);
+      // Past as many written slots as its extent could hold distinct 4-byte fields (64 with no
+      // known extent), an object's offsets say nothing: a wide pointer writes each at each
+      // width. Collapse it to the (X,*) §5.2 already has for an unknown offset: a later load
+      // overlaps that slot, so PT6 gives the non-handle top with explicit ROOTs kept.
+      if(atomAt.object && collapsedObjects().count(atomAt.object)) {atomAt.offset=0;atomAt.stride=-1;}
       // (X,*) denotes one location set whatever offset spelled it (§5.1).
       if(atomAt.stride==-1)atomAt.offset=0;
       const Atom &a=atomAt;
@@ -973,6 +982,14 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
         touchObject(a.object);
+        if(a.object && !filled && a.stride!=-1 && !collapsedObjects().count(a.object)) {
+          uint64_t extent=objectExtent(a.object);
+          uint64_t limit=extent==UINT64_MAX?64:std::max<uint64_t>(64,extent/4);
+          if(++writtenSlots[a.object]>limit) {
+            collapsedObjects().insert(a.object);
+            unionMemo().clear();displaceMemo.clear(); // Their results predate the collapse.
+          }
+        }
       } else if(slots[it->second].value.merge(v))touchObject(a.object);
     }
 }
@@ -2371,7 +2388,7 @@ void Analysis::step(Instruction &i) {
 }
 void Analysis::run() {
   BudgetScope scope;
-  extentCache().clear();
+  extentCache().clear();collapsedObjects().clear();unionMemo().clear();
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
@@ -2570,7 +2587,12 @@ void Analysis::run() {
     bool pending=std::find(dirty.begin(),dirty.end(),1)!=dirty.end();
     if(AnalysisTrace) {
       uint64_t atoms=0,largest=0,slotAtoms=0;const Value *big=nullptr;
-      for(auto &entry:values) {atoms+=entry.second.atoms.size();if(entry.second.atoms.size()>largest) {largest=entry.second.atoms.size();big=entry.first;}}
+      for(auto &entry:values) {
+        atoms+=entry.second.atoms.size();uint64_t pointers=0;
+        if(entry.second.atoms.size()>largest)for(auto &x:entry.second.atoms)pointers+=x.kind!=Atom::Int;
+        if(pointers>largest) {largest=pointers;big=entry.first;}
+      }
+      errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<"\n";
       for(auto &slot:slots)slotAtoms+=slot.value.atoms.size();
       uint64_t kinds[4]={0,0,0,0},strided=0,valueTop=0,slotTop=0;std::map<const Value *,uint64_t> byObject;
       for(auto &slot:slots) {slotTop+=slot.value.top;byObject[slot.object]+=slot.value.atoms.size();for(auto &x:slot.value.atoms) {kinds[x.kind==Atom::Int?0:x.kind==Atom::Ptr?1:x.kind==Atom::Fn?2:3]++;strided+=x.kind==Atom::Ptr && x.stride;}}
