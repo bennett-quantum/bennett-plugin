@@ -124,11 +124,23 @@ class Analysis {
   void noteSlotEdges(size_t);
   std::vector<llvm::Function *> addressTaken;
   std::unordered_map<const llvm::Value *, uint64_t> objectVersion;
-  struct LoadMemo { AV result; uint64_t version; AtomSet keep; };
+  // PT6 per (atom group, type). Slot contents only grow, so a group whose object changed
+  // since `version` takes the old result plus what the changed slots now give: the same
+  // union a full pass computes. Changes that can shrink a contribution force the full pass.
+  struct LoadMemo { AV result; uint64_t version; AtomSet keep; bool indexed = false; uint64_t rebuilds = 0;
+                    std::vector<Atom> exact, other; };
+  // Per object, the slot each version step changed; bit 31 marks a change after which a
+  // contribution may differ other than by growth (a zero image's extent widened).
+  std::unordered_map<const llvm::Value *, std::vector<uint32_t>> objectLog;
+  void slotChanged(size_t, bool monotone = true);
+  void loadPair(const Atom &, const Slot &, llvm::Type *, uint64_t, AV &, bool &);
+  bool loadDelta(LoadMemo &, const llvm::Value *, llvm::Type *, uint64_t);
   std::map<std::pair<uint64_t, llvm::Type *>, LoadMemo> loadMemo;
   std::map<std::tuple<uint64_t, uint64_t, unsigned, unsigned, bool, bool>, AV> displaceMemo;
   std::unordered_map<int, std::tuple<AtomSet, AtomSet, bool>> storeSeen;
-  struct WholeLoad { AV result; uint64_t versions = 0; AtomSet keep; };
+  // `parts`: per object group in order, the group memo's result (uid*2+top) and rebuild count it saw.
+  struct WholeLoad { AV result; uint64_t versions = 0; AtomSet keep;
+                     std::vector<std::pair<uint64_t, uint64_t>> parts; };
   std::map<std::pair<uint64_t, llvm::Type *>, WholeLoad> wholeLoads;
   std::unordered_map<int, uint64_t> loadRegistered;
   std::map<std::pair<uint64_t, unsigned>, AV> phiClosures;

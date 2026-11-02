@@ -39,6 +39,9 @@ cl::opt<unsigned> TraceChangesFrom("bennett-analysis-trace-changes",cl::init(UIN
 // written slots: a precision change dialect §5.1 does not grant (advisor ruling on
 // b-dialect-spec-5u3). Results under it are not the reference analysis and must be labelled so.
 cl::opt<bool> EarlyChainClose("bennett-analysis-early-chain-close",cl::init(false),cl::desc("NOT the reference analysis: close offset chains and collapse objects earlier than the spec's K"));
+// A test aid: recompute every incremental PT6 result in full and fail on any difference.
+cl::opt<bool> CheckLoadDelta("bennett-analysis-check-delta",cl::init(false),cl::Hidden,cl::desc("Check each incremental load result against a full PT6 pass"));
+uint64_t loadDeltas=0,loadRebuilds=0;
 struct AnalysisBudget {
   std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
   const Instruction *at=nullptr;
@@ -853,6 +856,14 @@ void Analysis::touchObject(const Value *o) {
   touchedObjects.insert(o);
   if(currentStep<0)wakeReaders();
 }
+void Analysis::slotChanged(size_t n,bool monotone) {
+  const Value *o=slots[n].object;
+  if(n>=0x80000000u)report_fatal_error("bennett: analysis: more than 2^31 slots");
+  auto &log=objectLog[o];
+  log.push_back((uint32_t)n|(monotone?0u:0x80000000u));
+  touchObject(o);
+  if(log.size()!=objectVersion[o])report_fatal_error("bennett: analysis: object version and slot log disagree");
+}
 void Analysis::wakeReaders() {
   if(touchedObjects.empty())return;
   // An object with very many readers is woken at the end of the sweep: they all run once
@@ -1003,7 +1014,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
           if(s.filled && s.offset==a.offset && s.stride==a.stride && s.numerical==a.numerical && !s.value.top && s.value.atoms.size()==1 && s.value.atoms.begin()->kind==Atom::Int && s.value.atoms.begin()->integer.isZero()) {
             if(size>s.bytes) {
               slotIndex.erase(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical});
-              s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);touchObject(a.object);
+              s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);slotChanged(n,false);
             }
             found=true;break;
           }
@@ -1015,7 +1026,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
       if(inserted) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
-        touchObject(a.object);
+        slotChanged(it->second);
         if(EarlyChainClose && a.object && !filled && a.stride!=-1 && !collapsedObjects().count(a.object)) {
           uint64_t extent=objectExtent(a.object);
           uint64_t limit=extent==UINT64_MAX?64:std::max<uint64_t>(64,extent/4);
@@ -1024,7 +1035,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             unionMemo().clear();displaceMemo.clear(); // Their results predate the collapse.
           }
         }
-      } else if(slots[it->second].value.merge(v)) {noteSlotEdges(it->second);touchObject(a.object);}
+      } else if(slots[it->second].value.merge(v)) {noteSlotEdges(it->second);slotChanged(it->second);}
     }
 }
 AV Analysis::read(Value *base, uint64_t offset, Type *t) {
@@ -1096,44 +1107,98 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
   }
   return read(base,offset,type);
 }
+// PT6's contribution of one overlapping slot to a load through one atom. Monotone in the
+// slot's value: a grown value contributes a superset (loadDelta relies on this).
+void Analysis::loadPair(const Atom &a, const Slot &s, Type *t, uint64_t size, AV &r, bool &partial) {
+  if (s.filled && a.stride == 0 && s.stride == 0 &&
+      a.offset >= s.offset &&
+      (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
+      (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
+    AV decoded;
+    decoded.top = s.value.top;
+    for (auto &x : s.value.atoms)
+      if (x.kind == Atom::Int) {
+        APInt bits(M.getDataLayout().getTypeSizeInBits(t).getKnownMinValue(), 0);
+        for (unsigned b = 0; b < size; ++b)
+          bits |= x.integer.zextOrTrunc(bits.getBitWidth()).shl(b * 8);
+        decoded.merge(integer(bits));
+      }
+    r.absorb(decoded);
+    return;
+  }
+  bool exact = a.stride == 0 && s.stride == 0 && a.offset == s.offset &&
+               size == s.bytes;
+  bool sameClass = size == s.bytes &&
+                   ((a.offset - s.offset) % (int64_t)size == 0) &&
+                   (a.stride == 0 || a.stride % (int64_t)size == 0) &&
+                   (s.stride == 0 || s.stride % (int64_t)size == 0);
+  if (exact || sameClass)
+    r.absorb(s.value);
+  else {
+    partial = true;
+    if (s.value.atoms.hasRoot())
+      for (auto &b : s.value.atoms)
+        if (b.kind == Atom::Root)
+          r.atoms.insert(b);
+  }
+}
+// The memo's group, against the slots its object changed since the memo's version. False when
+// only a full pass gives PT6's result: a change that is not growth, or a group whose result a
+// constant image's exact bytes decide (that decision can turn as slots grow).
+bool Analysis::loadDelta(LoadMemo &memo, const Value *object, Type *t, uint64_t size) {
+  if (!memo.keep.uid()) return false;
+  if (auto *g = dyn_cast<GlobalVariable>(object); g && g->isConstant() && t->isIntegerTy()) return false;
+  auto &log = objectLog[object];
+  if (memo.version > log.size()) report_fatal_error("bennett: analysis: load memo ahead of its object");
+  std::vector<uint32_t> changed(log.begin() + memo.version, log.end());
+  for (uint32_t entry : changed) if (entry & 0x80000000u) return false;
+  std::sort(changed.begin(), changed.end());
+  changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
+  if (!memo.indexed) {
+    for (auto &a : memo.keep) (a.stride == 0 ? memo.exact : memo.other).push_back(a);
+    std::sort(memo.exact.begin(), memo.exact.end(), [](const Atom &x, const Atom &y) {return x.offset < y.offset;});
+    memo.indexed = true;
+  }
+  AV r = memo.result;
+  AV::startAbsorbing();
+  bool partial = false;
+  for (uint32_t n : changed) {
+    const Slot &s = slots[n];
+    if (s.object != object) report_fatal_error("bennett: analysis: slot log names another object");
+    auto pair = [&](const Atom &a) {budgetTick(); if (overlaps(a, s, size)) loadPair(a, s, t, size, r, partial);};
+    for (auto &a : memo.other) pair(a);
+    if (s.stride == 0) {
+      // Exact atoms that can overlap [s.offset, s.offset+bytes): offsets in (s.offset-size, s.offset+bytes).
+      __int128 lo = (__int128)s.offset - (__int128)size + 1;
+      auto begin = std::lower_bound(memo.exact.begin(), memo.exact.end(), lo,
+                                    [](const Atom &x, __int128 v) {return (__int128)x.offset < v;});
+      for (auto it = begin; it != memo.exact.end() && (__int128)it->offset < (__int128)s.offset + (__int128)s.bytes; ++it) pair(*it);
+    } else for (auto &a : memo.exact) pair(a);
+  }
+  if (partial) r.top = true;
+  r.settle();
+  ++loadDeltas;
+  if (CheckLoadDelta) {
+    AV full;
+    loadAtoms(memo.keep, t, size, full);
+    if (full.top != r.top || full.atoms.uid() != r.atoms.uid()) {
+      std::string message;raw_string_ostream out(message);
+      out << "bennett: analysis: incremental PT6 differs from the full pass on ";
+      object->printAsOperand(out, false);
+      out << ": " << r.atoms.size() << " atoms top=" << r.top << " vs " << full.atoms.size() << " atoms top=" << full.top;
+      report_fatal_error(Twine(out.str()));
+    }
+  }
+  memo.result = std::move(r);
+  return true;
+}
 // PT6 for the atoms of one object. Pure in those atoms, the type and the object's slots.
 void Analysis::loadAtoms(const AtomSet &group, Type *t, uint64_t size, AV &r) {
   AV::startAbsorbing();
   for (auto &a : group) {
       bool partial = false;
-      for (size_t n:overlappingSlots(a,size)) {
-          auto &s=slots[n];
-          if (s.filled && a.stride == 0 && s.stride == 0 &&
-              a.offset >= s.offset &&
-              (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
-              (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
-            AV decoded;
-            decoded.top = s.value.top;
-            for (auto &x : s.value.atoms)
-              if (x.kind == Atom::Int) {
-                APInt bits(M.getDataLayout().getTypeSizeInBits(t).getKnownMinValue(), 0);
-                for (unsigned b = 0; b < size; ++b)
-                  bits |= x.integer.zextOrTrunc(bits.getBitWidth()).shl(b * 8);
-                decoded.merge(integer(bits));
-              }
-            r.absorb(decoded);
-            continue;
-          }
-          bool exact = a.stride == 0 && s.stride == 0 && a.offset == s.offset &&
-                       size == s.bytes;
-          bool sameClass = size == s.bytes &&
-                           ((a.offset - s.offset) % (int64_t)size == 0) &&
-                           (a.stride == 0 || a.stride % (int64_t)size == 0) &&
-                           (s.stride == 0 || s.stride % (int64_t)size == 0);
-          if (exact || sameClass)
-            r.absorb(s.value);
-          else {
-            partial = true;
-            for (auto &b : s.value.atoms)
-              if (b.kind == Atom::Root)
-                r.atoms.insert(b);
-          }
-        }
+      for (size_t n:overlappingSlots(a,size))
+        loadPair(a, slots[n], t, size, r, partial);
       // Immutable initialiser bytes reconstruct whole integer loads exactly.
       if (auto *g = dyn_cast<GlobalVariable>(a.object);
           g && g->isConstant() && t->isIntegerTy() && a.stride == 0) {
@@ -1183,9 +1248,7 @@ AV Analysis::load(const AV &p, Type *t) {
   AV r;
   uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
   r.top = p.top;
-  std::vector<const AV *> parts;
   auto &groups=p.atoms.byObject();
-  parts.reserve(groups.size());
   // Object versions only grow, so an unchanged sum means no object here changed: the whole
   // load is its last result. Most reruns of a load after a wakeup are this case.
   uint64_t versions=0;
@@ -1203,6 +1266,7 @@ AV Analysis::load(const AV &p, Type *t) {
     if(p.top && !result.top) {result.top=true;result.settle();}
     return result;
   }
+  std::vector<LoadMemo *> memos;
   for(auto &group:groups) {
     const Value *object=group.first;
     if(!object) {r.top=true;continue;}
@@ -1210,20 +1274,34 @@ AV Analysis::load(const AV &p, Type *t) {
     uint64_t version=objectVersion[object];
     auto &memo=loadMemo[{group.second.uid(),t}];
     if(!memo.keep.uid() || memo.version!=version) {
-      AV fresh;
-      loadAtoms(group.second,t,size,fresh);
-      // loadAtoms may reach back into the memo table only through other entries; std::map keeps references.
-      memo.result=std::move(fresh);memo.version=version;memo.keep=group.second;
+      if(loadDelta(memo,object,t,size))memo.version=version;
+      else {
+        AV fresh;
+        loadAtoms(group.second,t,size,fresh);
+        // loadAtoms may reach back into the memo table only through other entries; std::map keeps references.
+        memo.result=std::move(fresh);memo.version=version;memo.keep=group.second;memo.indexed=false;memo.exact.clear();memo.other.clear();
+        ++memo.rebuilds;++loadRebuilds;
+      }
     }
-    parts.push_back(&memo.result);
+    memos.push_back(&memo);
   }
+  // When no group memo was rebuilt since the whole result, every group only grew: the whole
+  // load is its last result plus the groups whose results changed. Otherwise a full union.
+  bool grown=whole.keep.uid()!=0 && whole.parts.size()==memos.size();
+  for(size_t n=0;grown && n<memos.size();++n)grown=whole.parts[n].second==memos[n]->rebuilds;
   AV::startAbsorbing();
-  for(auto *part:parts)r.absorb(*part);
+  if(grown) {
+    r.absorb(whole.result);
+    for(size_t n=0;n<memos.size();++n)if(whole.parts[n].first!=memos[n]->result.atoms.uid()*2+memos[n]->result.top)r.absorb(memos[n]->result);
+  } else for(auto *memo:memos)r.absorb(memo->result);
   r.settle();
   // Loading created slots only when seeding on demand, which is not a version change.
   uint64_t after=0;
   for(auto &group:groups)if(group.first)after+=objectVersion[group.first];
-  if(!p.top) {whole.result=r;whole.versions=after;whole.keep=p.atoms;}
+  if(!p.top) {
+    whole.result=r;whole.versions=after;whole.keep=p.atoms;whole.parts.clear();
+    for(auto *memo:memos)whole.parts.push_back({memo->result.atoms.uid()*2+memo->result.top,memo->rebuilds});
+  }
   return r;
 }
 std::set<Function *> Analysis::candidates(Value *v, FunctionType *type) {
@@ -2568,6 +2646,7 @@ void Analysis::step(Instruction &i) {
 }
 void Analysis::run() {
   BudgetScope scope;
+  loadDeltas=loadRebuilds=0;
   extentCache().clear();collapsedObjects().clear();unionMemo().clear();
   if(EarlyChainClose)errs()<<"bennett: analysis: -bennett-analysis-early-chain-close: NOT the reference analysis of dialect §5; every result of this run is labelled so\n";
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
@@ -2762,6 +2841,27 @@ void Analysis::run() {
         auto spent=std::chrono::duration_cast<std::chrono::milliseconds>(now-before).count();
         if(spent>=1000) {
           errs()<<"bennett: analysis:   slow step "<<spent<<" ms in @"<<order[id]->getFunction()->getName()<<" at"<<*order[id]<<"\n";
+          // The address set's shape: what a slow PT6/PT7 step iterates.
+          const Value *address=nullptr;
+          if(auto *l=dyn_cast<LoadInst>(order[id]))address=l->getPointerOperand();
+          else if(auto *st=dyn_cast<StoreInst>(order[id]))address=st->getPointerOperand();
+          else if(auto *c=dyn_cast<CallBase>(order[id]);c && c->arg_size())address=c->getArgOperand(c->arg_size()>1?1:0);
+          if(address && address->getType()->isPointerTy() && !isa<Constant>(address)) {
+            auto &v=values[address];auto &groups=v.atoms.byObject();
+            errs()<<"bennett: analysis:     address "<<v.atoms.size()<<" atoms top="<<v.top<<" in "<<groups.size()<<" objects;";
+            std::vector<std::pair<size_t,const Value *>> big;
+            for(auto &g:groups)big.push_back({g.second.size(),g.first});
+            std::sort(big.rbegin(),big.rend());
+            for(unsigned n=0;n<big.size() && n<3;++n) {
+              size_t count=0;
+              if(auto it=otherSlots.find(big[n].second);it!=otherSlots.end())count+=it->second.size();
+              if(auto it=exactSlots.find(big[n].second);it!=exactSlots.end())for(auto &e:it->second)count+=e.second.size();
+              errs()<<" "<<big[n].first<<" offsets of ";
+              if(big[n].second) {big[n].second->printAsOperand(errs(),false);if(auto *at=dyn_cast<Instruction>(big[n].second))errs()<<" in @"<<at->getFunction()->getName();}else errs()<<"EXT";
+              errs()<<" ("<<count<<" slots)";
+            }
+            errs()<<"\n";
+          }
         }
         if(now-lastReport>std::chrono::seconds(20)) {
           lastReport=now;
@@ -2790,7 +2890,7 @@ void Analysis::run() {
         if(entry.second.atoms.size()>largest)for(auto &x:entry.second.atoms)pointers+=x.kind!=Atom::Int;
         if(pointers>largest) {largest=pointers;big=entry.first;}
       }
-      errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<"\n";
+      errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<", load groups "<<loadDeltas<<" incremental "<<loadRebuilds<<" full\n";
       {
         std::vector<std::pair<double,std::string>> ranked;for(auto &e:opcodeCost)ranked.push_back({e.second.ms,e.first});
         std::sort(ranked.rbegin(),ranked.rend());
@@ -2834,6 +2934,7 @@ void Analysis::run() {
     solveSeeds();
     if(std::find(dirty.begin(),dirty.end(),1)==dirty.end())break;
   }
+  if(CheckLoadDelta)errs()<<"bennett: analysis: checked "<<loadDeltas<<" incremental load groups against full passes ("<<loadRebuilds<<" full)\n";
   addressTaken.clear();addressTakenKnown=false;
   loadMemo.clear();displaceMemo.clear();storeSeen.clear();wholeLoads.clear();loadRegistered.clear();phiClosures.clear();
   analysisRounds=rounds;
