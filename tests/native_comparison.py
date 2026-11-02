@@ -63,7 +63,7 @@ def main():
         ('entry', [*adapter, '-bennett-native-entry=absent', materialised, '-disable-output']),
         ('identity', [*adapter, native, '-disable-output']),
         ('transformation', [*(x for x in adapter if not x.startswith('-passes=')),
-                            '-passes=function(instcombine),bennett-native-comparison',
+                            '-passes=function(instnamer),bennett-native-comparison',
                             materialised, '-disable-output'])):
         rejected = subprocess.run(list(map(str, command)), capture_output=True,
                                   text=True, timeout=600)
@@ -96,14 +96,16 @@ def main():
     backend.bennett_load.restype = c.c_int
     backend.bennett_unload.argtypes = [c.c_void_p]
     backend.bennett_unload.restype = c.c_int
+    backend.bennett_last_error.restype = c.c_char_p
     obj = output / 'native_probe/launch.bennett'
     data = obj.read_bytes()
     target = json.loads((SIBLINGS / 'bennett-targets/targets/ideal-all-to-all.json').read_text())
     encoded = json.dumps(target, sort_keys=True, separators=(',', ':')).encode()
     object_buffer, target_buffer = c.create_string_buffer(data), c.create_string_buffer(encoded)
     program = c.c_void_p()
-    assert backend.bennett_load(object_buffer, len(data), target_buffer,
-                                len(encoded), c.byref(program)) == 0
+    status = backend.bennett_load(object_buffer, len(data), target_buffer,
+                                  len(encoded), c.byref(program))
+    assert status == 0, (status, backend.bennett_last_error())
     # Unused error/transport imports are resolved by the complete comparison
     # support in the full fixture test; this unit exercises successful qreg calls.
     compiled = c.CDLL(str(native_library), mode=os.RTLD_LAZY | os.RTLD_LOCAL)

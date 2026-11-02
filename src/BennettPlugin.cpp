@@ -1,5 +1,6 @@
 #include "Bennett.h"
 #include "NativeComparison.h"
+#include "ComparisonLayout.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -310,6 +311,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
+    initialiseComparisonLayout(m);
     if (ValidateOnly) {
       validateResidual(m,ValidateClassical);
       return PreservedAnalyses::all();

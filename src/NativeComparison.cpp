@@ -1,5 +1,6 @@
 #include "Bennett.h"
 #include "NativeComparison.h"
+#include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -9,6 +10,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/SHA256.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 using namespace llvm;
 namespace bennett {
@@ -16,6 +18,10 @@ namespace {
 cl::opt<std::string> NativeRecord("bennett-native-record");
 cl::opt<std::string> NativeEntry("bennett-native-entry");
 cl::opt<std::string> NativeReport("bennett-native-report");
+cl::opt<std::string> LayoutFile("bennett-comparison-layout",
+    cl::desc("Resolved comparison ELF addresses, outside source normalisation"));
+std::optional<json::Value> layout;
+std::string layoutHash;
 
 std::string digest(StringRef s) {
   return toHex(SHA256::hash(arrayRefFromStringRef(s)), true);
@@ -31,6 +37,25 @@ std::string bits(Module &m) {
   raw_string_ostream out(s);
   WriteBitcodeToFile(m, out);
   return s;
+}
+std::string structure(Module &m) {
+  auto copy = CloneModule(m);
+  for (auto &f : *copy)
+    f.setMetadata("bennett.address", nullptr);
+  return digest(bits(*copy));
+}
+uint64_t integer(const json::Object &o, StringRef field) {
+  auto n = o.getInteger(field);
+  if (!n || *n < 0)
+    fail("BD-E-COMPARISON-LAYOUT", ("missing/nonnegative integer: " + field).str());
+  return uint64_t(*n);
+}
+const json::Object *layoutEntry(StringRef table, StringRef key) {
+  if (!layout)
+    return nullptr;
+  auto *entries = layout->getAsObject()->getObject(table);
+  auto *entry = entries ? entries->getObject(key) : nullptr;
+  return entry;
 }
 
 // Backend state belongs to this marked component. The caller loads its actual
@@ -187,6 +212,33 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
           if (auto *g = dyn_cast<Function>(call->getCalledOperand()->stripPointerCasts()))
             if (markers().count(g->getName().str()))
               calls.push_back({call, g});
+    auto fingerprint = structure(m);
+    // Stable, collision-resistant aliases expose private/unnamed source
+    // definitions to the comparison linker without changing their bodies or
+    // making a second copy of any source global.
+    json::Array symbols;
+    SmallVector<GlobalValue *> values;
+    for (auto &g : m.globals()) if (!g.isDeclaration()) values.push_back(&g);
+    for (auto &f : m) if (!f.isDeclaration()) values.push_back(&f);
+    for (unsigned i = 0; i < values.size(); ++i) {
+      auto *v = values[i];
+      auto name = "__bennett_comparison_" + identity.substr(0, 20) + "_" + std::to_string(i);
+      if (m.getNamedValue(name))
+        fail("BD-E-NATIVE-INPUT", "comparison symbol collision", v);
+      v->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
+      GlobalAlias::create(GlobalValue::ExternalLinkage, name, v);
+      json::Object row{{"llvm_name", v->getName()}, {"native_symbol", name}};
+      if (auto *g = dyn_cast<GlobalVariable>(v)) {
+        row["kind"] = "global";
+        row["source_key"] = scalarGlobalKey(*g);
+        row["size"] = int64_t(m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue());
+        row["alignment"] = int64_t(m.getDataLayout().getPreferredAlign(g).value());
+      } else {
+        row["kind"] = "function";
+        row["source_key"] = v->getName();
+      }
+      symbols.push_back(std::move(row));
+    }
     Bridge bridge(m, identity);
     DenseMap<Function *, Function *> replacements;
     for (auto [call, g] : calls) {
@@ -210,9 +262,11 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
         old->eraseFromParent();
     json::Object report{{"schema", "bennett-native-comparison-1"},
                         {"materialised_sha256", identity},
+                        {"materialised_structure_sha256", fingerprint},
                         {"record_sha256", digest(recordBytes->getBuffer())},
                         {"entries", json::Array{NativeEntry.getValue()}},
                         {"binding_symbol", bridge.binding},
+                        {"symbols", std::move(symbols)},
                         {"source_memory_faults_checked", false},
                         {"resolved_link_layout", false},
                         {"full_comparison_acceptance", false}};
@@ -231,5 +285,70 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
 } // namespace
 void addNativeComparisonPass(ModulePassManager &pm) {
   pm.addPass(NativeComparisonPass());
+}
+void initialiseComparisonLayout(Module &m) {
+  layout.reset();
+  layoutHash.clear();
+  if (LayoutFile.empty()) return;
+  auto bytes = read(LayoutFile);
+  auto value = json::parse(bytes->getBuffer());
+  if (!value) fail("BD-E-COMPARISON-LAYOUT", toString(value.takeError()));
+  auto *o = value->getAsObject();
+  if (!o || o->getString("schema") != "bennett-comparison-layout-1" ||
+      integer(*o, "ptr_width") != m.getDataLayout().getPointerSizeInBits() ||
+      !o->getString("materialised_structure_sha256") ||
+      !o->getObject("globals") || !o->getObject("functions"))
+    fail("BD-E-COMPARISON-LAYOUT", "schema, pointer width or source correspondence missing");
+  auto end = integer(*o, "data_end"), heap = integer(*o, "heap_base");
+  if (end < 4096 || end > uint64_t(INT64_MAX) - 4095 || heap != alignTo(end, uint64_t(4096)))
+    fail("BD-E-COMPARISON-LAYOUT", "heap must be the first page boundary after linked data");
+  std::vector<std::pair<uint64_t,uint64_t>> ranges;
+  for (auto &item : *o->getObject("globals")) {
+    auto *entry = item.second.getAsObject();
+    if (!entry) fail("BD-E-COMPARISON-LAYOUT", "invalid global entry");
+    auto address = integer(*entry, "address"), size = integer(*entry, "size"), alignment = integer(*entry, "alignment");
+    if (address < 4096 || address > end || size > end - address ||
+        !isPowerOf2_64(alignment) || address % alignment)
+      fail("BD-E-COMPARISON-LAYOUT", "misaligned/out-of-data global range");
+    if (size) ranges.push_back({address, address+size});
+  }
+  llvm::sort(ranges);
+  for (unsigned i=1; i<ranges.size(); ++i)
+    if (ranges[i].first < ranges[i-1].second)
+      fail("BD-E-COMPARISON-LAYOUT", "overlapping source globals");
+  std::set<uint64_t> addresses;
+  for (auto &item : *o->getObject("functions")) {
+    auto *entry = item.second.getAsObject();
+    if (!entry) fail("BD-E-COMPARISON-LAYOUT", "invalid function entry");
+    auto address = integer(*entry, "address");
+    if (address < 4096 || !addresses.insert(address).second)
+      fail("BD-E-COMPARISON-LAYOUT", "null or merged source function address");
+    for (auto range : ranges) if (address >= range.first && address < range.second)
+      fail("BD-E-COMPARISON-LAYOUT", "function address overlaps source data");
+  }
+  layoutHash = digest(bytes->getBuffer());
+  layout = std::move(*value);
+}
+bool hasComparisonLayout() { return layout.has_value(); }
+std::string comparisonLayoutDigest() { return layoutHash; }
+std::optional<uint64_t> comparisonGlobalAddress(const GlobalVariable &g) {
+  if (!layout) return std::nullopt;
+  auto *e = layoutEntry("globals", scalarGlobalKey(g));
+  if (!e || integer(*e,"size") != g.getParent()->getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue() ||
+      integer(*e,"alignment") < g.getParent()->getDataLayout().getPreferredAlign(&g).value())
+    fail("BD-E-COMPARISON-LAYOUT", "missing or incompatible source global", &g);
+  return integer(*e, "address");
+}
+std::optional<uint64_t> comparisonFunctionAddress(const Function &f) {
+  if (auto *e = layoutEntry("functions", f.getName())) return integer(*e,"address");
+  return std::nullopt;
+}
+std::optional<uint64_t> comparisonHeapBase() {
+  if (!layout) return std::nullopt;
+  return integer(*layout->getAsObject(), "heap_base");
+}
+void checkComparisonMaterialisation(Module &m) {
+  if (layout && structure(m) != *layout->getAsObject()->getString("materialised_structure_sha256"))
+    fail("BD-E-COMPARISON-LAYOUT", "resolved map belongs to a different materialised module");
 }
 } // namespace bennett

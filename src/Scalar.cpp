@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/InstIterator.h"
@@ -462,6 +463,8 @@ struct Scalar {
             auto candidates=analysis->candidates(call->getCalledOperand(),call->getFunctionType());
             std::vector<Function *> sorted(candidates.begin(),candidates.end());
             auto address=[](Function *f) -> uint64_t {
+              if(auto n=comparisonFunctionAddress(*f))return *n;
+              if(hasComparisonLayout())fail("BD-E-COMPARISON-LAYOUT","missing function address",f);
               auto *md=f->getMetadata("bennett.address");
               if (!md) unimplemented("§19.5 comparison function addresses",4,f);
               return cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();
@@ -647,7 +650,11 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
       auto pw=dl.getPointerSizeInBits(t->getPointerAddressSpace());APInt offset(pw,0);
       auto *root=c->stripAndAccumulateConstantOffsets(dl,offset,true);
       if(auto *target=dyn_cast<GlobalVariable>(root);target && bases.count(target))bits=APInt(pw,bases.at(target))+offset;
-      else if(auto *f=dyn_cast<Function>(root);f && f->getMetadata("bennett.address")) bits=cast<ConstantInt>(cast<ConstantAsMetadata>(f->getMetadata("bennett.address")->getOperand(0))->getValue())->getValue().zextOrTrunc(pw)+offset;
+      else if(auto *f=dyn_cast<Function>(root)) {
+        if(auto address=comparisonFunctionAddress(*f))bits=APInt(pw,*address)+offset;
+        else if(!hasComparisonLayout() && f->getMetadata("bennett.address"))bits=cast<ConstantInt>(cast<ConstantAsMetadata>(f->getMetadata("bennett.address")->getOperand(0))->getValue())->getValue().zextOrTrunc(pw)+offset;
+        else unimplemented("§19.5 comparison function relocation",4,f);
+      }
       else if(auto *ce=dyn_cast<ConstantExpr>(c);ce && ce->getOpcode()==Instruction::IntToPtr && isa<ConstantInt>(ce->getOperand(0)))bits=cast<ConstantInt>(ce->getOperand(0))->getValue().zextOrTrunc(pw);
       else unimplemented("§19.5 global pointer relocation target",1,c);
     } else unimplemented("§19.5 vector data image",2,c);
@@ -694,7 +701,10 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
         auto targets=analysis.candidates(c->getCalledOperand(),c->getFunctionType());
         std::vector<Function *> sorted(targets.begin(),targets.end());
         std::sort(sorted.begin(),sorted.end(),[](auto *a,auto *b) {
-          auto address=[](Function *f) {auto *md=f->getMetadata("bennett.address");if(!md) unimplemented("§19.5 comparison function addresses",4,f);return cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();};return address(a)<address(b);
+          auto address=[](Function *f) {
+            if(auto n=comparisonFunctionAddress(*f))return *n;
+            if(hasComparisonLayout())fail("BD-E-COMPARISON-LAYOUT","missing function address",f);
+            auto *md=f->getMetadata("bennett.address");if(!md) unimplemented("§19.5 comparison function addresses",4,f);return cast<ConstantInt>(cast<ConstantAsMetadata>(md->getOperand(0))->getValue())->getZExtValue();};return address(a)<address(b);
         });for(auto *target:sorted) collect(target);
       }
     }
@@ -1024,7 +1034,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
   uint64_t nullSize=flag("bennett.null_size",4096);
   uint64_t base=nullSize;std::map<const GlobalVariable *,uint64_t> globalBases;
-  for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));globalBases[&g]=base;base+=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();}
+  for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));globalBases[&g]=comparisonGlobalAddress(g).value_or(base);base=std::max(base,globalBases[&g]+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue());}
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {
     auto size=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
     auto hex=scalarGlobalImage(g,globalBases),name=s.globals[&g];
@@ -1033,7 +1043,7 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
     dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
     globalLeaves[name]="{\"base\":"+std::to_string(globalBases[&g])+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
   }
-  uint64_t heap=flag("bennett.heap_base",alignTo(base,uint64_t(4096)));unsigned h=0,at=0;
+  uint64_t heap=comparisonHeapBase().value_or(flag("bennett.heap_base",alignTo(base,uint64_t(4096))));unsigned h=0,at=0;
   uint64_t endAddress = flag("bennett.region_base",heap + heapLimit);
   std::string regionLayout, regionHashLeaves;
   for (auto &d : devices) if (d.first == "BLOCK") {

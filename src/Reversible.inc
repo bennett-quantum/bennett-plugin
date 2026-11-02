@@ -140,6 +140,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     {"section","11.5/17.6/25.1"},{"reason","R entry: mandatory pre-instruction typed fault 1 requires ISA-7; generic trap only on exhausted counter; no later source effect; prefix history retained"}}}))+"\n");
   // Device bitcode retains materialised bodies; host main gets the launch ABI.
   launch->eraseFromParent();root->setName(entryName);
+  checkComparisonMaterialisation(m);
   raw_fd_ostream bc(out.str()+"/device.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(m,bc);bc.close();
   auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject());
   raw_fd_ostream host(out.str()+"/host.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(source,host);host.close();

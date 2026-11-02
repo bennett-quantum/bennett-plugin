@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -492,6 +493,9 @@ struct Entry {
   Function *selectedCallee = nullptr;
   bool generalDescriptor = false;
   uint64_t functionAddress(Function *fn) {
+    if (auto address = comparisonFunctionAddress(*fn)) return *address;
+    if (hasComparisonLayout())
+      fail("BD-E-COMPARISON-LAYOUT", "missing function address", fn);
     // Standalone comparison link, matching the module-order convention used
     // for data by the scalar linker. The production driver owns §19.5 layout.
     uint64_t address=4096;
@@ -1470,6 +1474,21 @@ struct Entry {
         } else if (auto *cmp = dyn_cast<ICmpInst>(&i)) {
           auto pred = cmp->getPredicate();
           auto *xv = cmp->getOperand(0), *yv = cmp->getOperand(1);
+          // §6.3: every allocation identity is nonzero, including stale copies.
+          // A qreg is not an ISA pointer/integer operand of icmp. For an exact
+          // non-null provenance this observation is independent of its value;
+          // nullable unions still require their scalar generation tags.
+          auto nonnullHandle = [&](Value *v) {
+            auto av = a.get(v);
+            return !av.top && !av.atoms.empty() &&
+              llvm::all_of(av.atoms, [](const Atom &x) { return x.kind == Atom::Root; });
+          };
+          if ((pred == CmpInst::ICMP_EQ || pred == CmpInst::ICMP_NE) &&
+              ((isa<ConstantPointerNull>(xv) && nonnullHandle(yv)) ||
+               (isa<ConstantPointerNull>(yv) && nonnullHandle(xv)))) {
+            names[cmp] = operand(ConstantInt::get(cmp->getType(), pred == CmpInst::ICMP_NE));
+            continue;
+          }
           if (pred == CmpInst::ICMP_UGT || pred == CmpInst::ICMP_UGE ||
               pred == CmpInst::ICMP_SGT || pred == CmpInst::ICMP_SGE) {
             pred = CmpInst::getSwappedPredicate(pred);
@@ -1534,6 +1553,25 @@ std::string linkReferences(Entry &e) {
   std::map<std::string,uint64_t> bases,sizes;
   std::set<std::string> used=e.ccGlobals;
   for (auto &names:e.referenceGlobals) for (auto &n:names) used.insert(n.second);
+  // Include pointer relocation targets for every tier. A data image can name
+  // another source global or a function even when no instruction loads it.
+  std::set<const Value *> relocationVisited;
+  std::function<void(const Value *)> relocation=[&](const Value *v) {
+    if (!relocationVisited.insert(v).second) return;
+    if (auto *g=dyn_cast<GlobalVariable>(v)) {
+      used.insert(scalarGlobalKey(*g));e.ccGlobals.insert(scalarGlobalKey(*g));
+      if (g->hasInitializer()) relocation(g->getInitializer());
+      return;
+    }
+    if (auto *fn=dyn_cast<Function>(v)) {
+      auto address=e.functionAddress(const_cast<Function *>(fn));
+      const_cast<Function *>(fn)->setMetadata("bennett.address",MDNode::get(e.m.getContext(),
+          ConstantAsMetadata::get(ConstantInt::get(dl.getIntPtrType(e.m.getContext()),address))));
+      return;
+    }
+    if(auto *constant=dyn_cast<Constant>(v))for(auto &operand:constant->operands())relocation(operand);
+  };
+  for (auto &g:e.m.globals())if(used.count(scalarGlobalKey(g)))relocation(&g);
   if(e.argvService) {
     std::set<const Value *> visited;
     std::function<void(const Value *)> include=[&](const Value *v) {
@@ -1545,6 +1583,7 @@ std::string linkReferences(Entry &e) {
     for(auto &g:e.m.globals())if(used.count(scalarGlobalKey(g)))include(&g);
     // The shared image and the indirect compare trees use the same addresses.
     for(auto &f:e.m) {
+      if (hasComparisonLayout() && !comparisonFunctionAddress(f)) continue;
       auto address=e.functionAddress(&f);
       f.setMetadata("bennett.address",MDNode::get(e.m.getContext(),ConstantAsMetadata::get(ConstantInt::get(e.m.getDataLayout().getIntPtrType(e.m.getContext()),address))));
     }
@@ -1552,20 +1591,21 @@ std::string linkReferences(Entry &e) {
   uint64_t base=4096;
   for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
     auto key=scalarGlobalKey(g),name="G"+std::to_string(globalSymbols.size()+1);
-    globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=base;
-    sizes[name]=dl.getTypeAllocSize(g.getValueType()).getFixedValue();base+=sizes[name];
+    globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=comparisonGlobalAddress(g).value_or(base);
+    sizes[name]=dl.getTypeAllocSize(g.getValueType()).getFixedValue();base=std::max(base,bases[name]+sizes[name]);
   }
   for(auto &key:used) if(!globalSymbols.count(key)) {
     // Model state materialised only in a scalar clone has the published i64
     // default image; its source name still identifies it across wrappers.
     if(!StringRef(key).starts_with("name:__bennett_dev_")) unimplemented("§19.5 unnamed unified global",1,&e.f);
     auto name="G"+std::to_string(globalSymbols.size()+1);globalSymbols[key]=name;
+    if (hasComparisonLayout())fail("BD-E-COMPARISON-LAYOUT", "materialised model global missing from source module");
     base=alignTo(base,uint64_t(8));bases[name]=base;sizes[name]=8;base+=8;
   }
   std::map<const GlobalVariable *,uint64_t> sourceBases;
   for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
   json::Object globals,interfaces;
-  uint64_t heap=alignTo(base,uint64_t(4096)),heapLimit=0,stack=0;
+  uint64_t heap=comparisonHeapBase().value_or(alignTo(base,uint64_t(4096))),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
   for(auto &ref:e.references) {
     parsed.push_back(objectSections(ref));auto layout=parse(parsed.back().at("layout"));
@@ -2372,12 +2412,20 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     std::map<Function *,std::string> ccNames;
     ccNames[f]=f->getName().str();
     std::vector<Function *> closure{f};
-    for(unsigned k=0;k<closure.size();++k)for(auto &i:instructions(*closure[k]))
-      if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=resolve(c->getCalledOperand());
-          g && !g->isDeclaration() && !markers().count(g->getName().str()) && !ccNames.count(g)) {
+    auto include = [&](Function *g) {
+      if (g && !g->isDeclaration() && !markers().count(g->getName().str()) && !ccNames.count(g)) {
         auto name="C"+std::to_string(closure.size()-1);
         if(name==f->getName())name+="callee";
         ccNames[g]=name;closure.push_back(g);
+      }
+    };
+    for(unsigned k=0;k<closure.size();++k)for(auto &i:instructions(*closure[k]))
+      if(auto *c=dyn_cast<CallBase>(&i)) {
+        if(auto *g=resolve(c->getCalledOperand())) include(g);
+        else {
+          auto candidates=a.candidates(c->getCalledOperand(),c->getFunctionType());
+          for(auto &g:m)if(candidates.count(&g))include(&g);
+        }
       }
     e.ccNames=&ccNames;
     e.lower();
@@ -2460,6 +2508,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   raw_fd_ostream bc(out.str() + "/device.bc", ec);
   if (ec)
     fail("output", ec.message());
+  checkComparisonMaterialisation(*device);
   WriteBitcodeToFile(*device, bc);
   for(auto &f:m)if(!f.isDeclaration())normaliseFP(f);
   for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())requireSoftFloat(*g);
@@ -2494,6 +2543,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       {"target_source", "runtime:BENNETT_TARGET"},
       {"checked_executable_claims", false}, {"linked_runtime_acceptance", false},
       {"required_acceptance", json::Array{"target/schedule-bound checked executable claims", "real linked launch-library execution"}}};
+    if (hasComparisonLayout()) record["comparison_layout_sha256"] = comparisonLayoutDigest();
     write(out.str() + "/" + dir + "/launch-record.json", jcs(json::Value(std::move(record))) + "\n");
   }
 
