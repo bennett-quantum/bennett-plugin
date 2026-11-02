@@ -142,6 +142,81 @@ def value(obj,entry,args=None,draws=None):
 def result(data):
  assert data['status']=='COMPLETED',data
  return int(data['results'][0]['value'])
+# The consumer's fixtures/grover.c, the quantum programmer's real translation unit, over a stub
+# oracle that reads its region. This exercises the marker lowering at the gate's register shapes;
+# it says nothing about SQLite, and only the consumer gate can pass rung 4.
+STUB=r"""
+#include <stdint.h>
+uint8_t rung4_oracle(unsigned char *img, long long len, uint64_t x) {
+  if ((long long)x >= len) __builtin_trap();
+  return img[x] & 1;
+}
+"""
+def fixture_flags(bits,area,length,iterations):
+ return [f'-DRUNG4_BITS={bits}',f'-DRUNG4_A={area}',f'-DRUNG4_LEN={length}',f'-DRUNG4_ITERS={iterations}','-DRUNG4_B_STEPS=400','-DRUNG4_B_HEAP=0','-DRUNG4_B_STACK=512','-DRUNG4_B_DEPTH=8']
+def build_fixture(major,d,bits,area,data,iterations):
+ tool=f'/usr/lib/llvm-{major}/bin/';fixture=SIBLINGS/'bennett-conformance/ladder/rung-4/fixtures/grover.c'
+ assert fixture.is_file(),fixture
+ (d/'stub.c').write_text(STUB)
+ pad=(1<<area)-len(data);text=''.join(f'\\{b:02X}' for b in data);ty=f'<{{ [{len(data)} x i8], [{pad} x i8] }}>'
+ (d/'image.ll').write_text(f'@rung4_db_image = constant {ty} <{{ [{len(data)} x i8] c"{text}", [{pad} x i8] zeroinitializer }}>, align 16\n')
+ run([tool+'clang','-O2','-flto','-emit-llvm','-I',HEADER,*fixture_flags(bits,area,len(data),iterations),'-c',fixture,'-o',d/'grover.bc'])
+ run([tool+'clang','-O2','-flto','-emit-llvm','-c',d/'stub.c','-o',d/'stub.bc'])
+ run([tool+'llvm-as',d/'image.ll','-o',d/'image.bc'])
+ run([tool+'llvm-link',d/'grover.bc',d/'stub.bc',d/'image.bc','-o',d/'p.bc'])
+ run([tool+'opt','-passes=lto<O3>','-S',d/'p.bc','-o',d/'post.ll'])
+ run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=400,0,512,8,0','-bennett-out='+str(d/'out'),'-disable-output',d/'post.ll'])
+def tuple_args(obj,entry,values):
+ # Entry arguments, then one step allowance per budget token (§9).
+ tokens=len(json.loads((obj.parent/'build.json').read_text())['budgets'])
+ return ','.join([*map(str,values),*['100000']*tokens])
+def consumer_fixture(major):
+ checks=0;bits=3;n=1<<bits;area=6
+ data=bytes([1,0,0,1,1,0,0,0])+bytes(range(16,48))
+ d=R/f'.tmp/cc-markers/{major}/fixture';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
+ build_fixture(major,d,bits,area,data,1)
+ entries={l['entry'] for l in json.loads((d/'out/launches.json').read_text())}
+ assert entries=={'rung4_tuple','rung4_grover'},entries
+ obj=d/'out/rung4_tuple/launch.bennett';run([REF,'check',obj])
+ found=re.search(r'section layout\n(.*)',obj.read_text());layout=json.loads(found[1])
+ budget=f"10000000,{layout['heap_limit_max']},{1<<layout['S_cells']},8"
+ for x in range(n):
+  for t in (0,1):
+   for e in (0,5,15):
+    out=json.loads(run([REF,'run-program',obj,'rung4_tuple','--args',tuple_args(obj,'rung4_tuple',[x,t,e]),'--budget',budget]).stdout)
+    want=x|((t^(data[x]&1))<<bits)|(e<<(bits+1))
+    assert out['status']=='COMPLETED' and int(out['results'][0]['value'])==want,('tuple',x,t,e,out.get('status'),out.get('results'),want);checks+=1
+ # Repeated oracle calls and the ancilla ladder of the diffusion: 4 row wires, two iterations.
+ bits=4;n=1<<bits
+ data=bytes([0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0])+bytes(16)
+ d=R/f'.tmp/cc-markers/{major}/fixture-ladder';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
+ build_fixture(major,d,bits,area,data,2)
+ obj=d/'out/rung4_grover/launch.bennett';run([REF,'check',obj])
+ layout=json.loads(re.search(r'section layout\n(.*)',obj.read_text())[1])
+ budget=f"10000000,{layout['heap_limit_max']},{1<<layout['S_cells']},8"
+ amps=[1/math.sqrt(n)]*n
+ for _ in range(2):
+  amps=[-v if data[i]&1 else v for i,v in enumerate(amps)]
+  mean=sum(amps)/n;amps=[2*mean-v for v in amps]
+ def outcome(draws):
+  live=list(range(n));result=0
+  for wire,draw in enumerate(draws):
+   zero=sum(amps[i]**2 for i in live if not (i>>wire)&1);total=sum(amps[i]**2 for i in live)
+   bit=0 if draw<zero/total else 1
+   result|=bit<<wire;live=[i for i in live if ((i>>wire)&1)==bit]
+  return result
+ for draws in ([0.5]*4,[0.01]*4,[0.99]*4,[0.1,0.9,0.1,0.9],[0.9,0.1,0.9,0.1]):
+  out=json.loads(run([REF,'run-program',obj,'rung4_grover','--args',tuple_args(obj,'rung4_grover',[]),'--draws',','.join(map(repr,draws)),'--budget',budget]).stdout)
+  assert out['status']=='COMPLETED' and int(out['results'][0]['value'])==outcome(draws),('grover ladder',draws,out.get('status'),out.get('results'),outcome(draws));checks+=1
+ # A real-size image: the launch must stay an object a checker can read. 2^20 bytes is 2^16 chunks.
+ large=bytes((i*37)&255 for i in range(4096))
+ d=R/f'.tmp/cc-markers/{major}/fixture-large';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
+ build_fixture(major,d,3,20,large,1)
+ obj=d/'out/rung4_grover/launch.bennett';run([REF,'check',obj]);text=obj.read_text()
+ chunks=text.count('oracle_call @xor128')
+ assert chunks==2*4096//16,('two qpreps, and only chunks with a set bit',chunks)
+ checks+=1
+ return checks
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();checks=0
  d=R/f'.tmp/cc-markers/{a.major}/program';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
@@ -175,5 +250,6 @@ def main():
  assert marked,'the published image marks nothing'
  for draws in ([0.5,0.5,0.5],[0.0,0.0,0.0],[0.99,0.99,0.99],[0.1,0.9,0.5],[0.9,0.1,0.5],[0.4,0.6,0.2]):
   got=result(value(obj,'grover_fixed',draws=draws));want=grover_outcome(draws);assert got==want,('grover',draws,got,want);checks+=1
+ checks+=consumer_fixture(a.major)
  print(f'cc markers LLVM {a.major}: {checks} checks; grover marked {marked}')
 if __name__=='__main__':raise SystemExit(main())

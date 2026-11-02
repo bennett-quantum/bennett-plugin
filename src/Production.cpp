@@ -1148,17 +1148,41 @@ struct Entry {
     auto &p = *address.atoms.begin();
     auto *g = p.kind == Atom::Ptr && !p.stride && p.object ? dyn_cast<GlobalVariable>(p.object) : nullptr;
     if (!g || !g->isConstant() || !g->hasDefinitiveInitializer() || p.offset < 0) return std::nullopt;
-    auto *data = dyn_cast_or_null<ConstantDataArray>(ReadByteArrayFromGlobal(g, p.offset));
-    std::vector<uint8_t> bytes(n, 0);
-    if (data) {
-      if (data->getNumElements() < n) return std::nullopt;
+    uint64_t size = m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue();
+    if ((uint64_t)p.offset + n > size) return std::nullopt;
+    std::vector<uint8_t> image(size, 0);
+    if (!flatten(g->getInitializer(), 0, image)) return std::nullopt;
+    return std::vector<uint8_t>(image.begin() + p.offset, image.begin() + p.offset + n);
+  }
+  // The little-endian bytes of a pointer-free initialiser; undefined bytes are zero (N7).
+  bool flatten(const Constant *value, uint64_t at, std::vector<uint8_t> &image) {
+    auto &dl = m.getDataLayout();
+    if (isa<ConstantAggregateZero>(value) || isa<UndefValue>(value)) return true;
+    if (auto *data = dyn_cast<ConstantDataSequential>(value)) {
       auto raw = data->getRawDataValues();
-      std::copy_n(raw.bytes_begin(), n, bytes.begin());
-      return bytes;
+      std::copy(raw.bytes_begin(), raw.bytes_end(), image.begin() + at);
+      return dl.isLittleEndian();
     }
-    // ReadByteArrayFromGlobal gives no array for an all-zero or undefined initialiser.
-    auto *value = g->getInitializer();
-    return value->isNullValue() || isa<UndefValue>(value) ? std::optional<std::vector<uint8_t>>(bytes) : std::nullopt;
+    if (auto *n = dyn_cast<ConstantInt>(value)) {
+      unsigned bytes = dl.getTypeStoreSize(n->getType()).getFixedValue();
+      if (!dl.isLittleEndian()) return false;
+      auto bits = n->getValue().zext(bytes * 8);
+      for (unsigned k = 0; k < bytes; ++k) image[at + k] = bits.lshr(k * 8).trunc(8).getZExtValue();
+      return true;
+    }
+    if (auto *record = dyn_cast<ConstantStruct>(value)) {
+      auto *layout = dl.getStructLayout(record->getType());
+      for (unsigned k = 0; k < record->getNumOperands(); ++k)
+        if (!flatten(record->getOperand(k), at + layout->getElementOffset(k), image)) return false;
+      return true;
+    }
+    if (auto *array = dyn_cast<ConstantArray>(value)) {
+      uint64_t stride = dl.getTypeAllocSize(array->getType()->getElementType()).getFixedValue();
+      for (unsigned k = 0; k < array->getNumOperands(); ++k)
+        if (!flatten(array->getOperand(k), at + k * stride, image)) return false;
+      return true;
+    }
+    return false;
   }
   void prepareBytes(CallBase &c, std::string q, uint64_t width, uint64_t n) {
     auto known = constantBytes(c.getArgOperand(1), n);

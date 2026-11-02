@@ -853,7 +853,22 @@ void Analysis::mergeValue(const Value *v,const AV &a) {
   if(values[v].merge(a))touchValue(v);
 }
 // Slot indices of one object, in creation order, as a scan of all slots would visit them.
+void Analysis::seedOnDemand(const Value *object) {
+  if(lazySeeds.empty())return;
+  auto found=lazySeeds.find(object);
+  if(found==lazySeeds.end())return;
+  auto *g=cast<GlobalVariable>(*found);
+  lazySeeds.erase(found);
+  size_t first=slots.size();
+  bool before=changed;
+  seed(const_cast<Constant *>(g->getInitializer()),g,0,g->getValueType());
+  changed=before; // Facts every step was entitled to from the start, not news.
+  for(size_t n=first;n<slots.size();++n) {
+    auto &s=slots[n];slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);indexSlot(n);
+  }
+}
 std::vector<size_t> Analysis::slotsOf(const Value *object) {
+  seedOnDemand(object);
   readObject(object);
   std::vector<size_t> result;
   if(auto it=otherSlots.find(object);it!=otherSlots.end())result=it->second;
@@ -913,6 +928,7 @@ void Analysis::indexSlot(size_t n) {
   } else otherSlots[s.object].push_back(n);
 }
 std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
+  seedOnDemand(a.object);
   readObject(a.object);
   std::vector<size_t> result;
   auto test=[&](size_t n) {budgetTick();if(overlaps(a,slots[n],bytes))result.push_back(n);};
@@ -931,6 +947,7 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto atomAt : p.atoms)
     if (atomAt.kind == Atom::Ptr) {
+      seedOnDemand(atomAt.object);
       // (X,*) denotes one location set whatever offset spelled it (§5.1).
       if(atomAt.stride==-1)atomAt.offset=0;
       const Atom &a=atomAt;
@@ -2402,9 +2419,25 @@ void Analysis::run() {
           }
       }
   }
+  // A large immutable image holds no pointers and only a load or copy can see it, so its
+  // per-byte slots wait for the first read. An N = 2^20 database is 2^25 of them, and only
+  // the marker that names it, which reads no slot, ever touches it (§5.2's seeds, on demand).
+  auto pointerFree=[](Constant *c) {
+    std::function<bool(Constant *)> free=[&](Constant *x) {
+      if(isa<ConstantDataSequential>(x) || isa<ConstantAggregateZero>(x) || isa<ConstantInt>(x))return !x->getType()->isPtrOrPtrVectorTy();
+      if(isa<ConstantStruct>(x) || isa<ConstantArray>(x)) {
+        for(auto &operand:x->operands())if(!free(cast<Constant>(operand)))return false;
+        return true;
+      }
+      return false;
+    };
+    return free(c);
+  };
   for (GlobalVariable &g : M.globals())
-    if (g.hasInitializer())
-      seed(g.getInitializer(), &g, 0, g.getValueType());
+    if (g.hasInitializer()) {
+      if(g.isConstant() && M.getDataLayout().getTypeAllocSize(g.getValueType()).getKnownMinValue()>=4096 && pointerFree(g.getInitializer()))lazySeeds.insert(&g);
+      else seed(g.getInitializer(), &g, 0, g.getValueType());
+    }
   for(size_t n=0;n<slots.size();++n) {
     auto &s=slots[n];slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);indexSlot(n);
   }
