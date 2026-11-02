@@ -1,0 +1,50 @@
+# Push-gate pins (bennett/tools/gate_README.md). Siblings resolve only to these commits.
+schema = 1
+repo = "bennett-plugin"
+tool_sha = "c698ce1c56d33fdae36624b8616d673a8836679a"
+timeout_s = 28800
+
+[env]
+BENNETT_SIBLINGS = "{layout}"
+BENNETT_ARITH_PINNED_ROOT = "{sibling:bennett-arith}/dist"
+BENNETT_ALLOCATOR_PINNED_ROOT = "{sibling:bennett-runtimes}/dist"
+
+[[check]]
+name = "plugin gate"
+argv = ["scripts/gate"]
+
+[siblings."bennett-isa-spec"]
+sha = "ecaaac060c44e317d1181345fa6b8e38c096c099"
+note = "ISA main as gated by the 2026-11-02 push wave"
+
+[[siblings."bennett-isa-spec".build]]
+name = "reference interpreter (debug)"
+cwd = "reference-interpreter"
+argv = ["cargo", "build", "--offline"]
+outputs = ["reference-interpreter/target/debug/bennett-isa-ref"]
+env = { CARGO_BUILD_JOBS = "4" }
+
+[[siblings."bennett-isa-spec".build]]
+name = "reference interpreter (release)"
+cwd = "reference-interpreter"
+argv = ["cargo", "build", "--offline", "--release"]
+outputs = ["reference-interpreter/target/release/bennett-isa-ref"]
+env = { CARGO_BUILD_JOBS = "4" }
+
+[siblings."bennett-dialect-spec"]
+sha = "023f5a771a814270634db3be9cfde88ded69f975"
+note = "the accepted 0.2.10 contract commit named in SPEC_VERSIONS.toml"
+
+[siblings."bennett-arith"]
+sha = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
+note = "commit named in SPEC_VERSIONS.toml [arith]"
+[siblings."bennett-arith".files]
+"dist/llvm18/bennett-arith.bc" = "8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1"
+"dist/llvm23/bennett-arith.bc" = "59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793"
+
+[siblings."bennett-runtimes"]
+sha = "2076014f81164ca75cc8f26cfe0081c2478cfdaf"
+note = "publication hashed by tests/allocator_closure.py and tests/reversible.py"
+[siblings."bennett-runtimes".files]
+"dist/llvm18/bennett-runtimes.bc" = "4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f"
+"dist/llvm23/bennett-runtimes.bc" = "bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e"
