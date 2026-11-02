@@ -76,6 +76,8 @@ public:
   // Identity of this exact set: equal sets have equal uids. 0 is the empty set.
   uint64_t uid() const;
   bool hasRoot() const;
+  // The ROOT atoms of this set, as one shared set (cached with the set).
+  const AtomSet &rootsOnly() const;
   // The pointer atoms of this set, one set per object (nullptr is EXT).
   const std::vector<std::pair<const llvm::Value *, AtomSet>> &byObject() const;
   // The atoms of this set not in another.

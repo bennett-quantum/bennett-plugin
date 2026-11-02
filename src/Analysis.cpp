@@ -41,7 +41,7 @@ cl::opt<unsigned> TraceChangesFrom("bennett-analysis-trace-changes",cl::init(UIN
 cl::opt<bool> EarlyChainClose("bennett-analysis-early-chain-close",cl::init(false),cl::desc("NOT the reference analysis: close offset chains and collapse objects earlier than the spec's K"));
 // A test aid: recompute every incremental PT6 result in full and fail on any difference.
 cl::opt<bool> CheckLoadDelta("bennett-analysis-check-delta",cl::init(false),cl::Hidden,cl::desc("Check each incremental load result against a full PT6 pass"));
-uint64_t loadDeltas=0,loadRebuilds=0;
+uint64_t loadDeltas=0,loadRebuilds=0,rebuildsConstant=0,rebuildsShrink=0;
 struct AnalysisBudget {
   std::chrono::steady_clock::time_point start=std::chrono::steady_clock::now();
   const Instruction *at=nullptr;
@@ -102,6 +102,8 @@ struct AtomSetRep : std::enable_shared_from_this<AtomSetRep> {
   mutable bool grouped=false;
   mutable int rootsKnown=-1;
   mutable std::vector<std::pair<const Value *,AtomSet>> groups;
+  mutable bool rootsGrouped=false,rootsAll=false;
+  mutable AtomSet roots; // Empty when rootsAll: a set of only ROOTs is its own (no ownership cycle).
 };
 namespace {
 struct AtomHash {
@@ -414,6 +416,20 @@ bool AtomSet::hasRoot() const {
     rep->rootsKnown=found;
   }
   return rep->rootsKnown>0;
+}
+const AtomSet &AtomSet::rootsOnly() const {
+  normalise();
+  static const AtomSet none;
+  if(!rep)return none;
+  if(!rep->rootsGrouped) {
+    auto &table=atomTable().atoms;
+    std::vector<uint32_t> ids;
+    for(uint32_t id:rep->ids)if(table[id&IndexMask].kind==Atom::Root)ids.push_back(id);
+    rep->rootsAll=ids.size()==rep->ids.size();
+    if(!rep->rootsAll)rep->roots.rep=internIds(std::move(ids));
+    rep->rootsGrouped=true;
+  }
+  return rep->rootsAll?*this:rep->roots;
 }
 size_t AtomSet::count(const Atom &a) const {
   normalise();
@@ -1136,10 +1152,10 @@ void Analysis::loadPair(const Atom &a, const Slot &s, Type *t, uint64_t size, AV
     r.absorb(s.value);
   else {
     partial = true;
-    if (s.value.atoms.hasRoot())
-      for (auto &b : s.value.atoms)
-        if (b.kind == Atom::Root)
-          r.atoms.insert(b);
+    if (s.value.atoms.hasRoot()) {
+      AV roots;roots.atoms=s.value.atoms.rootsOnly();
+      r.absorb(roots);
+    }
   }
 }
 // The memo's group, against the slots its object changed since the memo's version. False when
@@ -1147,11 +1163,11 @@ void Analysis::loadPair(const Atom &a, const Slot &s, Type *t, uint64_t size, AV
 // constant image's exact bytes decide (that decision can turn as slots grow).
 bool Analysis::loadDelta(LoadMemo &memo, const Value *object, Type *t, uint64_t size) {
   if (!memo.keep.uid()) return false;
-  if (auto *g = dyn_cast<GlobalVariable>(object); g && g->isConstant() && t->isIntegerTy()) return false;
+  if (auto *g = dyn_cast<GlobalVariable>(object); g && g->isConstant() && t->isIntegerTy()) {++rebuildsConstant;return false;}
   auto &log = objectLog[object];
   if (memo.version > log.size()) report_fatal_error("bennett: analysis: load memo ahead of its object");
   std::vector<uint32_t> changed(log.begin() + memo.version, log.end());
-  for (uint32_t entry : changed) if (entry & 0x80000000u) return false;
+  for (uint32_t entry : changed) if (entry & 0x80000000u) {++rebuildsShrink;return false;}
   std::sort(changed.begin(), changed.end());
   changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
   if (!memo.indexed) {
@@ -2646,7 +2662,7 @@ void Analysis::step(Instruction &i) {
 }
 void Analysis::run() {
   BudgetScope scope;
-  loadDeltas=loadRebuilds=0;
+  loadDeltas=loadRebuilds=rebuildsConstant=rebuildsShrink=0;
   extentCache().clear();collapsedObjects().clear();unionMemo().clear();
   if(EarlyChainClose)errs()<<"bennett: analysis: -bennett-analysis-early-chain-close: NOT the reference analysis of dialect §5; every result of this run is labelled so\n";
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
@@ -2890,7 +2906,7 @@ void Analysis::run() {
         if(entry.second.atoms.size()>largest)for(auto &x:entry.second.atoms)pointers+=x.kind!=Atom::Int;
         if(pointers>largest) {largest=pointers;big=entry.first;}
       }
-      errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<", load groups "<<loadDeltas<<" incremental "<<loadRebuilds<<" full\n";
+      errs()<<"bennett: analysis:   collapsed objects "<<collapsedObjects().size()<<", load groups "<<loadDeltas<<" incremental "<<loadRebuilds<<" full ("<<rebuildsConstant<<" constant image, "<<rebuildsShrink<<" widened zero image)\n";
       {
         std::vector<std::pair<double,std::string>> ranked;for(auto &e:opcodeCost)ranked.push_back({e.second.ms,e.first});
         std::sort(ranked.rbegin(),ranked.rend());
