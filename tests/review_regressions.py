@@ -21,7 +21,7 @@ def run(command, timeout=120):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--major', type=int, required=True, choices=(18, 23))
-    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate'))
+    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native'))
     args = parser.parse_args()
     tool = f'/usr/lib/llvm-{args.major}/bin/'
     plugin = ROOT / f'build/libbennett-plugin-{args.major}.so'
@@ -32,6 +32,57 @@ def main():
     rows = []
     failures = []
     for case in args.case or ('shuffle', 'byval', 'global-counter'):
+        if case == 'mixed-native':
+            original = (ROOT / 'tests/probes/review-mixed-native.ll').read_text()
+            for name, body in [('review', original), ('host-fp', original + '''
+define double @native_fp(double %a,double %b) {
+ %sum = fadd double %a,%b
+ ret double %sum
+}
+''')]:
+                directory = work / case / name
+                directory.mkdir(parents=True, exist_ok=True)
+                source = directory / 'input.ll'
+                source.write_text(body)
+                run([*command, '-bennett-out=' + str(directory), source])
+                host = run([tool + 'opt', '-passes=verify', '-S', directory / 'host.bc', '-o', '-']).stdout
+                assert 'load <8 x i1>' in host and 'extractelement <8 x i1>' in host, host
+                if name == 'host-fp':
+                    assert '%sum = fadd double %a, %b' in host and 'call i64 @__bennett_sf_' not in host, host
+                obj = directory / 'top/launch.bennett'
+                run([REF, 'check', obj])
+                result = json.loads(run([REF, 'run-program', obj, 'top', '--args', '37',
+                                         '--budget', '1000,0,0,0', '--reverse']).stdout)
+                assert result['status'] == 'REVERSED' and result['equals_entry'] and result['results'] == [
+                    {'type':'i8','value':'37'}], result
+                rows.append(dict(case=case, name=name, actual=result))
+            directory = work / case / 'device-fp'
+            directory.mkdir(parents=True, exist_ok=True)
+            source = directory / 'input.ll'
+            source.write_text(original.replace('-i64:64-f80:', '-i64:64-i128:128-f80:') + '''
+define double @device_fp(double %x) {
+ %sum = fadd double %x, 2.000000e+00
+ ret double %sum
+}
+!llvm.module.flags = !{!0}
+!0 = !{i32 1, !"bennett.sstack", i64 4096}
+''')
+            run([*command, '-bennett-oracle=device_fp', '-bennett-scalar-shape=IN(64,zext);tgt=64',
+                 '-bennett-scalar-stack=262144', '-bennett-scalar-heap=65536',
+                 '-bennett-out=' + str(directory), source])
+            obj = directory / 'ref.bennett'
+            run([REF, 'check', obj])
+            # The published add closure has over 114k location cells. Its
+            # exercised call chain exceeds 65,536 cells; retain that boundary
+            # and give the successful numerical witness a sufficient stack.
+            numerical_ref = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref'
+            boundary = json.loads(run([numerical_ref, 'run-oracle', obj, 'ref', '--input', '4607182418800017408',
+                                       '--budget', '1000000,65536,65536,128']).stdout)
+            assert boundary['code'] == 3 and boundary['payload'] == 0, boundary
+            result = json.loads(run([numerical_ref, 'run-oracle', obj, 'ref', '--input', '4607182418800017408',
+                                     '--budget', '1000000,65536,262144,128']).stdout)
+            assert result['code'] == 0 and int(result['payload']) == 4613937818241073152, result
+            rows.append(dict(case=case, name='device-fp', actual=result, small_stack=boundary))
         if case == 'dynamic-gate':
             original = (ROOT / 'tests/probes/review-dynamic-gate.ll').read_text()
             directory = work / case
@@ -57,6 +108,30 @@ def main():
                 result = json.loads(run([REF, 'run-program', obj, 'top', '--args', inputs, '--budget', '1000,0,0,0']).stdout)
                 assert result['status'] == 'FAILED', result
                 rows.append(dict(case=case, invalid=inputs, actual=result))
+            measured = directory / 'measured.ll'
+            measured.write_text('''target datalayout = "e-p:64:64"
+declare ptr @__bennett_qalloc(i64,i64)
+declare void @__bennett_qfree(ptr)
+declare void @__bennett_gate(i32,ptr,i64)
+declare i1 @__bennett_measure(ptr,i64)
+define i1 @top(i64 %index) {
+ %q = call ptr @__bennett_qalloc(i64 0,i64 2)
+ call void @__bennett_gate(i32 1,ptr %q,i64 %index)
+ %value = call i1 @__bennett_measure(ptr %q,i64 %index)
+ call void @__bennett_gate(i32 1,ptr %q,i64 %index)
+ call void @__bennett_qfree(ptr %q)
+ ret i1 %value
+}
+''')
+            dest = directory / 'measured'
+            run([*command, '-bennett-out=' + str(dest), measured])
+            obj = dest / 'top/launch.bennett'
+            run([REF, 'check', obj])
+            for index in (0,1):
+                result = json.loads(run([REF, 'run-program', obj, 'top', '--args', str(index),
+                                         '--budget', '1000,0,0,0']).stdout)
+                assert result['status'] == 'COMPLETED' and result['results'] == [{'type':'i1','value':'1'}], result
+                rows.append(dict(case=case, measurement_index=index, actual=result))
         if case == 'control':
             original = (ROOT / 'tests/probes/review-control.ll').read_text()
             declaration = 'declare void @__bennett_gate(i32, ptr, i64)\n'

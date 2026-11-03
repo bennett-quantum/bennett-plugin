@@ -686,6 +686,14 @@ std::string scalarGlobalImage(GlobalVariable &g, const std::map<const GlobalVari
 }
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack, unsigned autoSnapshot) {
+  // This module is the private device clone. Retain symbols/addresses for
+  // native-only definitions but do not send their bodies through N0.
+  {
+    Analysis selection(m,&f);selection.run();
+    selection.releaseTransferGraphs();
+    for(auto &g:m)if(!g.isDeclaration() && selection.tiers[&g].empty())g.deleteBody();
+    for(auto &g:m)if(!g.isDeclaration() && selection.tiers[&g]==std::set<std::string>{"H"})g.deleteBody();
+  }
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
   if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));
   for(auto &g:m)if(!g.isDeclaration())normaliseFP(g);

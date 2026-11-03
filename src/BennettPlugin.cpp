@@ -317,7 +317,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       return PreservedAnalyses::all();
     }
     if (NormaliseOnly || Comparison) {
-      if(Comparison || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m);
+      if(Comparison || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m,nullptr,false,true);
       if(!Comparison)normaliseWideABI(m);
       for (Function &f : m) if (!f.isDeclaration() && !f.hasFnAttribute("bennett.native.comparison.runtime")) normaliseScalar(f,!Comparison);
       for(auto &f:m)if(!f.use_empty())materialiseIntegerRuntime(f);
@@ -326,7 +326,8 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       errs() << "bennett: scalar normalisation test mode; full N0-N35/V1-V16 pending M2\n";
       return PreservedAnalyses::none();
     }
-    if(!AnalysisOnly || std::getenv("BENNETT_ARITH_BITCODE"))linkArith(m);
+    if(!AnalysisOnly || std::getenv("BENNETT_ARITH_BITCODE"))
+      linkArith(m,Tier.empty()?m.getFunction(Oracle):m.getFunction(ProgramEntry),!Tier.empty());
     if(!Tier.empty() && Tier!="reversible")fail("input","§19.2 expected tier reversible");
     if(Tier.empty() && (!ProgramEntry.empty() || !Disk.empty()))fail("input","§19.2 entry/disk require reversible tier");
     auto *rEntry=Tier.empty()?nullptr:m.getFunction(ProgramEntry);

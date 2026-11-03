@@ -2701,7 +2701,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     fail("output", ec.message());
   checkComparisonMaterialisation(*device);
   WriteBitcodeToFile(*device, bc);
-  for(auto &f:m)if(!f.isDeclaration())normaliseFP(f);
+  for(auto &f:m)if(!f.isDeclaration() && (a.tiers[&f].count("CC") || a.tiers[&f].count("R") || a.tiers[&f].count("L")))normaliseFP(f);
   for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i))if(auto *g=c->getCalledFunction())requireSoftFloat(*g);
   raw_fd_ostream host(out.str() + "/host.bc", ec);
   if (ec)

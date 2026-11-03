@@ -27,7 +27,7 @@ static std::string format(Type *t) {
 }
 static Type *carrier(Type *t) {return IntegerType::get(t->getContext(),t->getPrimitiveSizeInBits());}
 // No numerical implementation lives here. This is the published bitcode edge.
-void linkArith(Module &m) {
+void linkArith(Module &m,Function *entry,bool reversible,bool all) {
   auto *overridePath=std::getenv("BENNETT_ARITH_BITCODE");
   std::string pinnedPath;
   if(auto *root=std::getenv("BENNETT_ARITH_PINNED_ROOT"))
@@ -37,12 +37,23 @@ void linkArith(Module &m) {
   if(!m.getModuleFlag("bennett.arith.bitcode.sha256")) {
   // Publish only the required closure. Discover N9/N32/N33 declarations on
   // a private source clone, then let LLVM's binary linker follow dependencies.
-  auto probe=CloneModule(m);
-  for(auto &f:*probe)if(!f.isDeclaration())normaliseScalar(f,false);
-  bool needed=false;
-  for(auto &f:*probe)if(f.isDeclaration() && !f.use_empty() && f.getName().starts_with("__bennett_sf_")) {
-    m.getOrInsertFunction(f.getName(),f.getFunctionType());needed=true;
+  std::set<std::string> selected;
+  if(all)for(auto &f:m)selected.insert(f.getName().str());
+  else {
+    // Preliminary reachability selects the device variants to probe. The
+    // authoritative S2 run follows library linkage and freezes no early verdict.
+    Analysis discovery(m,entry,reversible);discovery.run();
+    for(auto &f:m)for(auto tier:{"CC","R","L"})
+      if(discovery.tiers[&f].count(tier))selected.insert(f.getName().str());
   }
+  auto probe=CloneModule(m);
+  for(auto &f:*probe)if(!f.isDeclaration() && selected.count(f.getName().str()))normaliseScalar(f,false);
+  bool needed=false;
+  for(auto &f:*probe)if(selected.count(f.getName().str()))for(auto &i:instructions(f))
+    if(auto *call=dyn_cast<CallBase>(&i))if(auto *g=call->getCalledFunction();
+        g && g->isDeclaration() && g->getName().starts_with("__bennett_sf_")) {
+      m.getOrInsertFunction(g->getName(),g->getFunctionType());needed=true;
+    }
   if(!needed)return;
   } // Require individual definitions at production closure collection.
   auto bytes=MemoryBuffer::getFile(path);
