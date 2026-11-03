@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Production CC launch acceptance, independent ISA check and launch execution."""
 import argparse,hashlib,json,os,re,shutil,subprocess
-from contracts import ROOT as R,DIALECT,SIBLINGS,dialect_text
+from contracts import ROOT as R,DIALECT,SIBLINGS,PIN,dialect_text
 REF=SIBLINGS/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
 # Host allowance only: compiler/proof subprocesses can exceed a minute on the
 # shared host. ISA budgets remain explicit in each command and fixture.
 def run(args):return subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=600)
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',required=True,type=int);a=p.parse_args();d=R/f'.tmp/production/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
- (d/'bennett_markers.h').write_text(subprocess.check_output(['git','-C',str(DIALECT),'show','023f5a7:spec/bennett_markers.h'],text=True))
+ (d/'bennett_markers.h').write_text(subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/bennett_markers.h'],text=True))
  fixture=re.search(r'```isa object=inc8\n(.*?)```',dialect_text(),re.S)[1].encode()
  report={'major':a.major,'cases':[]}
  for x in (0,7,255):
