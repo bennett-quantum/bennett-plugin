@@ -362,6 +362,51 @@ struct Entry {
     for(auto &field:fields(v->getType()))out.push_back(fresh(fieldType(field.type)));
     tuples[v]=out;return out;
   }
+  struct CallArguments {
+    std::vector<std::string> values, copies;
+  };
+  CallArguments callArguments(CallBase &call) {
+    CallArguments result;
+    for(unsigned k=0;k<call.arg_size();++k) {
+      auto *arg=call.getArgOperand(k);
+      auto *copyType=call.getParamByValType(k);
+      if(!copyType) {
+        auto values=operands(arg);
+        result.values.insert(result.values.end(),values.begin(),values.end());
+        continue;
+      }
+      // N25: each byval argument gets independent caller-owned storage.
+      // Copy bytes, including padding, without changing source endianness.
+      auto bytes=m.getDataLayout().getTypeAllocSize(copyType).getFixedValue();
+      auto length=number(bytes),copy=emit("ptr","alloc "+length);
+      result.values.push_back(copy);result.copies.push_back(copy);
+      allocatedBytes+=std::max(uint64_t(1),bytes);recordAllocation(copy,length);
+      if(!bytes)continue;
+      auto pointerType="i"+std::to_string(m.getDataLayout().getPointerSizeInBits());
+      auto source=emit(pointerType,"ptrtoint."+pointerType+" "+operand(arg));
+      auto target=emit(pointerType,"ptrtoint."+pointerType+" "+copy);
+      auto zero=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),0));
+      auto one=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),1));
+      auto limit=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),bytes));
+      auto index=fresh(pointerType),id=std::to_string(dispatchBlock++);
+      auto loop="byval"+id,done=loop+"done";
+      rows.push_back("br ^"+loop+"("+zero+")");
+      rows.push_back("^"+loop+"("+index+":"+pointerType+"):");
+      auto from=emit("ptr","inttoptr "+emit(pointerType,"add "+source+" "+index));
+      auto to=emit("ptr","inttoptr "+emit(pointerType,"add "+target+" "+index));
+      auto value=emit("i8","load.i8 "+from);rows.push_back("store.i8 "+to+" "+value);
+      auto next=emit(pointerType,"add "+index+" "+one);
+      auto more=emit("i1","icmp.ult "+next+" "+limit);
+      rows.push_back("br "+more+" ^"+loop+"("+next+") ^"+done+"()");
+      rows.push_back("^"+done+"():");
+    }
+    return result;
+  }
+  void releaseCallArguments(const CallArguments &args) {
+    for(auto it=args.copies.rbegin();it!=args.copies.rend();++it) {
+      rows.push_back("free "+*it);recordFree(*it);
+    }
+  }
   std::string fieldPointer(const std::string &p,uint64_t offset) {
     if(!offset)return p;
     auto t="i"+std::to_string(m.getDataLayout().getPointerSizeInBits());
@@ -1237,20 +1282,20 @@ struct Entry {
             for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
               if(ccNames->count(candidate))candidates[functionAddress(candidate)]=candidate;
             for(auto &candidate:candidates)keys.push_back(candidate.first);
-            std::vector<std::string> args;for(auto &arg:c->args()) {auto vs=operands(arg);args.insert(args.end(),vs.begin(),vs.end());}
+            auto args=callArguments(*c);
             auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
             auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
             compareTree(value,pw,keys,[&](uint64_t key) {
-              auto call="call @"+ccNames->at(candidates.at(key))+(args.empty()?"":" "+join(args," "));
+              auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
               std::vector<std::string> values;
               if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
               rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
-              propagateExit();rows.push_back("br ^"+done+"("+join(values)+")");
+              rows.push_back("br ^"+done+"("+join(values)+")");
             },bad);
             rows.push_back("^"+bad+"():");rows.push_back("trap");
             std::vector<std::string> bindings;
             if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
-            rows.push_back("^"+done+"("+join(bindings)+"):");usesCCCalls=true;continue;
+            rows.push_back("^"+done+"("+join(bindings)+"):");releaseCallArguments(args);propagateExit();usesCCCalls=true;continue;
           }
           if (!g)
             unimplemented("§17.4 indirect CC call", 1, c);
@@ -1322,12 +1367,11 @@ struct Entry {
             // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
             // ISA calls bind typed operands, keep a callee environment and
             // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
-            std::vector<std::string> args;
-            for(auto &arg:c->args()) {auto vs=operands(arg);args.insert(args.end(),vs.begin(),vs.end());}
-            auto call="call @"+ccNames->at(g)+(args.empty()?"":" "+join(args," "));
+            auto args=callArguments(*c);
+            auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
             if(c->getType()->isVoidTy())rows.push_back(call);
             else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
-            propagateExit();
+            releaseCallArguments(args);propagateExit();
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {

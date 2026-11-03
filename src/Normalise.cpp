@@ -350,7 +350,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
       if(left.empty() || right.empty())continue;
       SmallVector<Value *> result;
       for(int lane:shuffle->getShuffleMask())
-        result.push_back(lane<0?Constant::getNullValue(cast<VectorType>(shuffle->getType())->getElementType()):
+        result.push_back(lane<0?left[0]:
             unsigned(lane)<left.size()?left[lane]:right[lane-left.size()]);
       laneValues[i]=result;deadVectors.push_back(i);continue;
     }
