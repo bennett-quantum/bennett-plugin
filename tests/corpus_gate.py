@@ -64,7 +64,7 @@ def softfloat_native(bc,major,baseline,dest):
  linked=dest/'softfloat.bc'
  rc,_,err=run([f'/usr/lib/llvm-{major}/bin/opt',
   '-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),
-  '-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',bc,'-o',linked])
+  '-passes=bennett','-bennett-dialect=0.2.13','-bennett-comparison',bc,'-o',linked])
  if rc:return {'error':err.strip()}
  return native(linked,major,baseline,dest)
 def cell(task):
@@ -76,7 +76,7 @@ def cell(task):
   src=dest/'input.ll';rc,_,err=run([tool/'clang','-O0','-Xclang','-disable-O0-optnone','-emit-llvm','-S',case,'-o',src])
   if rc:row['diagnostic']=err;row['properties']['L1']='frontend failed';return row
  combined=dest/'combined.bc';report=dest/'analysis.json'
- rc,out,err=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes='+pipe+',bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(report),src,'-o',combined],timeout=60)
+ rc,out,err=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes='+pipe+',bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(report),src,'-o',combined],timeout=60)
  row['plugin_exit']=rc;row['diagnostic']=err[-1800:]
  if stem=='c-pure-attr-wrapper' and rc and 'BD-E-EFFECT-LIE' in err:
   row['properties']['L2']=True;row['agree']=True;row['expected_diagnostic']='§3.8 source-effect lie (EXPECT: probe)';return row
@@ -92,7 +92,7 @@ def cell(task):
  # Region keys must be name-independent; compare mergefunc twins in the same
  # materialised module. Cross-pipeline semantic identity still needs full map.
  stable=dest/'stable.json'
- rc2,_,err2=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(stable),combined,'-disable-output'])
+ rc2,_,err2=run([tool/'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-legality-audit','-bennett-report='+str(stable),combined,'-disable-output'])
  def identities(d):return [(r['marker'],r['operand'],sorted({c['key'] for c in r['candidates']})) for r in d['regions']]
  row['properties']['L4']=False if rc2 else identities(data)==identities(json.loads(stable.read_text()))
  row['identity_scope']='content identity under plugin; stock-pipeline equivalence pending full materialisation' 

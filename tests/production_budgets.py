@@ -13,7 +13,7 @@ def main():
  cases=[]
  def lower(name,t,source=src):
   dest=d/name;dest.mkdir();tablefile=dest/'table.json';tablefile.write_text(json.dumps(t,sort_keys=True,separators=(',',':')))
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budgets='+str(tablefile),'-bennett-out='+str(dest/'out'),'-disable-output',source]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budgets='+str(tablefile),'-bennett-out='+str(dest/'out'),'-disable-output',source]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
   if z.returncode:return None
   row['build']=json.loads((dest/'out/top/build.json').read_text());obj=dest/'out/top/launch.bennett';c=run([REF,'check',obj]);row['check']=c.returncode==0;row['sha256']=hashlib.sha256(obj.read_bytes()).hexdigest()
   b=row['build']['budgets'];steps=[x['steps'] for x in b]

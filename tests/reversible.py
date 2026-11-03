@@ -16,7 +16,7 @@ def main():
  for case,expected,status in [('r-console','68690a','0'),('r-start-exit','780a','3'),('r-callback','78','0'),('r-asm','78','0')]:
   d=R/f'.tmp/reversible/{m}/{case}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
   source=R/f'tests/probes/{case}.ll'
-  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','--bennett-tier=reversible','--bennett-entry=main',source]
+  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','--bennett-tier=reversible','--bennett-entry=main',source]
   run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output'])
   recognised=json.loads((d/'recognised.json').read_text());assert 'R' in next(f['tiers'] for f in recognised['functions'] if f['name']=='main'),recognised
   run([*base,'-bennett-budget-default=100000,131072,4096,32,65536','-bennett-out='+str(d/'out'),'-disable-output'],3)
@@ -38,14 +38,14 @@ def main():
    value=json.loads(run([REF,'run-program',obj,'main','--budget','1000000,131072,4096,32','--replies',replies]).stdout)
    assert value['status']=='FAILED' and value['console_hex']=='',value
    assert 'unlisted-op' in (d/'out/main/build.json').read_text()
-   assert any(e['source']=='dialect-0.2.10:N31' and 'unlisted-op' in e['reason'] for e in json.loads((d/'out/main/coverage.json').read_text())['entries'])
+   assert any(e['source']=='dialect-0.2.13:N31' and 'unlisted-op' in e['reason'] for e in json.loads((d/'out/main/coverage.json').read_text())['entries'])
    replies.write_text(json.dumps([dict(service='bennett.argv',payload='00'*20,reply='00'*20)]))
   rows.append(dict(case=case,ok=True,source_sha256=sha(source),recognised_sha256=sha(d/'recognised.json'),materialised_sha256=sha(d/'out/device.bc'),materialised_verified=True,object_sha256=sha(obj),runs=executions))
  # §17.6: budget checks precede each source effect and the final return.
  for limit,prefix in [(0,''),(1,'78'),(2,'78')]:
   d=R/f'.tmp/reversible/{m}/budget-{limit}';d.mkdir(parents=True,exist_ok=True)
   source=R/'tests/probes/r-budget.ll'
-  run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','--bennett-tier=reversible','--bennett-entry=main',source,f'-bennett-budget-default={limit},131072,4096,32,65536','-bennett-out='+str(d/'out'),'-disable-output'],3)
+  run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','--bennett-tier=reversible','--bennett-entry=main',source,f'-bennett-budget-default={limit},131072,4096,32,65536','-bennett-out='+str(d/'out'),'-disable-output'],3)
   obj=d/'out/main/launch.bennett';run([REF,'check',obj])
   value=json.loads(run([REF,'run-program',obj,'main','--budget','1000000,131072,4096,32','--replies',replies]).stdout)
   assert value['console_hex']==prefix,value
@@ -62,7 +62,7 @@ def main():
  run([tool+'clang','--target=x86_64-unknown-linux-musl','--sysroot='+str(sysroot),'-nostdinc','-isystem',sysroot/'include','-O2','-flto','-emit-llvm','-c',source,'-o',d/'input.bc'])
  run([tool+'llvm-link',d/'input.bc',runtime,arith,'--only-needed','-o',d/'linked.bc'])
  run([tool+'opt','-passes=lto<O3>',d/'linked.bc','-o',d/'postlink.bc'])
- base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','--bennett-tier=reversible','--bennett-entry=main',d/'postlink.bc']
+ base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','--bennett-tier=reversible','--bennett-entry=main',d/'postlink.bc']
  started=time.monotonic();run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output']);seconds=time.monotonic()-started
  assert seconds<20, seconds
  z=run([*base,'-bennett-report='+str(d/'production-recognised.json'),'-bennett-out='+str(d/'out'),'-disable-output'],3)

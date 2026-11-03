@@ -1,11 +1,11 @@
 status = "milestone-1-in-progress"
-dialect = "0.2.10"
+dialect = "0.2.13"
 isa = "0.8"
 [specs]
-"bennett-dialect-spec" = "0.2.10"
+"bennett-dialect-spec" = "0.2.13"
 "bennett-isa-spec" = "0.8"
 [commits]
-"bennett-dialect-spec" = "023f5a771a814270634db3be9cfde88ded69f975"
+"bennett-dialect-spec" = "95a4b8d06933018a07fef3516296a25fd582fcde"
 [arith]
 commit = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
 llvm18_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc"

@@ -174,7 +174,7 @@ def main():
     latest = {
         'name': a.name, 'date': a.date, 'commits': a.commits.split(','), 'code_head': head,
         'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
-        'dialect': '0.2.10', 'dialect_commit': PIN, 'isa': '0.8',
+        'dialect': '0.2.13', 'dialect_commit': PIN, 'isa': '0.8',
         'arith': __import__('tomllib').loads((R/'SPEC_VERSIONS.toml').read_text())['arith'],
         'arith_gate_paths': {str(m):str(__import__('contracts').arith_path(m)) for m in MAJORS},
         'allocator_gate_root': os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT'),

@@ -68,7 +68,7 @@ def execute(major,d):
  fixtures=dict(re.findall(r'```isa object=([^\n ]+)\n(.*?)```',dialect_text(),re.S))
  for name,src,inputs,golden in cases():
   dest=d/name;shutil.rmtree(dest,ignore_errors=True);dest.mkdir();ll=dest/'input.ll';ll.write_text(src);out=dest/'out'
-  z=run([f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=1000,0,128,8,0','-bennett-out='+str(out),'-disable-output',ll])
+  z=run([f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budget-default=1000,0,128,8,0','-bennett-out='+str(out),'-disable-output',ll])
   row={'name':name,'exit':z.returncode,'diagnostic':z.stderr,'runs':[]};result.append(row)
   if z.returncode:continue
   obj=out/'top/launch.bennett';z=run([REF,'check',obj]);row['check']=z.returncode==0;row['check_output']=z.stdout+z.stderr

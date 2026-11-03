@@ -75,7 +75,7 @@ def main():
    if '@'+fn in body:body+='\ndeclare '+sig+'\n'
   body+='\n!llvm.module.flags = !{!0}\n!0 = !{i32 1, !"bennett.sstack", i64 128}\n';src=d/'input.ll';src.write_text(body)
   width=16 if name=='dynamic-boundary' else 8
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=f',f'-bennett-scalar-shape=;tgt={width}','-bennett-scalar-stack=4096','-bennett-scalar-heap=128','-bennett-out='+str(d),'-disable-output',src]);row={'name':name,'lowered':z.returncode==0,'diagnostic':z.stderr};rows.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=f',f'-bennett-scalar-shape=;tgt={width}','-bennett-scalar-stack=4096','-bennett-scalar-heap=128','-bennett-out='+str(d),'-disable-output',src]);row={'name':name,'lowered':z.returncode==0,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:continue
   obj=d/'ref.bennett';z=run([REF,'check',obj]);row['check']=z.returncode==0;row['check_output']=z.stdout+z.stderr
   z=run([REF,'run-oracle',obj,'ref','--input','','--budget','100000,128,4096,16']);row['output']=z.stdout+z.stderr

@@ -30,7 +30,7 @@ def main():
     source = R / 'tests/probes/native-layout.ll'
     out = d / 'out'
     producer = [tool + 'opt', '-load-pass-plugin=' + str(plugin), '-passes=bennett',
-                '-bennett-dialect=0.2.10', '-bennett-budget-default=1000,4096,128,8,0']
+                '-bennett-dialect=0.2.13', '-bennett-budget-default=1000,4096,128,8,0']
     run([*producer, '-bennett-out=' + str(out), source, '-disable-output'])
     native, report = d / 'native.bc', d / 'native.json'
     run([tool + 'opt', '-load-pass-plugin=' + str(plugin),

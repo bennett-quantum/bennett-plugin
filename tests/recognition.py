@@ -24,7 +24,7 @@ def main():
  with tempfile.TemporaryDirectory(dir=R/'.tmp') as t:
   for name,body,want in cases:
    f=Path(t)/(name+'.ll'); f.write_text(body); report=Path(t)/'report.json'
-   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
+   cmd=[str(tool),'-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-closed-unit','-bennett-report='+str(report),'-disable-output',str(f)]
    try:x=subprocess.run(cmd,capture_output=True,text=True,errors="replace",timeout=60)
    except subprocess.TimeoutExpired:
     failures.append((name,want,124,'timeout'));continue

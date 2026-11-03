@@ -44,7 +44,7 @@ def main():
 
     output = directory / 'out'
     run([tool + 'opt', '-load-pass-plugin=' + str(plugin), '-passes=bennett',
-         '-bennett-dialect=0.2.10', '-bennett-budget-default=1000,128,128,8,0',
+         '-bennett-dialect=0.2.13', '-bennett-budget-default=1000,128,128,8,0',
          '-bennett-out=' + str(output), '-disable-output',
          R / 'tests/probes/native-comparison.ll'])
     materialised = output / 'device.bc'

@@ -1,6 +1,6 @@
 # Building and testing
 
-The source tree targets LLVM **18 and 23**, dialect **0.2.10** (023f5a7), ISA **0.8**.
+The source tree targets LLVM **18 and 23**, dialect **0.2.13** (95a4b8d), ISA **0.8**.
 Builds and tests are offline and headless. All scripts unset DISPLAY,
 WAYLAND_DISPLAY, DBUS_SESSION_BUS_ADDRESS and BROWSER and use this repo's `.tmp`.
 No LLVM graphical view pass is used.
@@ -19,12 +19,12 @@ the third pass (2026-10-31); bp-ahz is closed. The fallback remains available.
 
 ```
 /usr/lib/llvm-18/bin/opt -load-pass-plugin=build/libbennett-plugin-18.so \
-  -passes='lto<O3>,bennett' -bennett-dialect=0.2.10 -bennett-out=.tmp/out input.bc -o host.bc
+  -passes='lto<O3>,bennett' -bennett-dialect=0.2.13 -bennett-out=.tmp/out input.bc -o host.bc
 ```
 
 The plugin registers only an explicit module pass, with no front-end/pre-link
 extension callback. `-bennett-pre-link` makes an explicit pre-link invocation inert,
-including version checks. Identity is `bennett`, `dialect-0.2.10;isa-0.8`.
+including version checks. Identity is `bennett`, `dialect-0.2.13;isa-0.8`.
 
 Development interfaces (no whole-program production conformance claim):
 
@@ -124,3 +124,5 @@ env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR=
 `scripts/record-verification.py` records the actual artefacts after a successful
 M1c run with `.tmp/m1c-pre-push.exit` written by its runner; it asserts the gate's
 plugin hashes, accepted pin and all expected checks before updating verification.json.
+
+The accepted dialect pin is 95a4b8d06933018a07fef3516296a25fd582fcde. The separately versioned lifting map remains 0.2.9, normaliser 0.2.8 and ISA/launch 0.8. Existing bennett.fault/argv service declarations retain their 0.2.10 schema version; this adoption changes compatibility guards and reporting, without inventing a service amendment. Arithmetic/runtime publication re-pins remain explicit follow-up work.

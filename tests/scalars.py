@@ -34,7 +34,7 @@ def main():
   stack=re.search(r'stack (?:max |max=|)(\d+)',maps.get(name,''))
   if not stack:stack=re.search(r'stack\s+(\d+)',maps.get(name,''))
   cells=int(stack[1]) if stack else (64 if name=='entry-stack' else 32)
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+re.sub(r'MEM_IN\((\d+)\)',lambda m:'MEM_IN('+str(1<<int(m[1]))+')',fields['desc']),'-bennett-scalar-stack='+str(cells),'-bennett-scalar-heap='+str(int(re.search(r'heap_limit_max=(\d+)',maps.get(name,''))[1]) if re.search(r'heap_limit_max=(\d+)',maps.get(name,'')) else (64 if name=='entry-stack' else 0)),'-bennett-out='+str(dest),'-disable-output',str(src)]
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle='+fields['region'][1:],'-bennett-scalar-shape='+re.sub(r'MEM_IN\((\d+)\)',lambda m:'MEM_IN('+str(1<<int(m[1]))+')',fields['desc']),'-bennett-scalar-stack='+str(cells),'-bennett-scalar-heap='+str(int(re.search(r'heap_limit_max=(\d+)',maps.get(name,''))[1]) if re.search(r'heap_limit_max=(\d+)',maps.get(name,'')) else (64 if name=='entry-stack' else 0)),'-bennett-out='+str(dest),'-disable-output',str(src)]
   (dest/'ref.bennett').unlink(missing_ok=True)
   x=run(cmd);row={'name':name,'lowered':x.returncode==0}
   if x.returncode:
@@ -68,7 +68,7 @@ def main():
  cdir=R/f'.tmp/scalars/{a.major}/c-inc8';cdir.mkdir(parents=True,exist_ok=True)
  csrc=cdir/'inc8.c';csrc.write_text('unsigned char inc8(unsigned char x) { return (unsigned char)(x + 1); }\n')
  cll=cdir/'inc8.ll';cc=run([f'/usr/lib/llvm-{a.major}/bin/clang','-O3','-emit-llvm','-S',csrc,'-o',cll])
- lower=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=default<O3>,bennett','-bennett-dialect=0.2.10','-bennett-oracle=inc8','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-scalar-stack=7','-bennett-out='+str(cdir),'-disable-output',cll]) if cc.returncode==0 else cc
+ lower=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=default<O3>,bennett','-bennett-dialect=0.2.13','-bennett-oracle=inc8','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-scalar-stack=7','-bennett-out='+str(cdir),'-disable-output',cll]) if cc.returncode==0 else cc
  c_ok=lower.returncode==0 and (cdir/'ref.bennett').read_bytes()==objects['inc8'].encode()
  report={'major':a.major,'c_inc8_equal':c_ok,'objects':results,'deferred':[x['name'] for x in results if x.get('deferred')], 'passed':sum(x.get('check',False) and x.get('fixture_equal',False) and x.get('hash_fixture_equal',False) and all(y['ok'] for y in x.get('runs',[])) for x in results)}
  (R/f'.tmp/scalars-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))

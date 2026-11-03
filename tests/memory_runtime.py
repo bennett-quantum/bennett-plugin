@@ -16,7 +16,7 @@ if a.major==23:
  source.append('declare void @llvm.experimental.memset.pattern.p0.i16.i32(ptr,i16,i32,i1 immarg)\ndefine void @pattern(ptr %d,i16 %v,i32 %n) { call void @llvm.experimental.memset.pattern.p0.i16.i32(ptr %d,i16 %v,i32 %n,i1 false)\n ret void }')
 source.append('declare void @__bennett_rt_memcpy(ptr,ptr,i64)\ndefine void @copy_helper(ptr %d,ptr %s,i8 %v,i32 %n) { %len = zext i32 %n to i64\n call void @__bennett_rt_memcpy(ptr %d,ptr %s,i64 %len)\n ret void }');cases.append(('copy_helper',False,False))
 src=d/'in.ll';src.write_text('\n'.join(source));out=d/'out.ll'
-run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',src,'-o',out]);assert not re.search('call void @llvm.',out.read_text())
+run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-normalise-only','-S',src,'-o',out]);assert not re.search('call void @llvm.',out.read_text())
 so=d/'memory.so';run([tool+'clang','-shared','-fPIC','-O0',out,'-o',so]);lib=ctypes.CDLL(str(so))
 for name,fill,inline in cases:
  fn=getattr(lib,name);fn.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_uint8,ctypes.c_uint32]
@@ -42,7 +42,7 @@ define internal i8 @f() {{{{
  %read = getelementptr i8,ptr @data,i64 4
  %r = load i8,ptr %read,align 1
  ret i8 %r }}}}'''.replace('{{','{').replace('}}','}'))
-  run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=f','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-scalar-shape=;tgt=8','-bennett-out='+str(case),'-disable-output',src]);obj=case/'ref.bennett';run([REF,'check',obj])
+  run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=f','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-scalar-shape=;tgt=8','-bennett-out='+str(case),'-disable-output',src]);obj=case/'ref.bennett';run([REF,'check',obj])
   bad=dest+length>16 or (not fill and start+length>16)
   data=json.loads(run([REF,'run-oracle',obj,'ref','--input','','--budget','100000,4096,4096,128']).stdout)
   if bad:assert data['code']==7,data
@@ -60,10 +60,10 @@ define internal i8 @f() {{ %p = call ptr @__bennett_rt_ss_push(i64 1,i64 1)
  ret i8 7 }}
 !llvm.module.flags = !{{!0}}
 !0 = !{{i32 1,!"bennett.sstack",i64 128}}''')
- run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=f','-bennett-scalar-shape=;tgt=8','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(case),'-disable-output',src]);obj=case/'ref.bennett';run([REF,'check',obj]);data=json.loads(run([REF,'run-oracle',obj,'ref','--input','','--budget','100000,4096,4096,128']).stdout);assert data['code']==(0 if zero else 7),data;rows.append(case.name+'/ISA-lifetime')
+ run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=f','-bennett-scalar-shape=;tgt=8','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(case),'-disable-output',src]);obj=case/'ref.bennett';run([REF,'check',obj]);data=json.loads(run([REF,'run-oracle',obj,'ref','--input','','--budget','100000,4096,4096,128']).stdout);assert data['code']==(0 if zero else 7),data;rows.append(case.name+'/ISA-lifetime')
 # Helpers and referenced globals participate in the key; unrelated globals do not.
 def key(body):
- src=d/'key.ll';rep=d/'key.json';src.write_text(body+'\ndeclare void @__bennett_oracle(ptr,ptr,ptr)\ndefine void @host() { call void @__bennett_oracle(ptr @f,ptr null,ptr null)\n ret void }');run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',src]);return json.loads(rep.read_text())['regions'][0]['candidates'][0]['key']
+ src=d/'key.ll';rep=d/'key.json';src.write_text(body+'\ndeclare void @__bennett_oracle(ptr,ptr,ptr)\ndefine void @host() { call void @__bennett_oracle(ptr @f,ptr null,ptr null)\n ret void }');run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',src]);return json.loads(rep.read_text())['regions'][0]['candidates'][0]['key']
 body='declare void @__bennett_rt_memset(ptr,i8,i64)\ndefine internal i8 @f(ptr %p) { call void @__bennett_rt_memset(ptr %p,i8 42,i64 1)\n ret i8 0 }'
 linked='@seed = internal global i8 VALUE\ndefine void @__bennett_rt_memset(ptr %p,i8 %v,i64 %n) { %x = load i8,ptr @seed\n store i8 %x,ptr %p\n ret void }'
 assert key(body)!=key(body.replace('declare void @__bennett_rt_memset(ptr,i8,i64)',linked.replace('VALUE','7')))

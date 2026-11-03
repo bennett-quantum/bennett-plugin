@@ -91,7 +91,7 @@ def main():
    call='call void @__bennett_inplace(ptr @f, ptr @g, ptr null, ptr %desc)'
    source=source.replace(call,call+'\n %bit = call i1 @__bennett_measure(ptr %x, i64 0)\n %observed = zext i1 %bit to i8',1)+'\ndeclare i1 @__bennett_measure(ptr, i64)\n'
   dest=d/name;shutil.rmtree(dest,ignore_errors=True);dest.mkdir();ll=dest/'input.ll';ll.write_text(source);out=dest/'out'
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-scalar-stack=128','-bennett-budget-default='+('4' if name=='inplace-small-budget' else '1000')+',32,128,8,0','-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-scalar-stack=128','-bennett-budget-default='+('4' if name=='inplace-small-budget' else '1000')+',32,128,8,0','-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
   if name in ['inplace-not-inverse','inplace-small-budget','inplace-second-small-budget']:
    row['expected_rejection']=z.returncode!=0 and 'BD-E-INPLACE-NOT-INVERSE' in z.stderr
    row['check']=row['run']=row['expected_rejection'];continue

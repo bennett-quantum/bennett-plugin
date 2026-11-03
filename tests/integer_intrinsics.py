@@ -50,7 +50,7 @@ for n in widths:
    source.append(vbody+' ret void }')
 source.append((R/'tests/probes/vector-funnel.ll').read_text())
 src=d/'in.ll';src.write_text('\n'.join(source));out=d/'out.ll'
-run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',src,'-o',out])
+run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-normalise-only','-S',src,'-o',out])
 assert not re.search(r'call .*@llvm\.',out.read_text()),'intrinsic call residue'
 assert not any(re.search(r'<4 x i\d+>',line) for line in out.read_text().splitlines() if not line.startswith('declare ')),'vector residue after N21/N27'
 runtime=d/'stack.c';runtime.write_text('#include <stdint.h>\n#include <unistd.h>\nstatic unsigned char s[1048576];static uint64_t sp;void *__bennett_rt_ss_push(uint64_t n,uint64_t a){sp=(sp+a-1)&-a;void*p=s+sp;sp+=n;return p;}void __bennett_rt_ss_pop(void*p){sp=(unsigned char*)p-s;}void __bennett_nz_fault(uint64_t n){_exit((int)n);}')
@@ -149,7 +149,7 @@ define internal i1 @n27prod(ptr %p) { %a = load i192,ptr %p,align 1
  ret i1 %r }
 !llvm.module.flags = !{!0}
 !0 = !{i32 1, !"bennett.sstack", i64 256}''')
-obj=d/'production';run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=n27prod','-bennett-scalar-shape=MEM_IN(32);tgt=1','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(obj),'-disable-output',prod])
+obj=d/'production';run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=n27prod','-bennett-scalar-shape=MEM_IN(32);tgt=1','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(obj),'-disable-output',prod])
 run([REF,'check',obj/'ref.bennett'])
 for x in [0,1,(1<<192)-1]:
  data=json.loads(run([REF,'run-oracle',obj/'ref.bennett','ref','--input','','--mem','m0='+x.to_bytes(32,'little').hex(),'--budget','1000000,4096,4096,256']).stdout)

@@ -16,7 +16,7 @@ def main():
  for name,expected in CASES.items():
   d=R/f'.tmp/aggregate-rows/{a.major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
   src=R/f'tests/probes/{name}.ll';report=d/'recognised.json';material=d/'materialised.ll'
-  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',src]
+  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13',src]
   z=run([*base,'-bennett-analysis-only','-bennett-report='+str(report),'-disable-output']);assert z.returncode==0,z.stderr
   z=run([*base,'-bennett-normalise-only','-S','-o',material]);assert z.returncode==0,z.stderr
   text=material.read_text();assert 'extractvalue' in text or name=='aggregate-wide-return',text
@@ -39,7 +39,7 @@ def main():
   for n in range(1,8):host+=f'%r{n} = or i64 '+('%s0' if n==1 else f'%r{n-1}')+f', %s{n}\n'
   host+='call void @__bennett_oracle(ptr @region,ptr null,ptr %desc)\ncall void @__bennett_qfree(ptr %fault)\ncall void @__bennett_qfree(ptr %q)\nret i64 %r7\n}\n'+DECL+'\ndeclare i1 @__bennett_measure(ptr,i64)\n'
   cc=d/'production.ll';cc.write_text(src.read_text().replace('define i64 @top(', 'define internal i64 @region(')+'\n'+host)
-  cc_out=d/'production';z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=1000000,65536,65536,128,4096','-bennett-out='+str(cc_out),'-disable-output',cc]);assert z.returncode==0,z.stderr
+  cc_out=d/'production';z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budget-default=1000000,65536,65536,128,4096','-bennett-out='+str(cc_out),'-disable-output',cc]);assert z.returncode==0,z.stderr
   launch=cc_out/'top/launch.bennett';z=run([REF,'check',launch]);assert z.returncode==0,z.stdout+z.stderr
   tokens=json.loads((cc_out/'top/build.json').read_text())['budgets']
   cc_ref=REF.parent.parent/'release/bennett-isa-ref'

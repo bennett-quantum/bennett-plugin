@@ -25,7 +25,7 @@ cases += [
 rows=[]
 for name,verdict,body in cases:
  d=R/f'.tmp/validation/{a.major}/{name}';d.mkdir(parents=True,exist_ok=True);src=d/'in.ll';src.write_text(body)
- x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-validate-only','-disable-output',str(src)],capture_output=True,text=True)
+ x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-validate-only','-disable-output',str(src)],capture_output=True,text=True)
  rule=re.search(r'validator-(v[0-9]+)',name)[1].upper()
  ok=(x.returncode==0) if verdict=='accept' else x.returncode!=0 and 'BD-E-RESIDUAL' in x.stderr and rule in x.stderr
  rows.append(dict(case=name,rule=rule,ok=ok,diagnostic=x.stderr if not ok else ''))
@@ -33,13 +33,13 @@ for name,verdict,body in cases:
 # must run after materialisation and inspect the emitted closure only.
 d=R/f'.tmp/validation/{a.major}/automatic-l';d.mkdir(parents=True,exist_ok=True)
 src=d/'in.ll';src.write_text('define internal i8 @entry(i8 %x) { %r = add nsw i8 %x, 1\n ret i8 %r }\ndefine i8 @host(i8 %x) { %p = alloca i8\n store i8 %x, ptr %p\n %r = load i8, ptr %p\n ret i8 %r }\n')
-x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=entry','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-out='+str(d),'-disable-output',str(src)],capture_output=True,text=True)
+x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=entry','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-out='+str(d),'-disable-output',str(src)],capture_output=True,text=True)
 rows.append(dict(case='automatic-L-materialised-closure',rule='S7',ok=x.returncode==0 and 'residual validator accepted L closure' in x.stderr,diagnostic=x.stderr if x.returncode else ''))
 # CC may retain a host call; L/R may not. This is the actual reader mode,
 # independently of the normaliser and without runtime-name exemptions.
 for classical in (False,True):
  src=d/'external.ll';src.write_text('declare i8 @external()\ndefine i8 @f() { %r = call i8 @external()\n ret i8 %r }')
- cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-validate-only','-disable-output',str(src)]
+ cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-validate-only','-disable-output',str(src)]
  if classical:cmd.append('-bennett-validate-classical')
  x=subprocess.run(cmd,capture_output=True,text=True)
  rows.append(dict(case='V12-'+('CC' if classical else 'LR')+'-hostcall',rule='V12',ok=x.returncode==0 if classical else x.returncode!=0 and 'V12' in x.stderr,diagnostic=x.stderr if classical and x.returncode else ''))

@@ -47,7 +47,7 @@ declare void @__bennett_oracle(ptr, ptr, ptr)
   if dev:fields += [(32+np*32,'i32',str(dev[0])),(36+np*32,'i32','0'),(40+np*32,'ptr','%disk' if block else '%t' if output else 'null'),(48+np*32,'i64',str(dev[1]))]
   for i,(offset,ty,v) in enumerate(fields):stores += [f' %p{i} = getelementptr i8, ptr %desc, i64 {offset}',f' store {ty} {v}, ptr %p{i}']
   src=src.replace(aggregate,'\n'.join(stores));(dest/'input.ll').write_text(src)
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=1000,{int(output)},128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13',f'-bennett-budget-default=1000,{int(output)},128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']
   z=run(cmd);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
   if z.returncode:continue
   obj=out/'top/launch.bennett';ref=out/'top/oracle-0/ref.bennett'
@@ -65,7 +65,7 @@ declare void @__bennett_oracle(ptr, ptr, ptr)
   calls='\n'.join(f'call void @__bennett_oracle(ptr @{f}, ptr null, ptr %desc)' for f in (['f','g','g','f'] if name=='two-regions' else ['f','f']))
   src=region+f'\ndefine void @top() {{\n {alloc}\n %t = call ptr @__bennett_qalloc(i64 0, i64 8)\n %fault = call ptr @__bennett_qalloc(i64 0, i64 4)\n %desc = alloca [64 x i8]\n {stores}\n {calls}\n call void @__bennett_qfree(ptr %fault)\n call void @__bennett_qfree(ptr %t)\n call void @__bennett_qfree(ptr %x)\n ret void\n}}\ndeclare ptr @__bennett_qalloc(i64, i64)\ndeclare void @__bennett_qfree(ptr)\ndeclare void @__bennett_oracle(ptr, ptr, ptr)\n'
   (dest/'input.ll').write_text(src)
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=1000,0,128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budget-default=1000,0,128,8,0','-bennett-out='+str(out),'-disable-output',dest/'input.ll']);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};cases.append(row)
   if z.returncode:continue
   obj=out/'top/launch.bennett';row['sha256']=hashlib.sha256(obj.read_bytes()).hexdigest();c=run([REF,'check',obj]);row['check']=c.returncode==0;row['check_output']=c.stdout+c.stderr
   z=run([REF,'run-program',obj,'top','--args',','.join(['1000']*(4 if name=='two-regions' else 2)),'--budget','10000,0,128,8']);row['run_output']=z.stdout+z.stderr;row['run']=z.returncode==0 and json.loads(z.stdout)['status']=='COMPLETED'
@@ -93,7 +93,7 @@ declare ptr @__bennett_qalloc(i64, i64)
 declare void @__bennett_qfree(ptr)
 declare void @__bennett_gate(i32, ptr, i64)
 """)
- z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(out),'-disable-output',dest/'input.ll']);row={'name':'handle-phi','exit':z.returncode,'diagnostic':z.stderr,'no_published_golden':True};cases.append(row)
+ z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-out='+str(out),'-disable-output',dest/'input.ll']);row={'name':'handle-phi','exit':z.returncode,'diagnostic':z.stderr,'no_published_golden':True};cases.append(row)
  if z.returncode==0:
   obj=out/'top/launch.bennett';row['sha256']=hashlib.sha256(obj.read_bytes()).hexdigest();c=run([REF,'check',obj]);row['check']=c.returncode==0;row['check_output']=c.stdout+c.stderr;row['runs']=[]
   for arg,expected in [(0,9),(1,7)]:

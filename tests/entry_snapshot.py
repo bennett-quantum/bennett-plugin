@@ -84,7 +84,7 @@ def main():
   if a.case and name not in a.case:continue
   d=R/f'.tmp/entry-snapshot/{a.major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True);ll=d/'input.ll';ll.write_text(body);out=d/'out'
   heap,sstack=(48,24) if name in ('logical-stack','popped-frame','restored-allocation','save-state') else (0,0) if name in ('global','handle-input','several-entries') else (16,0)
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=1000000,{heap},4096,16,{sstack}','-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13',f'-bennett-budget-default=1000000,{heap},4096,16,{sstack}','-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:continue
   row['check']=True;row['runs']=[]
   for entry in (('first','second') if name=='several-entries' else ('top',)):

@@ -37,7 +37,7 @@ def main():
          '--only-needed', '-o', d / 'linked.bc'])
     run([t + 'opt', '-passes=lto<O3>', d / 'linked.bc', '-o', d / 'postlink.bc'])
     producer = [t + 'opt', '-load-pass-plugin=' + str(plugin), '-passes=bennett',
-                '-bennett-dialect=0.2.10', '-bennett-tier=reversible', '-bennett-entry=main',
+                '-bennett-dialect=0.2.13', '-bennett-tier=reversible', '-bennett-entry=main',
                 '-bennett-budget-default=1048576,1048576,65536,256,65536']
 
     def emit(out, extra=()):

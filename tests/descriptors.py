@@ -20,7 +20,7 @@ void top(void) {
 ''')
  tool=f'/usr/lib/llvm-{a.major}/bin/';ll=d/'in.ll'
  subprocess.run([tool+'clang','-O1','-emit-llvm','-S',src,'-o',ll],check=True)
- cmd=[tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-descriptor-reference','-bennett-scalar-stack=7','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(d),'-disable-output',str(ll)]
+ cmd=[tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-descriptor-reference','-bennett-scalar-stack=7','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(d),'-disable-output',str(ll)]
  x=subprocess.run(cmd,capture_output=True,text=True);obj=d/'oracle-0/ref.bennett';fixture=re.search(r'```isa object=inc8\n(.*?)```',dialect_text(),re.S)[1].encode();ok=x.returncode==0 and obj.exists() and obj.read_bytes()==fixture
  # Production is acceptance: success and complete launch artefacts are required.
  prod=d/'production';shutil.rmtree(prod,ignore_errors=True);prod.mkdir()

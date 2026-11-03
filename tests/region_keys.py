@@ -30,7 +30,7 @@ define void @top() {
  ret void }
 !0 = !{}
 ''')
-x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-S',str(source),'-o',str(out)],capture_output=True,text=True)
+x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(report),'-S',str(source),'-o',str(out)],capture_output=True,text=True)
 keys=[r['candidates'][0]['key'] for r in json.loads(report.read_text())['regions']] if x.returncode==0 else []
 checks={'flags':len(keys)==7 and keys[0]==keys[1]==keys[5]==keys[6],'freeze':len(keys)==7 and keys[2]==keys[3],
         'rstep_preserved':len(keys)==7 and keys[3]!=keys[4],
@@ -38,7 +38,7 @@ checks={'flags':len(keys)==7 and keys[0]==keys[1]==keys[5]==keys[6],'freeze':len
 # N22 ABI replacement must preserve tracking handles even after strip removes
 # every local function name. Region identity must never look functions up by name.
 stripped_report=d/'stripped.json'
-stripped=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=strip,bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(stripped_report),'-disable-output',str(source)],capture_output=True,text=True)
+stripped=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=strip,bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(stripped_report),'-disable-output',str(source)],capture_output=True,text=True)
 stripped_keys=[r['candidates'][0]['key'] for r in json.loads(stripped_report.read_text())['regions']] if stripped.returncode==0 else []
 checks['stripped_function_identity']=stripped.returncode==0 and stripped_keys==keys
 # Compare source closures against independently published materialised closures.
@@ -59,7 +59,7 @@ for name in fixtures:
   path.write_text(pairs[tag][name]+f'\ndeclare void @__bennett_oracle(ptr,ptr,ptr)\ndefine void @__key_probe() {{\n call void @__bennett_oracle(ptr @{entry},ptr null,ptr null)\n ret void\n}}\n')
   rep.unlink(missing_ok=True)
   try:
-   z=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',str(path)],capture_output=True,text=True,timeout=20)
+   z=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',str(path)],capture_output=True,text=True,timeout=20)
   except subprocess.TimeoutExpired:
    z=subprocess.CompletedProcess([],124,'','key audit timed out after 20 seconds')
   observed.append(json.loads(rep.read_text())['regions'][0]['candidates'][0]['key'] if z.returncode==0 else None)
@@ -75,7 +75,7 @@ def closure_key(body, entry='region'):
  path=d/'closure.ll';rep=d/'closure.json'
  path.write_text(body+f'\ndeclare void @__bennett_oracle(ptr,ptr,ptr)\ndefine void @__closure_probe() {{ call void @__bennett_oracle(ptr @{entry},ptr null,ptr null)\n ret void }}\n')
  rep.unlink(missing_ok=True)
- z=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',str(path)],capture_output=True,text=True)
+ z=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(rep),'-disable-output',str(path)],capture_output=True,text=True)
  assert z.returncode==0,z.stderr
  return json.loads(rep.read_text())['regions'][0]['candidates'][0]['key']
 indirect = """@fp = internal constant ptr @target

@@ -21,17 +21,55 @@ def run(command, timeout=120):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--major', type=int, required=True, choices=(18, 23))
-    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native'))
+    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native', 'unresolved-call'))
     args = parser.parse_args()
     tool = f'/usr/lib/llvm-{args.major}/bin/'
     plugin = ROOT / f'build/libbennett-plugin-{args.major}.so'
     work = ROOT / f'.tmp/review-regressions/{args.major}'
     work.mkdir(parents=True, exist_ok=True)
     command = [tool + 'opt', '-load-pass-plugin=' + str(plugin),
-               '-passes=bennett', '-bennett-dialect=0.2.10', '-disable-output']
+               '-passes=bennett', '-bennett-dialect=0.2.13', '-disable-output']
     rows = []
     failures = []
     for case in args.case or ('shuffle', 'byval', 'global-counter'):
+        if case == 'unresolved-call':
+            original = (ROOT / 'tests/probes/review-host-import.ll').read_text()
+            successor = original.replace(' ret i32 %z', ' br label %after\nafter:\n ret i32 %z')
+            indirect = original.replace(' %safe =', ' %safe =', 1).replace(
+                ' br i1 %safe', ' %callee = select i1 %safe, ptr @identity, ptr @host_fn\n br i1 %safe')
+            indirect = indirect.replace('call i32 @host_fn(i32 %x)', 'call i32 %callee(i32 %x)')
+            indirect += '\ndefine internal i32 @identity(i32 %x) { ret i32 %x }\n'
+            start = original.index(' %safe =')
+            helper = original[:original.index('define i32 @top')] + '''define i32 @top(i32 %x) {
+ %q = call ptr @__bennett_qalloc(i64 0,i64 1)
+ call void @__bennett_qfree(ptr %q)
+ %value = call i32 @helper(i32 %x)
+ ret i32 %value
+}
+define internal i32 @helper(i32 %x) {
+''' + original[start:]
+            for name, body in [('review', original), ('successor', successor), ('indirect', indirect), ('callee', helper)]:
+                directory = work / case / name
+                directory.mkdir(parents=True, exist_ok=True)
+                source = directory / 'input.ll'
+                source.write_text(body)
+                run([*command, '-bennett-out=' + str(directory), source])
+                obj = directory / 'top/launch.bennett'
+                run([REF, 'check', obj])
+                safe = json.loads(run([REF, 'run-program', obj, 'top', '--args', '0',
+                                       '--budget', '1000,0,32,32', '--reverse']).stdout)
+                assert safe['status'] == 'REVERSED' and safe['results'] == [{'type':'i32','value':'7'}] and safe['equals_entry'], safe
+                assert not safe['host_requests'], safe
+                replies = directory / 'replies.json'
+                replies.write_text(json.dumps([dict(service='bennett.fault', payload='0800000000000000', reply='')]))
+                reached = json.loads(run([REF, 'run-program', obj, 'top', '--args', '1',
+                                          '--budget', '1000,0,32,32', '--replies', replies]).stdout)
+                assert reached['status'] == 'FAILED' and reached['host_requests'][0]['service'] == 'bennett.fault', reached
+                assert reached['host_requests'][0]['payload'] == '0800000000000000', reached
+                for filename in ('coverage.json', 'all-coverage.json'):
+                    coverage = json.loads((directory / 'top' / filename).read_text())
+                    assert any(row['classification'] == 'trapped' and 'host_fn' in row['reason'] for row in coverage['entries']), (name, filename, coverage)
+                rows.append(dict(case=case, name=name, safe=safe, reached=reached))
         if case == 'mixed-native':
             original = (ROOT / 'tests/probes/review-mixed-native.ll').read_text()
             for name, body in [('review', original), ('host-fp', original + '''

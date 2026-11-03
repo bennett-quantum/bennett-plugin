@@ -264,11 +264,11 @@ static void recognise(Module &m) {
   // Effect lies use the full S2 call graph later, including region edges.
 }
 static void checkVersion(Module &m) {
-  if (Dialect != "0.2.10" || ISA != "0.8")
-    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.10 / ISA 0.8");
+  if (Dialect != "0.2.13" || ISA != "0.8")
+    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.13 / ISA 0.8");
   if (auto *md = m.getModuleFlag("bennett.dialect")) {
     auto *s = dyn_cast<MDString>(md);
-    if (!s || s->getString() != "0.2.10")
+    if (!s || s->getString() != "0.2.13")
       fail("BD-E-VERSION", "§19.9 module flag");
   }
 }
@@ -445,7 +445,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
 };
 } // namespace bennett
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.10;isa-0.8",
+  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.13;isa-0.8",
           [](PassBuilder &pb) {
             pb.registerPipelineParsingCallback(
                 [](StringRef n, ModulePassManager &pm,

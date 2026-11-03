@@ -19,7 +19,7 @@ def main():
  rows=[]
  def lower(name,t,src=source):
   dest=d/name;dest.mkdir();tf=dest/'table.json';tf.write_text(json.dumps(t,sort_keys=True,separators=(',',':')))
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budgets='+str(tf),'-bennett-out='+str(dest/'out'),'-disable-output',src])
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budgets='+str(tf),'-bennett-out='+str(dest/'out'),'-disable-output',src])
   row={'name':name,'lowered':z.returncode==0,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:return None
   row['build']=json.loads((dest/'out/top/build.json').read_text());obj=dest/'out/top/oracle-0/ref.bennett';launch=dest/'out/top/launch.bennett'
@@ -63,7 +63,7 @@ def main():
   'external-state-writer':runtime+'\ndefine void @other() { store i64 8, ptr @ss_sp\n ret void }\n',
  }.items():
   src=d/(name+'.ll');src.write_text(bad)
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=f','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-out='+str(d/name),'-disable-output',src])
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=f','-bennett-scalar-shape=IN(8,zext);tgt=8','-bennett-out='+str(d/name),'-disable-output',src])
   proof_cases.append({'name':name,'ok':z.returncode!=0 and 'linked runtime logical-frame validation' in z.stderr,'diagnostic':z.stderr})
  report={'major':a.major,'cases':rows,'proof_cases':proof_cases};(R/f'.tmp/budget-stage-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
  return not all(r['ok'] for r in proof_cases) or not rows or not all(r.get('check') and r.get('ok') for r in rows)

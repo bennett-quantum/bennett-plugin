@@ -55,7 +55,7 @@ define void @agg(ptr %p,ptr %q) { %v = load {i7,[2 x i24],i129},ptr %p,align 1
 ''')
 src=d/'in.ll';src.write_text('\n'.join(source));out=d/'out.ll'
 e=dict(os.environ);e['BENNETT_ARITH_BITCODE']=''
-z=subprocess.run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',str(src),'-o',str(out)],capture_output=True,text=True,env=e);assert z.returncode==0,z.stderr
+z=subprocess.run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-normalise-only','-S',str(src),'-o',str(out)],capture_output=True,text=True,env=e);assert z.returncode==0,z.stderr
 assert not re.search(r'(?:load|store) i(?:1|7|65|129|257)\b',out.read_text()),'non-byte memory residue'
 # Runtime slots get a test-only stack allocator; arithmetic definitions come from the plugin.
 runtime=d/'stack.c';runtime.write_text('#include <stdint.h>\n#include <unistd.h>\nstatic unsigned char s[1048576];static uint64_t sp;void *__bennett_rt_ss_push(uint64_t n,uint64_t a){sp=(sp+a-1)&-a;void*p=s+sp;sp+=n;return p;}void __bennett_rt_ss_pop(void*p){sp=(unsigned char*)p-s;}void __bennett_nz_fault(uint64_t n){_exit((int)n);}')
@@ -124,7 +124,7 @@ prod=d/'production.ll';prod.write_text('''define internal i1 @wideprod(ptr %p) {
  %c = mul i192 %b,3
  %r = icmp eq i192 %c,6
  ret i1 %r }\n!llvm.module.flags = !{!0}\n!0 = !{i32 1, !"bennett.sstack", i64 128}''')
-obj=d/'production';run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-oracle=wideprod','-bennett-scalar-shape=MEM_IN(32);tgt=1','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(obj),'-disable-output',prod])
+obj=d/'production';run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-oracle=wideprod','-bennett-scalar-shape=MEM_IN(32);tgt=1','-bennett-scalar-stack=4096','-bennett-scalar-heap=4096','-bennett-out='+str(obj),'-disable-output',prod])
 run([REF,'check',obj/'ref.bennett'])
 for value in [0,1,(1<<192)-1]:
  data=json.loads(run([REF,'run-oracle',obj/'ref.bennett','ref','--input','','--mem','m0='+value.to_bytes(32,'little').hex(),'--budget','1000000,4096,4096,128']).stdout)

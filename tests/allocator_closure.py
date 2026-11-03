@@ -28,7 +28,7 @@ def main():
         d=R/f'.tmp/allocator-closure/{a.major}/{name}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
         run([tool+'llvm-link',R/f'tests/probes/{name}.ll',runtime,arith,'--only-needed','-o',d/'linked.bc'])
         run([tool+'opt','-passes=lto<O3>',d/'linked.bc','-o',d/'postlink.bc'])
-        base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',d/'postlink.bc']
+        base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13',d/'postlink.bc']
         run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output'])
         run([*base,'-bennett-normalise-only','-o',d/'normalised.bc'])
         run([tool+'opt','-passes=verify',d/'normalised.bc','-disable-output'])

@@ -27,7 +27,7 @@ def check(major,case,inputs):
         'void *__bennett_qalloc(uint64_t c,uint64_t w){return 0;}\nvoid __bennett_qfree(void *p){}\n'
         'extern int64_t top(int64_t);\nint main(int c,char **v){printf("%lld\\n",(long long)top(strtoll(v[1],0,10)));}\n')
     run([tool+'clang','-O0',source,driver,'-o',d/'native'])
-    base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',source]
+    base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13',source]
     run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output'])
     run([*base,'-bennett-budget-default=100000,128,4096,32,0','-bennett-out='+str(d/'out'),'-disable-output'])
     for f in ['device.bc','host.bc']:run([tool+'opt','-passes=verify',d/'out'/f,'-disable-output'])

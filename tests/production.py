@@ -31,7 +31,7 @@ unsigned top(unsigned arg) {
 }
 '''.replace('PREP',prep).replace('MEASURE',measures))
   tool=f'/usr/lib/llvm-{a.major}/bin/';ll=dest/'input.ll';cc=run([tool+'clang','-O1','-emit-llvm','-S',src,'-o',ll]);assert cc.returncode==0,cc.stderr
-  objdir=dest/'out';lower=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-scalar-stack=7','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(objdir),'-disable-output',ll]);row={'input':x,'lower_exit':lower.returncode,'diagnostic':lower.stderr};report['cases'].append(row)
+  objdir=dest/'out';lower=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-scalar-stack=7','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(objdir),'-disable-output',ll]);row={'input':x,'lower_exit':lower.returncode,'diagnostic':lower.stderr};report['cases'].append(row)
   if lower.returncode:continue
   obj=objdir/'top/launch.bennett';check=run([REF,'check',obj]);row['check']=check.returncode==0;row['check_output']=check.stdout+check.stderr
   if check.returncode:continue
@@ -59,7 +59,7 @@ unsigned top(unsigned arg) {
  decls=re.search(r'```llvm markers-ir\n(.*?)```',dialect_text(),re.S)[1]
  used=set(re.findall(r'@(__bennett_\w+)',body));body+='\n'+'\n'.join(l for l in decls.splitlines() if re.search(r'@([^ (]+)',l)[1] in used)
  published=d/'published';published.mkdir();(published/'input.ll').write_text(body)
- z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(published/'out'),'-disable-output',published/'input.ll'])
+ z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budget-default=5,0,7,1,0','-bennett-out='+str(published/'out'),'-disable-output',published/'input.ll'])
  pub={'exit':z.returncode,'diagnostic':z.stderr};report['published_oracle_inc8']=pub
  if z.returncode==0:
   obj=published/'out/top/launch.bennett';check=run([REF,'check',obj]);execution=run([REF,'run-program',obj,'top','--args','5,5','--budget','10000,0,7,1']);pub['check']=check.returncode==0;pub['check_output']=check.stdout+check.stderr;pub['run']=json.loads(execution.stdout) if execution.returncode==0 else execution.stderr;pub['reference_exact']=(published/'out/top/oracle-0/ref.bennett').read_bytes()==fixture
@@ -73,7 +73,7 @@ unsigned top(unsigned arg) {
 declare ptr @__bennett_qalloc(i64, i64)
 declare void @__bennett_qfree(ptr)
 ''')
- z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-out='+str(abi/'out'),'-disable-output',abi/'input.ll'])
+ z=run([tool+'opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-out='+str(abi/'out'),'-disable-output',abi/'input.ll'])
  abi_result={'exit':z.returncode,'diagnostic':z.stderr};report['native_abi']=abi_result
  if z.returncode==0:
   host=run([tool+'opt','-passes=verify','-S',abi/'out/host.bc','-o','-']);abi_result['ok']=host.returncode==0 and 'define signext i8 @abi(i8 signext %arg)' in host.stdout

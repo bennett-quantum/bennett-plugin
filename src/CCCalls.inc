@@ -37,7 +37,6 @@ void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
     }
     for(auto &leaf:leaves)memory+="layout "+leaf.first+" "+leaf.second+"\n";
   }
-  if(e.allocatorFaultService)memory+="device bennett.fault {\"version\":\"0.2.10\"}\n";
   std::function<void(std::string)> visit=[&](std::string name) {
     if(hashes.count(name))return;
     std::vector<std::string> group;
@@ -61,7 +60,7 @@ void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
       }
       canonical+=rest.substr(last);
       std::string devices;
-      if(e.argvService && sections.count("devices")) {
+      if(sections.count("devices")) {
         auto document=parse(sections.at("devices"));std::set<std::string> used;
         std::regex effect(R"(effect ([a-z]+)\.)"),service(R"(hostcall ([A-Za-z_0-9./]+) )");
         for(std::sregex_iterator it(rest.begin(),rest.end(),effect),end;it!=end;++it)used.insert((*it)[1]);

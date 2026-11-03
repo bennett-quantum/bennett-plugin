@@ -2209,7 +2209,7 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.10"},
+  return json::Object{{"dialect", "0.2.13"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"analysis_rounds", analysisRounds},

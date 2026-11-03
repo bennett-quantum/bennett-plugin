@@ -19,7 +19,7 @@ def main():
    if not line or line.startswith('regs '):continue
    expected.append([hashes[symbol],block,ordinal]);ordinal+=1
   cov=json.loads((d/'all-coverage.json').read_text())['entries'];row['coverage_complete']=expected==[x['point'] for x in cov]
-  row['coverage_sources']=all(x['source'].startswith('dialect-0.2.10:') for x in cov)
+  row['coverage_sources']=all(x['source'].startswith('dialect-0.2.13:') for x in cov)
   row['metadata_hashes']={f:hashlib.sha256((d/f).read_bytes()).hexdigest() for f in ['build.json','certificate.json','coverage.json']}
   row['ok']=all(row[k] for k in ['artifact_hashes','coverage_complete','coverage_sources'])
  (R/f'.tmp/production-records-{a.major}.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2));return not all(x['ok'] for x in report['cases'])

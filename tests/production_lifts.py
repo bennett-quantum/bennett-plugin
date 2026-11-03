@@ -34,7 +34,7 @@ def execute(major, names):
   body+='\n'+f'call void @__bennett_oracle(ptr {fields["region"]}, ptr null, ptr %desc)\n'*2+'call void @__bennett_qfree(ptr %fault)\ncall void @__bennett_qfree(ptr %t)\n'+'\n'.join(free)+'\nret void\n}\ndeclare ptr @__bennett_qalloc(i64, i64)\ndeclare void @__bennett_qfree(ptr)\ndeclare void @__bennett_oracle(ptr, ptr, ptr)\n'
   source=d/'input.ll';source.write_text(body);out=d/'out'
   layout=json.loads(objects[name].split('section layout\n')[1]) if name in objects else {'S_cells':12,'heap_limit_max':128};stack=1<<layout['S_cells'];heap=layout['heap_limit_max']
-  z=run([f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.10',f'-bennett-budget-default=10000,{heap},{stack},16,0','-bennett-out='+str(out),'-disable-output',source]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
+  z=run([f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.13',f'-bennett-budget-default=10000,{heap},{stack},16,0','-bennett-out='+str(out),'-disable-output',source]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr};rows.append(row)
   if z.returncode:continue
   row['reference_exact']=(out/'top/oracle-0/ref.bennett').read_bytes()==objects[name].encode() if name in objects else True
   row['published_golden']=name if name in objects else None

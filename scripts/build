@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Offline dual-major build. Uses CMake when present, llvm-config otherwise."""
-import concurrent.futures, hashlib, os, shutil, subprocess
+import concurrent.futures, hashlib, os, shutil, subprocess, tomllib
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
 for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']: os.environ.pop(key,None)
@@ -10,17 +10,21 @@ if shutil.which('cmake'):
  subprocess.run(['cmake','--build',str(R/'build'),'-j','4'],check=True)
 else:
  print('cmake unavailable: offline llvm-config build (CMake configuration unverified)',flush=True)
+ pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith']
  def build(major):
   tool=Path(f'/usr/lib/llvm-{major}/bin')
   flags=subprocess.check_output([str(tool/'llvm-config'),'--cxxflags'],text=True).split()
+  definitions=[f'-DBENNETT_ARITH_DEFAULT_PATH="{pins[f"llvm{major}_path"]}"',
+               f'-DBENNETT_ARITH_DEFAULT_SHA256="{pins[f"llvm{major}_sha256"]}"']
+  compile_flags=[*flags,'-std=c++17','-fPIC','-g','-O2',*definitions]
   dest=R/f'build/llvm{major}';dest.mkdir(parents=True,exist_ok=True)
   objs=[]
   for src in sorted((R/'src').glob('*.cpp')):
    obj=dest/(src.stem+'.o');objs.append(str(obj))
-   digest=hashlib.sha256(src.read_bytes()+(R/'src/Bennett.h').read_bytes()+b'O2-g-v1').hexdigest()
+   digest=hashlib.sha256(src.read_bytes()+(R/'src/Bennett.h').read_bytes()+'\0'.join(compile_flags).encode()).hexdigest()
    stamp=obj.with_suffix('.sha256')
    if not obj.exists() or not stamp.exists() or stamp.read_text()!=digest:
-    subprocess.run(['g++',*flags,'-std=c++17','-fPIC','-g','-O2','-c',str(src),'-o',str(obj)],check=True)
+    subprocess.run(['g++',*compile_flags,'-c',str(src),'-o',str(obj)],check=True)
     stamp.write_text(digest)
   output=R/f'build/libbennett-plugin-{major}.so'
   temporary=output.with_suffix('.so.new')

@@ -38,7 +38,7 @@ def main():
          '--only-needed', '-o', d / 'linked.bc'])
     run([t + 'opt', '-passes=lto<O3>', d / 'linked.bc', '-o', d / 'postlink.bc'])
     producer = [t + 'opt', '-load-pass-plugin=' + str(plugin), '-passes=bennett',
-                '-bennett-dialect=0.2.10', '-bennett-budget-default=100000,128,4096,32,0']
+                '-bennett-dialect=0.2.13', '-bennett-budget-default=100000,128,4096,32,0']
     out = d / 'out'
     run([*producer, '-bennett-out=' + str(out), d / 'postlink.bc', '-disable-output'])
     prepared, checked, native = [d / f'{name}.bc' for name in ('prepared', 'checked', 'native')]

@@ -6,17 +6,17 @@ for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os
 (ROOT/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(ROOT/'.tmp')
 SIBLINGS=Path(os.environ.get('BENNETT_SIBLINGS') or ROOT.parent)
 DIALECT=SIBLINGS/'bennett-dialect-spec'
-PIN='023f5a771a814270634db3be9cfde88ded69f975'
+PIN='95a4b8d06933018a07fef3516296a25fd582fcde'
 def dialect_text():
  return subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/Bennett-Dialect-Spec.md'],text=True)
 def drift():
  # An unaccepted working draft is not a change to the accepted contract.
  registry=tomllib.loads((DIALECT/'SPEC_VERSIONS.toml').read_text())
  pin=tomllib.loads((ROOT/'SPEC_VERSIONS.toml').read_text())
- return (registry['dialect']!='0.2.10' or pin['dialect']!='0.2.10'
-         or pin['specs']['bennett-dialect-spec']!='0.2.10'
+ return (registry['dialect']!='0.2.13' or pin['dialect']!='0.2.13'
+         or pin['specs']['bennett-dialect-spec']!='0.2.13'
          or pin['isa']!='0.8' or pin['specs']['bennett-isa-spec']!='0.8'
-         or hashlib.sha256(dialect_text().encode()).hexdigest()!='d4f3c1a88391cc147f8c8fa4f80f82852e3ebe6f880610fc16cd5151f33d7206'
+         or hashlib.sha256(dialect_text().encode()).hexdigest()!='803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda15'
          or pin['commits']['bennett-dialect-spec']!=PIN)
 
 def arith_path(major):

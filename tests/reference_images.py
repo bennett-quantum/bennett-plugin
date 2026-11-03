@@ -237,7 +237,7 @@ def main():
         result = subprocess.run([
             f'/usr/lib/llvm-{major}/bin/opt',
             '-load-pass-plugin=' + str(R / f'build/libbennett-plugin-{major}.so'),
-            '-passes=bennett', '-bennett-dialect=0.2.10',
+            '-passes=bennett', '-bennett-dialect=0.2.13',
             '-bennett-analysis-only', '-bennett-report=' + str(report),
             '-disable-output', str(source)], text=True, capture_output=True)
         actual = next((value for value in json.loads(report.read_text())['values']

@@ -19,7 +19,7 @@ def check(major,case):
         assert z.returncode==0,(args,z.stdout,z.stderr)
         return z.stdout
     source=R/f'tests/probes/{case}.ll'
-    base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',source]
+    base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13',source]
     run([*base,'-bennett-analysis-only','-bennett-report='+str(d/'recognised.json'),'-disable-output'])
     run([*base,'-bennett-budget-default=100000,128,4096,32,0','-bennett-out='+str(d/'out'),'-disable-output'])
     for file in ['device.bc','host.bc']:run([tool+'opt','-passes=verify',d/'out'/file,'-disable-output'])

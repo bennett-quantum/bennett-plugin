@@ -15,7 +15,7 @@ def main():
               'n-undef','n-defined-zero','n-dynamic-lane','n-narrow-lane','n-trap','n-memintrinsics','n-atomic','n-atomic-wrap',
               *(['n-atomic-usub'] if a.major==23 else [])]:
   d=R/f'.tmp/materialisation/{a.major}/{name}';d.mkdir(parents=True,exist_ok=True);src=d/'in.ll';src.write_text(pairs['in'][name]);out=d/'out.ll'
-  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-normalise-only','-S',str(src),'-o',str(out)]
+  cmd=[f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-normalise-only','-S',str(src),'-o',str(out)]
   # Canonicalise the published spelling with this major's LLVM printer too:
   # i2 2 and i2 -2 are the same bit pattern; LLVM prints the latter. No
   # optimisation or Bennett pass is applied to the expected instruction list.

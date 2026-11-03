@@ -31,7 +31,7 @@ def main():
   src=d/(name+'.ll');src.write_text(body);dest=d/name
   e=dict(env)
   if linked:e['BENNETT_ARITH_BITCODE']=str(linked)
-  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10',*flags,src],e)
+  z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13',*flags,src],e)
   return z,dest
  def check(name,ok,detail=''):rows.append(dict(name=name,ok=bool(ok),detail=detail))
  def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -150,7 +150,7 @@ define i64 @top() { %old = atomicrmw fmax ptr @g, double 1.0 seq_cst
  check('comparison-link',z.returncode==0,z.stderr)
  if z.returncode==0:
   e=dict(env,BENNETT_ARITH_BITCODE=str(bc))
-  again=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',comparison,'-disable-output'],e)
+  again=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-comparison',comparison,'-disable-output'],e)
   check('comparison-relink-idempotent',again.returncode==0,again.stderr)
  if z.returncode==0:
   for level in (0,3):
@@ -209,7 +209,7 @@ declare void @__bennett_qfree(ptr)
  check('published-required-exports',all('__bennett_sf_'+op+'_f64' in exports for op in ['sitofp','add','mul','div','cmp']))
  realenv=dict(os.environ);realenv.pop('BENNETT_ARITH_BITCODE',None)
  real=d/'real.ll';real.write_text('define i64 @real(i64 %x) { %a = sitofp i64 %x to double\n %b = fadd double %a, 1.0\n %r = bitcast double %b to i64\n ret i64 %r }')
- realbc=d/'real.bc';z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',real,'-o',realbc],realenv)
+ realbc=d/'real.bc';z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-comparison',real,'-o',realbc],realenv)
  check('published-comparison-link',z.returncode==0,z.stderr)
  if z.returncode==0:
   main=d/'real-main.c';main.write_text('#include <stdint.h>\nextern uint64_t real(uint64_t); int main(void) { return real(2)!=UINT64_C(0x4008000000000000) || real(0)!=UINT64_C(0x3ff0000000000000); }')
@@ -218,7 +218,7 @@ declare void @__bennett_qfree(ptr)
    check(f'published-comparison-O{level}',z.returncode==0 and run([exe],realenv).returncode==0,z.stderr)
  # M>128 native slots must link, initialise idempotently and execute.
  source=R/'tests/probes/softfloat-native-wide.ll';widebc=d/'native-wide.bc'
- z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-comparison',source,'-o',widebc],realenv)
+ z=run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-comparison',source,'-o',widebc],realenv)
  check('published-native-wide-link',z.returncode==0,z.stderr)
  if z.returncode==0:
   rows[-1].update(source_sha256=sha(source),materialised_sha256=sha(widebc))
@@ -231,7 +231,7 @@ declare void @__bennett_qfree(ptr)
  # M2 imports the recursive seven-format/libm closure. Keep the same extended
  # S2 allowance as direct CC below; total production includes two L builds.
  realout=R/f'.tmp/softfloat-production-probe/{a.major}';shutil.rmtree(realout,ignore_errors=True)
- z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
+ z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-budget-ms=180000','-bennett-out='+str(realout),'-bennett-budget-default=1000000,65536,65536,128,4096','-disable-output',d/'production-input.ll'],realenv,timeout=600)
  check('published-production-link',z.returncode==0,z.stderr)
  rows[-1].update(timing)
  if z.returncode==0:
@@ -244,7 +244,7 @@ declare void @__bennett_qfree(ptr)
    check('published-production-numerical-'+str(value),z.returncode==0 and data.get('code')==0 and data.get('payload')==int(value!=0),z.stdout+z.stderr)
    rows[-1].update(result=data,command=list(map(str,argv)),seconds=seconds,ref_sha256=sha(numerical_ref))
   source=R/'tests/probes/cc-softfloat-oracle.ll';recognised=realout/'oracle-recognised.json'
-  z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
+  z,timing=measured_run([tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-budget-ms=180000',source,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],dict(realenv,BENNETT_ARITH_BITCODE=str(published)),timeout=600)
   check('published-production-recognition',z.returncode==0,z.stderr)
   rows[-1].update(timing)
   if z.returncode==0:rows[-1].update(evidence(realout,source,recognised))
@@ -255,7 +255,7 @@ declare void @__bennett_qfree(ptr)
   rows[-1].update(measurement,object_sha256=sha(launch),oracle_steps_budget=1000000)
   ccdir=realout/'direct-cc';source=R/'tests/probes/cc-softfloat.ll';recognised=realout/'direct-cc-recognised.json'
   linkedenv=dict(realenv,BENNETT_ARITH_BITCODE=str(published))
-  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-budget-ms=180000',source]
+  base=[tool+'opt','-load-pass-plugin='+str(plugin),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-budget-ms=180000',source]
   z,timing=measured_run([*base,'-bennett-analysis-only','-bennett-report='+str(recognised),'-disable-output'],linkedenv,timeout=600)
   check('published-production-CC-recognition',z.returncode==0,z.stderr)
   rows[-1].update(timing)

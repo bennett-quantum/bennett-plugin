@@ -7,7 +7,7 @@ static void normaliseRAsm(Function &f, json::Array &coverage) {
     auto text=std::regex_replace(StringRef(assembly->getAsmString()).str(),std::regex("[;\\s]+")," ");text=StringRef(text).trim().str();
     bool erased=c->getType()->isVoidTy() && (text.empty() || text=="pause" || text=="nop");
     coverage.push_back(json::Object{{"function",f.getName()},{"asm",text},{"constraints",assembly->getConstraintString()},
-      {"source","dialect-0.2.10:N31"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
+      {"source","dialect-0.2.13:N31"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
     if(!erased) {
       IRBuilder<> b(c);auto fault=f.getParent()->getOrInsertFunction("__bennett_nz_fault",b.getVoidTy(),b.getInt64Ty());
       auto *trap=b.CreateCall(fault,{b.getInt64(8)});
@@ -115,14 +115,14 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     auto selector=e.emit("i32","load.i32 "+e.fieldPointer(p,4));status=e.emit("i32","select "+exiting+" "+selector+" "+status);
   }
   e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
-  json::Object record{{"dialect","0.2.10"},{"isa","0.8"},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
+  json::Object record{{"dialect","0.2.13"},{"isa","0.8"},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
     {"mode","reversible"},{"verdict","blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
   record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
   json::Object cert{{"versions",json::Object{{"isa","0.8"},{"cert","0.8"}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
   auto object=launchObject(e,record,cert);write(dir+"/launch.bennett",object);
   auto build=jcs(json::Value(std::move(record)));write(dir+"/build.json",build+"\n");
-  cert["producer"]=json::Object{{"name","bennett-plugin"},{"version","0.2.10+build."+hash(build)},
+  cert["producer"]=json::Object{{"name","bennett-plugin"},{"version","0.2.13+build."+hash(build)},
     {"materialisation",json::Object{{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},{"normaliser_version","0.2.8"}}}};
   write(dir+"/certificate.json",jcs(json::Value(std::move(cert)))+"\n");
   auto report=completeCoverage(object);auto sections=objectSections(object);auto symbols=parse(sections.at("symbols"));
@@ -132,7 +132,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     for(auto &entry:*report.getArray("entries")) {
       auto *entryObject=entry.getAsObject();auto *at=entryObject->getArray("point");
       if((*at)[0].getAsString()==identity && (*at)[1].getAsString()==p->getString("block") && (*at)[2].getAsInteger()==p->getInteger("ordinal")) {
-        (*entryObject)["source"]="dialect-0.2.10:N31";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
+        (*entryObject)["source"]="dialect-0.2.13:N31";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
       }
     }
   }

@@ -249,6 +249,7 @@ struct Entry {
   std::vector<std::map<std::string,std::string>> referenceGlobals;
   json::Array coverage;
   json::Array controlledIdentities;
+  std::map<std::pair<std::string,std::string>,std::string> trappedCalls;
   std::map<std::string, std::pair<std::string, std::string>> actions;
   unsigned next = 0, ordinal = 0;
   struct PhysicalSlot { std::string q, tag; unsigned identity; };
@@ -430,6 +431,27 @@ struct Entry {
       bits=carrier;value=sourceByteOrder(value,bits);
     }
     rows.push_back("store.i"+std::to_string(bits)+" "+pointer+" "+value);
+  }
+  void reportedFault(Value *code) {
+    if(!rTier) {
+      allocatorFaultService=true;
+      auto *payload=m.getGlobalVariable("__bennett_cc_fault_payload",true);
+      if(!payload)payload=new GlobalVariable(m,Type::getInt64Ty(m.getContext()),false,
+        GlobalValue::InternalLinkage,ConstantInt::get(Type::getInt64Ty(m.getContext()),0),"__bennett_cc_fault_payload");
+      auto pointer=operand(payload),value=operand(code);
+      rows.push_back("store.i64 "+pointer+" "+value);
+      emit("i"+std::to_string(m.getDataLayout().getPointerSizeInBits()),"hostcall bennett.fault "+pointer+" "+number(8));
+    }
+    rows.push_back("trap");
+  }
+  void unresolvedCall(StringRef callee) {
+    std::string block;
+    for(auto it=rows.rbegin();it!=rows.rend();++it)if(StringRef(*it).starts_with("^")) {
+      block=StringRef(*it).drop_front().split('(').first.str();break;
+    }
+    auto symbol=ccNames?ccNames->at(&f):f.getName().str();
+    trappedCalls[{symbol,block}]="§4.5 no bitcode or bound host service for "+callee.str();
+    reportedFault(ConstantInt::get(Type::getInt64Ty(m.getContext()),8));
   }
   std::string fieldPointer(const std::string &p,uint64_t offset) {
     if(!offset)return p;
@@ -1369,12 +1391,14 @@ struct Entry {
             auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
             std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
             for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
-              if(ccNames->count(candidate))candidates[functionAddress(candidate)]=candidate;
+              if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
+                candidates[functionAddress(candidate)]=candidate;
             for(auto &candidate:candidates)keys.push_back(candidate.first);
             auto args=callArguments(*c);
             auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
             auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
             compareTree(value,pw,keys,[&](uint64_t key) {
+              if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
               auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
               std::vector<std::string> values;
               if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
@@ -1411,13 +1435,7 @@ struct Entry {
             // through §11.5 before trapping. The payload is private storage,
             // not an extra logical heap allocation on a failing path.
             if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
-              allocatorFaultService = true;
-              auto *payload = m.getGlobalVariable("__bennett_cc_fault_payload",true);
-              if (!payload) payload = new GlobalVariable(m,Type::getInt64Ty(m.getContext()),false,
-                  GlobalValue::InternalLinkage,ConstantInt::get(Type::getInt64Ty(m.getContext()),0),"__bennett_cc_fault_payload");
-              auto p=operand(payload),code=operand(c->getArgOperand(0));
-              rows.push_back("store.i64 "+p+" "+code);
-              emit("i"+std::to_string(m.getDataLayout().getPointerSizeInBits()),"hostcall bennett.fault "+p+" "+number(8));
+              reportedFault(c->getArgOperand(0));break;
             }
             rows.push_back("trap"); break;
           }
@@ -1462,6 +1480,18 @@ struct Entry {
             if(c->getType()->isVoidTy())rows.push_back(call);
             else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
             releaseCallArguments(args);propagateExit();
+          } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
+                    !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
+            // A reached missing import is F(8). Give unreachable successor
+            // blocks names for the unused result without executing source work.
+            if(!c->getType()->isVoidTy()) {
+              auto ns=destinations(c);auto fs=fields(c->getType());
+              for(unsigned k=0;k<ns.size();++k) {
+                if(fs[k].type->isPointerTy())rows.push_back(ns[k]+" = inttoptr "+number(0));
+                else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
+              }
+            }
+            unresolvedCall(n);break;
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
@@ -2107,11 +2137,13 @@ std::string launchObject(Entry &e, json::Object &record,
       ordinal = 0;
       continue;
     }
+    auto trapped=e.trappedCalls.find({e.f.getName().str(),block});
+    bool missing=line=="trap" && trapped!=e.trappedCalls.end();
     e.coverage.push_back(
         json::Object{{"point", json::Array{ih, block, ordinal++}},
-                     {"source", "dialect-0.2.10:17.4"},
-                     {"classification", "lowered"},
-                     {"reason", "CC scalar/marker lowering"}});
+                     {"source", missing?"dialect-0.2.13:4.5":"dialect-0.2.13:17.4"},
+                     {"classification", missing?"trapped":"lowered"},
+                     {"reason", missing?trapped->second:"CC scalar/marker lowering"}});
   }
   (*so)[std::to_string(so->size())] =
       json::Object{{"interface_hash", ih},
@@ -2156,7 +2188,8 @@ std::string launchObject(Entry &e, json::Object &record,
   return object;
 }
 // Supplementary coverage preserves the existing CC coverage sidecar's bytes.
-json::Object completeCoverage(StringRef object) {
+json::Object completeCoverage(StringRef object,
+    const std::map<std::pair<std::string,std::string>,std::string> &trapped = {}) {
   auto symbols = parse(object.split("section symbols\n").second.split('\n').first);
   std::map<std::string, std::string> hashes;
   for (auto &v : *symbols.getAsObject()) {
@@ -2175,9 +2208,10 @@ json::Object completeCoverage(StringRef object) {
     } else if (line.starts_with("^")) {
       block = line.drop_front().split('(').first.str(); ordinal = 0;
     } else if (!line.empty() && !line.starts_with("regs ")) {
+      auto missing=trapped.find({symbol,block});bool fault=line=="trap" && missing!=trapped.end();
       entries.push_back(json::Object{{"point", json::Array{hashes.at(symbol), block, ordinal++}},
-        {"source", "dialect-0.2.10:" + rule}, {"classification", "lowered"},
-        {"reason", "materialised scalar production instruction"}});
+        {"source", "dialect-0.2.13:" + (fault?std::string("4.5"):rule)}, {"classification", fault?"trapped":"lowered"},
+        {"reason", fault?missing->second:"materialised scalar production instruction"}});
     }
   }
   return json::Object{{"entries", std::move(entries)}};
@@ -2629,6 +2663,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
       e.budgets=std::move(callee.budgets);
       e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+      e.trappedCalls.insert(callee.trappedCalls.begin(),callee.trappedCalls.end());
       for(auto &proof:callee.controlledIdentities)e.controlledIdentities.push_back(std::move(proof));
       e.usesSourceMemory|=callee.usesSourceMemory;
       e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);e.allocatedBytes+=callee.allocatedBytes;
@@ -2640,7 +2675,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     }
     if(e.automaticSnapshot)e.ccHeapBytes=e.table.capacities[1];
     else if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
-    json::Object record{{"dialect", "0.2.10"},
+    json::Object record{{"dialect", "0.2.13"},
                         {"isa", "0.8"},
                         {"llvm_version", LLVM_VERSION_STRING},
                         {"pipeline", "bennett"},
@@ -2664,13 +2699,18 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     auto obj = launchObject(e, record, cert);
     if(!e.controlledIdentities.empty())record["controlled_identity_proofs"]=std::move(e.controlledIdentities);
     write(dir + "/launch.bennett", obj);
-    write(dir + "/all-coverage.json", jcs(json::Value(completeCoverage(obj))) + "\n");
+    auto allCoverage=completeCoverage(obj,e.trappedCalls);
+    std::set<std::string> covered;
+    for(auto &row:e.coverage)covered.insert(jcs(*row.getAsObject()->get("point")));
+    for(auto &row:*allCoverage.getArray("entries"))if(row.getAsObject()->getString("classification")=="trapped")
+      if(covered.insert(jcs(*row.getAsObject()->get("point"))).second)e.coverage.push_back(parse(jcs(row)));
+    write(dir + "/all-coverage.json", jcs(json::Value(std::move(allCoverage))) + "\n");
     auto build = jcs(json::Value(std::move(record)));
 
     write(dir + "/build.json", build + "\n");
     cert["producer"] = json::Object{
         {"name", "bennett-plugin"},
-        {"version", "0.2.10+build." + hash(build)},
+        {"version", "0.2.13+build." + hash(build)},
         {"materialisation", json::Object{{"llvm_version", LLVM_VERSION_STRING},
                                          {"pipeline", "bennett"},
                                          {"normaliser_version", "0.2.8"}}}};

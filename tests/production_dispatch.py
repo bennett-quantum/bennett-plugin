@@ -23,7 +23,7 @@ def main():
   ('runtime-arg',old.replace(' %kind = select i1 %choose, i32 1, i32 2\n','').replace('i1 %choose','i64 %value').replace('store i32 %kind','store i32 2').replace('store i64 0, ptr %p9','store i64 %value, ptr %p9'),[(0,True),(7,True),(255,True)]),
  ]:
   dest=d/name;dest.mkdir();ll=dest/'input.ll';ll.write_text(observed(src));out=dest/'out'
-  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-budget-default='+('1000,4096,128,8,0' if name=='across-blocks' else '1000,0,128,8,0'),'-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr,'runs':[]};cases.append(row)
+  z=run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-budget-default='+('1000,4096,128,8,0' if name=='across-blocks' else '1000,0,128,8,0'),'-bennett-out='+str(out),'-disable-output',ll]);row={'name':name,'exit':z.returncode,'diagnostic':z.stderr,'runs':[]};cases.append(row)
   if z.returncode:continue
   obj=out/'top/launch.bennett';c=run([REF,'check',obj]);row['check']=c.returncode==0;row['check_output']=c.stdout+c.stderr
   row['objects']=[{'path':str(x.relative_to(R)),'sha256':hashlib.sha256(x.read_bytes()).hexdigest()} for x in sorted(out.rglob('*.bennett'))]

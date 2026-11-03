@@ -49,7 +49,7 @@ def main():
     run([t + 'opt', '-passes=lto<O3>', d / 'linked.bc', '-o', d / 'postlink.bc'])
     out = d / 'out'
     producer = [t + 'opt', '-load-pass-plugin=' + str(plugin), '-passes=bennett',
-                '-bennett-dialect=0.2.10', '-bennett-analysis-budget-ms=300000',
+                '-bennett-dialect=0.2.13', '-bennett-analysis-budget-ms=300000',
                 '-bennett-budget-default=10000000,1048576,4096,256,65536']
     run([*producer, '-bennett-out=' + str(out), d / 'postlink.bc', '-disable-output'])
     assert (out / 'ht_demo_basic/launch.bennett').is_file()

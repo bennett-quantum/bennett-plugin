@@ -152,7 +152,7 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();results=[]
  for name,(body,wants) in CASES.items():
   dest=R/f'.tmp/analysis-edges/{a.major}/{name}';dest.mkdir(parents=True,exist_ok=True);src=dest/'in.ll';src.write_text(('target datalayout = "E-p:64:64"\n' if name=='subbyte-big' else 'target datalayout = "e-p:64:64"\n')+body+'\n');report=dest/'report.json'
-  x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-disable-output',str(src)],capture_output=True,text=True)
+  x=subprocess.run([f'/usr/lib/llvm-{a.major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{a.major}.so'),'-passes=bennett','-bennett-dialect=0.2.13','-bennett-analysis-only','-bennett-report='+str(report),'-disable-output',str(src)],capture_output=True,text=True)
   ok=x.returncode==0;data=json.loads(report.read_text()) if ok else {}
   for fn,val,atoms in wants:ok=ok and any(v['function']==fn and v['value']==val and set(v['atoms'])==atoms and not v['top'] for v in data.get('values',[]))
   if name=='additive-copy-cycle':ok=ok and data.get('analysis_rounds',100)<10 and any(v['value']=='%n' and v['top'] for v in data.get('values',[]))
