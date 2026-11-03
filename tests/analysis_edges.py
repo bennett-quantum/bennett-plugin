@@ -2,6 +2,7 @@
 """Reference PT9/PT10/PT12 and tier regressions, derived from §4–§6."""
 import argparse,json,subprocess
 from contracts import ROOT as R
+from reference_k import constant_calls
 CASES={
 # An additive cycle whose step is a finite set is the same orbit: past K it is top at once (bp-fj1).
 'additive-set-step':('''define internal i32 @cycle(i1 %c) {
@@ -278,6 +279,12 @@ define i8 @top(i64 %n) {
 define i8 @top(i8 %n) { %r = call i8 @leaf(i8 %n)
  ret i8 %r }''',[]),
 }
+# Register the bp-ipp witness in this suite, which scripts/gate already runs.
+for count in (4096,4097):
+ CASES[f'constant-calls-{count}']=(constant_calls(count),[
+  ('sink','%address',{f'PTR(@bytes,{n},0)' for n in range(count)}),
+  ('sink','%v',{'INT(1)'}),
+ ])
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);a=p.parse_args();results=[]
  for name,(body,wants) in CASES.items():

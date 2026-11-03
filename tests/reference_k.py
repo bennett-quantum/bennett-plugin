@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""§5.1's K is the only bound of the reference analysis (advisor ruling on b-dialect-spec-5u3).
+"""§5.1's K bounds INT atoms only (accepted 5u3 interpretation; advisor R16).
 
-Offsets are never closed before K offsets of one provenance, and no object collapses for its slot
-count, unless the non-reference flag -bennett-analysis-early-chain-close asks for it.
+Pointer offsets have no cardinality cutoff and objects never collapse for their slot count.
+The NON-REFERENCE flag -bennett-analysis-early-chain-close enables experimental widening.
 """
 import argparse,json,subprocess,sys
 from contracts import ROOT as R
@@ -39,6 +39,26 @@ define i64 @top(i64 %n) {{
 {stores}
  %v = load i64, ptr %s0
  ret i64 %v
+}}'''
+def constant_calls(count):
+ """Council sol B1: PT9 unions in-bounds constant addresses into one internal parameter."""
+ image='\\01'*8192
+ calls='\n'.join(f' call i8 @sink(ptr getelementptr inbounds ([8192 x i8], ptr @bytes, i64 0, i64 {n}))' for n in range(count))
+ return f'''@bytes = internal constant [8192 x i8] c"{image}"
+declare void @__bennett_adj(ptr, ptr, ptr)
+define internal i8 @sink(ptr %p) {{
+ ; Expose the parameter's exact address set in the instruction-only report.
+ %address = getelementptr i8, ptr %p, i64 0
+ %v = load i8, ptr %p
+ ret i8 %v
+}}
+define internal void @action(ptr %env) {{
+{calls}
+ ret void
+}}
+define void @top() {{
+ call void @__bennett_adj(ptr @action, ptr null, ptr null)
+ ret void
 }}'''
 INTEGER_ORBIT='''@g = internal global [8 x i64] zeroinitializer
 define internal i64 @cycle() {
@@ -103,11 +123,12 @@ define i64 @top(i1 %c) {
  %s = add i64 %r, %neg
  ret i64 %s
 }'''
-def solve(major,name,body,early=False):
+def solve(major,name,body,early=False,check_delta=False):
  dest=R/f'.tmp/reference-k/{major}/{name}';dest.mkdir(parents=True,exist_ok=True)
  src=dest/'in.ll';src.write_text('target datalayout = "e-p:64:64"\n'+body+'\n');report=dest/'report.json'
  argv=[f'/usr/lib/llvm-{major}/bin/opt','-load-pass-plugin='+str(R/f'build/libbennett-plugin-{major}.so'),'-passes=bennett','-bennett-dialect=0.2.10','-bennett-analysis-only','-bennett-report='+str(report),'-disable-output',str(src)]
  if early:argv.insert(4,'-bennett-analysis-early-chain-close')
+ if check_delta:argv.insert(4,'-bennett-analysis-check-delta')
  x=subprocess.run(argv,capture_output=True,text=True,timeout=600)
  if x.returncode:raise AssertionError(f'{name}: {x.stderr[-800:]}')
  return json.loads(report.read_text()),x.stderr
@@ -121,11 +142,20 @@ def main():
  # Reference: 40 offsets of an object of no literal extent are exact, without top.
  body,last=unknown_extent(40);data,_=solve(m,'unknown-40',body);v=value(data,last)
  check('unknown-extent-40-exact',not v['top'] and len(v['atoms'])==40 and all(x.endswith(',0)') for x in v['atoms']),v)
- # Reference: K offsets stay exact; one more takes the orbit. The boundary is §5.1's own.
+ # K applies only to INT atoms: both finite pointer unions stay exact (bp-ipp).
  body,last=unknown_extent(4096);data,_=solve(m,'unknown-4096',body);v=value(data,last)
- check('unknown-extent-K-exact',not v['top'] and len(v['atoms'])==4096,{'top':v['top'],'atoms':len(v['atoms'])})
+ check('unknown-extent-K-exact',not v['top'] and set(v['atoms'])=={f'PTR(%b,{n*8},0)' for n in range(4096)},{'top':v['top'],'atoms':len(v['atoms'])})
  body,last=unknown_extent(4097);data,_=solve(m,'unknown-4097',body);v=value(data,last)
- check('unknown-extent-K+1-closes',v['top'] and len(v['atoms'])<8,{'top':v['top'],'atoms':v['atoms'][:8]})
+ check('unknown-extent-K+1-exact',not v['top'] and set(v['atoms'])=={f'PTR(%b,{n*8},0)' for n in range(4097)},{'top':v['top'],'atoms':len(v['atoms'])})
+ # The in-bounds constant-byte witness must be accepted with INT(1), with no EXT/top
+ # residue at either side of 4096. Also exercise the incremental/full PT6 comparison.
+ for count in (4096,4097):
+  data,_=solve(m,f'constant-calls-{count}',constant_calls(count),check_delta=True)
+  v=value(data,'%address','sink')
+  check(f'constant-calls-{count}-exact-offsets',not v['top'] and set(v['atoms'])=={f'PTR(@bytes,{n},0)' for n in range(count)},{'top':v['top'],'atoms':len(v['atoms'])})
+  v=value(data,'%v','sink')
+  check(f'constant-calls-{count}-load-one',not v['top'] and v['atoms']==['INT(1)'],v)
+  check(f'constant-calls-{count}-accepted',any(f['name']=='action' and f['tiers']==['CC'] for f in data['functions']) and 'non_reference' not in data,data['functions'])
  # Reference: eight addresses outside the object stay explicit beside PT2's unknown address.
  body,last=past_extent(8);data,_=solve(m,'past-8',body);v=value(data,last)
  explicit=[x for x in v['atoms'] if x.startswith('PTR(@g,') and x.endswith(',0)')]
@@ -149,10 +179,10 @@ def main():
  v=value(data,'%d');check('pt5-displaced-exact',set(v['atoms'])=={'PTR(@g,8,0)','PTR(@g,16,0)','PTR(@h,8,0)','PTR(@h,16,0)'},v)
  v=value(data,'%diff');check('pt5-address-difference',v['top'] and 'PTR(@g,0,-1)' in v['atoms'] and 'PTR(@h,0,-1)' in v['atoms'],v)
  v=value(data,'%neg');check('pt5-int-minus-address',v['top'] and 'PTR(@g,0,-1)' in v['atoms'],v)
- # The flag is the only way to the earlier closure, and it says so.
+ # The flag is the only way to this NON-REFERENCE widening, and it says so.
  body,last=unknown_extent(40);data,err=solve(m,'early-unknown-40',body,early=True);v=value(data,last)
  check('flag-closes-early',v['top'] and len(v['atoms'])<8,{'top':v['top'],'atoms':v['atoms'][:8]})
- check('flag-labelled','NOT the reference analysis' in err,err[:200])
+ check('flag-labelled','NON-REFERENCE' in err and data.get('non_reference')=='-bennett-analysis-early-chain-close',err[:200])
  data,_=solve(m,'early-slots-80',many_slots(80),early=True);v=value(data,'%v')
  check('flag-collapses',v['top'],v)
  _,err=solve(m,'default-silent',unknown_extent(4)[0]);check('default-unlabelled','NOT the reference analysis' not in err,err[:200])

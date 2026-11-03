@@ -35,10 +35,10 @@ cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000));
 cl::opt<bool> AnalysisTrace("bennett-analysis-trace",cl::desc("Print solver progress per round to stderr"));
 cl::opt<unsigned> TraceChangesFrom("bennett-analysis-trace-changes",cl::init(UINT_MAX),cl::desc("With the trace, name the first changing steps of each round from this one on"));
-// Past 4 offsets outside an object, or 32 of one with no literal extent, and past max(64, extent/4)
-// written slots: a precision change dialect §5.1 does not grant (advisor ruling on
-// b-dialect-spec-5u3). Results under it are not the reference analysis and must be labelled so.
-cl::opt<bool> EarlyChainClose("bennett-analysis-early-chain-close",cl::init(false),cl::desc("NOT the reference analysis: close offset chains and collapse objects earlier than the spec's K"));
+// NON-REFERENCE: close past 4096 offsets per provenance, 4 outside an object, or 32 with
+// no literal extent; collapse past max(64, extent/4) written slots. These precision changes
+// are not granted by dialect §5.1, whose K applies only to INT atoms.
+cl::opt<bool> EarlyChainClose("bennett-analysis-early-chain-close",cl::init(false),cl::desc("NON-REFERENCE: close pointer offset chains and collapse objects (NOT the reference analysis)"));
 // A test aid: recompute every incremental PT6 result in full and fail on any difference.
 cl::opt<bool> CheckLoadDelta("bennett-analysis-check-delta",cl::init(false),cl::Hidden,cl::desc("Check each incremental load result against a full PT6 pass"));
 uint64_t loadDeltas=0,loadRebuilds=0,rebuildsConstant=0,rebuildsShrink=0;
@@ -305,19 +305,13 @@ void canonical(std::vector<uint32_t> &ids,bool &top) {
     firstStar=std::lower_bound(ids.begin(),ids.end(),StarBit);
     firstInt=std::lower_bound(firstStar,ids.end(),IntBit);
   }
-  // A chain of displaced addresses (a pointer recurrence through memory, or a copy between
-  // offsets of one object) denotes PT2's modular orbit, which only ends after 2^60 or so
-  // elements. Take the orbit, the residue class of the differences' lowest set bit with PT2's
-  // unknown-address alternative, past K offsets of one provenance: the bound §5.1 sets on an
-  // index set, so an index domain within K keeps its exact offsets. §5.1 states K for INT atoms
-  // only; b-dialect-spec-5u3 asks it to state the offset bound too.
-  // Only under -bennett-analysis-early-chain-close (not the reference): also past 4 offsets
-  // outside the object, and past 32 of an object of no literal extent.
-  constexpr size_t OffsetChain=4096,EarlyLeftObject=4,EarlyNoExtent=32;
-  const size_t LeftObject=EarlyChainClose?EarlyLeftObject:SIZE_MAX,NoExtent=EarlyChainClose?EarlyNoExtent:SIZE_MAX;
+  // NON-REFERENCE: a large finite union alone does not prove a displacement cycle. Closing
+  // it to a residue class with EXT/top is experimental widening, including at 4096 offsets.
+  // The default preserves the exact pointer set; §5.1 bounds INT atoms only.
+  constexpr size_t OffsetChain=4096,LeftObject=4,NoExtent=32;
   size_t pointers=firstStar-ids.begin();
   bool chained=false;
-  if(closeChains && pointers>std::min<size_t>(OffsetChain,LeftObject)) {
+  if(EarlyChainClose && closeChains && pointers>std::min<size_t>(OffsetChain,LeftObject)) {
     struct Tally {uint32_t total=0,outside=0;uint64_t extent=0;bool known=false;};
     llvm::DenseMap<const Value *,Tally> counts;
     for(auto it=ids.begin();it!=firstStar && !chained;++it) {
@@ -480,7 +474,7 @@ void AV::settle() {
   if(!r)return;
   bool stars=r->firstStar!=r->firstInt;
   size_t ints=r->ids.size()-r->firstInt;
-  if(!stars && !(top && ints) && !(!top && ints>4096) && (r->firstStar<=(EarlyChainClose?4u:4096u) || !closeChains))return;
+  if(!stars && !(top && ints) && !(!top && ints>4096) && (!EarlyChainClose || r->firstStar<=4u || !closeChains))return;
   auto ids=r->ids;
   canonical(ids,top);
   atoms.rep=internIds(std::move(ids));
@@ -1020,7 +1014,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto atomAt : p.atoms)
     if (atomAt.kind == Atom::Ptr) {
       seedOnDemand(atomAt.object);
-      // Only under -bennett-analysis-early-chain-close (not the reference): past as many written
+      // NON-REFERENCE, under -bennett-analysis-early-chain-close: past as many written
       // slots as its extent could hold distinct 4-byte fields (64 with no known extent), collapse
       // an object to (X,*), so that a later load overlaps that slot and PT6 gives top.
       if(atomAt.object && collapsedObjects().count(atomAt.object)) {atomAt.offset=0;atomAt.stride=-1;}
@@ -2724,7 +2718,7 @@ void Analysis::run() {
   BudgetScope scope;
   loadDeltas=loadRebuilds=rebuildsConstant=rebuildsShrink=0;
   extentCache().clear();collapsedObjects().clear();unionMemo().clear();
-  if(EarlyChainClose)errs()<<"bennett: analysis: -bennett-analysis-early-chain-close: NOT the reference analysis of dialect §5; every result of this run is labelled so\n";
+  if(EarlyChainClose)errs()<<"bennett: analysis: -bennett-analysis-early-chain-close: NON-REFERENCE (NOT the reference analysis of dialect §5); every result of this run is labelled so\n";
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
