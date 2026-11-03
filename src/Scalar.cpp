@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ByteOrder.h"
 #include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/llvm-config.h"
@@ -513,13 +514,25 @@ struct Scalar {
           unsigned w = width(l->getType());
           if (w % 8) unimplemented("§12 N22 nonbyte load",2,l);
           auto p = value(l->getPointerOperand());lines.push_back("lift.boundscheck "+p+" "+std::to_string(w/8));
-          dest(names[l],w);lines.push_back(names[l]+" = lift.load.i"+std::to_string(w)+" "+p);continue;
+          dest(names[l],w);
+          if(m.getDataLayout().isLittleEndian() || w==8)
+            lines.push_back(names[l]+" = lift.load.i"+std::to_string(w)+" "+p);
+          else {
+            auto raw=temp(w,"lift.load.i"+std::to_string(w)+" "+p);
+            auto value=reverseBytes(raw,w,[&](APInt n){return constant(n);},
+              [&](unsigned bits,std::string op){return temp(bits,"lift."+op);});
+            lines.push_back(names[l]+" = lift.mov "+value);
+          }
+          continue;
         }
         if (auto *st = dyn_cast<StoreInst>(&i)) {
           auto v=value(st->getValueOperand()),p=value(st->getPointerOperand());
           unsigned w=width(st->getValueOperand()->getType());
           if(w%8)unimplemented("§12 N22 nonbyte store",2,st);
           lines.push_back("lift.boundscheck "+p+" "+std::to_string(w/8));
+          if(!m.getDataLayout().isLittleEndian() && w>8)
+            v=reverseBytes(v,w,[&](APInt n){return constant(n);},
+              [&](unsigned bits,std::string op){return temp(bits,"lift."+op);});
           lines.push_back("lift.store.i"+std::to_string(w)+" "+p+" "+v);continue;
         }
         if (isa<AllocaInst>(i)) unimplemented("§17.3 shadow stack",2,&i);

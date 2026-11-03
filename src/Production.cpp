@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ByteOrder.h"
 #include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/MapVector.h"
@@ -238,6 +239,7 @@ struct Entry {
   bool generalUsed = false;
   bool allocatorFaultService = false;
   bool usesCCCalls = false;
+  bool usesSourceMemory = false;
   std::map<Function *, std::string> *ccNames = nullptr;
   std::map<std::string, std::pair<std::string,std::string>> ccFunctions;
   std::vector<std::string> regs, rows, params, results, paramTypes, resultTypes;
@@ -246,6 +248,7 @@ struct Entry {
   std::vector<std::string> references;
   std::vector<std::map<std::string,std::string>> referenceGlobals;
   json::Array coverage;
+  json::Array controlledIdentities;
   std::map<std::string, std::pair<std::string, std::string>> actions;
   unsigned next = 0, ordinal = 0;
   struct PhysicalSlot { std::string q, tag; unsigned identity; };
@@ -407,6 +410,27 @@ struct Entry {
       rows.push_back("free "+*it);recordFree(*it);
     }
   }
+  std::string sourceByteOrder(std::string value,unsigned bits) {
+    return reverseBytes(value,bits,[&](APInt n){return operand(ConstantInt::get(m.getContext(),n));},
+      [&](unsigned w,std::string op){return emit("i"+std::to_string(w),op);});
+  }
+  std::string sourceLoad(std::string pointer,unsigned bits) {
+    usesSourceMemory=true;
+    auto carrier=(!m.getDataLayout().isLittleEndian() && bits>8)?alignTo(bits,8u):bits;
+    auto value=emit("i"+std::to_string(carrier),"load.i"+std::to_string(carrier)+" "+pointer);
+    if(!m.getDataLayout().isLittleEndian() && bits>8)value=sourceByteOrder(value,carrier);
+    if(bits!=carrier)value=emit("i"+std::to_string(bits),"trunc.i"+std::to_string(bits)+" "+value);
+    return value;
+  }
+  void sourceStore(std::string pointer,std::string value,unsigned bits) {
+    usesSourceMemory=true;
+    if(!m.getDataLayout().isLittleEndian() && bits>8) {
+      auto carrier=alignTo(bits,8u);
+      if(bits!=carrier)value=emit("i"+std::to_string(carrier),"zext.i"+std::to_string(carrier)+" "+value);
+      bits=carrier;value=sourceByteOrder(value,bits);
+    }
+    rows.push_back("store.i"+std::to_string(bits)+" "+pointer+" "+value);
+  }
   std::string fieldPointer(const std::string &p,uint64_t offset) {
     if(!offset)return p;
     auto t="i"+std::to_string(m.getDataLayout().getPointerSizeInBits());
@@ -497,9 +521,7 @@ struct Entry {
     rows.push_back(sum+" = add "+bits+" "+k);
     rows.push_back(address+" = inttoptr "+sum);
     auto w = t->isPointerTy() ? pw : width(t);
-    auto value = fresh("i"+std::to_string(w));
-    rows.push_back(value+" = load.i"+std::to_string(w)+" "+address);
-    return value;
+    return sourceLoad(address,w);
   }
   std::string gep(GEPOperator *g) {
     auto &dl = m.getDataLayout();
@@ -1065,6 +1087,35 @@ struct Entry {
                            ") () () ()\n^entry():\n" + ops};
     return n;
   }
+  bool controlledIdentity(CallBase &call) {
+    auto *body=resolve(call.getArgOperand(2));
+    if(!body || body->isDeclaration() || body->size()!=1)return false;
+    unsigned instructions=0;
+    for(auto &i:body->getEntryBlock())if(!isa<DbgInfoIntrinsic>(i)) {
+      if(!isa<ReturnInst>(i) || cast<ReturnInst>(i).getReturnValue())return false;
+      ++instructions;
+    }
+    // This is an identity proof, not evaluation of a general generation.
+    // One return consumes one G step; a positive resolved default proves no
+    // generation fault can occur. Other generations use the general path.
+    if(instructions!=1 || !isa<ConstantPointerNull>(call.getArgOperand(3)))return false;
+    auto budget=table.baseline(*body);
+    if(!budget[0])return false;
+    auto index=integer(a.get(call.getArgOperand(1)),&call);
+    auto width=qwidth(a.get(call.getArgOperand(0)),&call);
+    withHandle(call.getArgOperand(0),[&](std::string control) {
+      if(index>=width) {
+        rows.push_back("trap");rows.push_back("^control"+std::to_string(dispatchBlock++)+"unreachable():");return;
+      }
+      auto wire="c["+std::to_string(index)+"]";
+      auto name=action("","c:wire["+std::to_string(width)+"] in","",std::to_string(width),
+        "qpred "+wire+"\nqunpred "+wire);
+      rows.push_back("action_call @"+name+" () ("+control+") () ()");
+    });
+    controlledIdentities.push_back(json::Object{{"source",body->getName()},
+      {"region_key",regionKey(body)},{"generation_steps",1},{"resolved_budget",tuple(budget)}});
+    return true;
+  }
   void gate(CallBase &c) {
     auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
     auto *v = c.getArgOperand(measurement ? 0 : 1);
@@ -1073,11 +1124,44 @@ struct Entry {
     if(!result.empty())names[&c]=result;
   }
   void gateOn(CallBase &c, std::string src) {
+    bool measurement=c.getCalledFunction()->getName()=="__bennett_measure";
+    auto *index=c.getArgOperand(measurement?1:2);
+    auto width=qwidth(a.get(c.getArgOperand(measurement?0:1)),&c);
+    auto indices=a.get(index),ops=measurement?intValue(0,32):a.get(c.getArgOperand(0));
+    if(singletonInt(indices) && singletonInt(ops) && integer(indices,&c)<width) {
+      gateLeaf(c,src,integer(indices,&c),integer(ops,&c));return;
+    }
+    auto id=std::to_string(dispatchBlock++),done="gate"+id+"done",bad="gate"+id+"bad";
+    auto result=measurement?fresh("i1"):"";
+    auto choose=[&](Value *value,AV domain,std::vector<uint64_t> keys,const std::function<void(uint64_t)> &body) {
+      if(!domain.top) {
+        std::vector<uint64_t> finite;
+        for(auto key:keys)if(domain.atoms.count(*intValue(key,cast<IntegerType>(value->getType())->getBitWidth()).atoms.begin()))finite.push_back(key);
+        keys=std::move(finite);
+      }
+      if(keys.empty()){rows.push_back("br ^"+bad+"()");return;}
+      if(singletonInt(domain) && keys.size()==1){body(keys[0]);return;}
+      compareTree(operand(value),widthOf(value),keys,body,bad);
+    };
+    std::vector<uint64_t> keys;for(uint64_t i=0;i<width;++i)keys.push_back(i);
+    choose(index,indices,keys,[&](uint64_t i) {
+      auto leaf=[&](uint64_t op) {
+        gateLeaf(c,src,i,op);
+        rows.push_back("br ^"+done+"("+(measurement?names.at(&c):"")+")");
+      };
+      if(measurement)leaf(0);
+      else choose(c.getArgOperand(0),ops,{1,2,3,4,5,6,7,8},leaf);
+    });
+    rows.push_back("^"+bad+"():");rows.push_back("trap");
+    rows.push_back("^"+done+"("+(measurement?result+":i1":"")+"):");
+    if(measurement)names[&c]=result;
+  }
+  unsigned widthOf(Value *value) {return width(value->getType());}
+  void gateLeaf(CallBase &c, std::string src,uint64_t i,uint64_t op) {
     auto n = c.getCalledFunction()->getName();
     bool measurement = n == "__bennett_measure";
     auto q = a.get(c.getArgOperand(measurement ? 0 : 1));
     auto w = qwidth(q, &c);
-    auto i = integer(a.get(c.getArgOperand(measurement ? 1 : 2)), &c);
     if (i >= w)
       fail("T-INDEX", "§18.3 gate/measurement index", &c);
     if (measurement) {
@@ -1093,7 +1177,6 @@ struct Entry {
       rows.push_back(value + " = measure " + copy);
     } else {
       static const char *ops[] = {"", "x", "h", "s", "sdg", "t", "tdg"};
-      auto op = integer(a.get(c.getArgOperand(0)), &c);
       std::string wire = "s[" + std::to_string(i) + "]", row;
       if (op >= 1 && op <= 6)
         row = std::string(ops[op]) + " " + wire;
@@ -1236,10 +1319,16 @@ struct Entry {
       for (PHINode &p : to->phis()) {auto vs=operands(p.getIncomingValueForBlock(from));values.insert(values.end(),vs.begin(),vs.end());}
       return "^" + blocks[to] + ("(" + join(values) + ")");
     };
-    // Linked/LTO block order need not place dominators before uses. Preserve
-    // the established order elsewhere; visit new allocator CFGs in RPO.
+    // LLVM block layout need not put a dominating definition before its use.
+    // Keep existing emission order when it already meets that dependency.
+    std::map<const BasicBlock *,unsigned> position;
+    unsigned index=0;for(auto &bb:f)position[&bb]=index++;
+    bool laterDefinition=false;
+    for(auto &bb:f)for(auto &i:bb)if(!isa<PHINode>(i))for(auto &use:i.operands())
+      if(auto *definition=dyn_cast<Instruction>(use.get()))
+        laterDefinition|=position.at(definition->getParent())>position.at(&bb);
     std::vector<BasicBlock *> order;
-    if(f.hasFnAttribute("bennett.cc.allocator") || (ccNames && ccNames->size()>1)) {
+    if(laterDefinition || f.hasFnAttribute("bennett.cc.allocator") || (ccNames && ccNames->size()>1)) {
       for(auto *bb:ReversePostOrderTraversal<Function *>(&f))order.push_back(bb);
       for(auto &bb:f)if(!is_contained(order,&bb))order.push_back(&bb);
     } else for(auto &bb:f)order.push_back(&bb);
@@ -1355,6 +1444,7 @@ struct Entry {
             descriptor(*c);
           else if (n == "__bennett_inplace")
             inplace(*c);
+          else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
           else if (n == "__bennett_gate" || n == "__bennett_measure")
             gate(*c);
           else if(n=="__bennett_nz_alloc") {
@@ -1398,7 +1488,7 @@ struct Entry {
             for(unsigned k=0;k<fs.size();++k) {
               auto value=vs[k],address=fieldPointer(p,fs[k].offset),t="i"+std::to_string(width(fs[k].type));
               if(fs[k].type->isPointerTy())value=emit(t,"ptrtoint."+t+" "+value);
-              rows.push_back("store."+t+" "+address+" "+value);
+              sourceStore(address,value,width(fs[k].type));
             }
             continue;
           }
@@ -1407,13 +1497,13 @@ struct Entry {
           if (st->getValueOperand()->getType()->isPointerTy() && !tagged(a.get(st->getValueOperand()))) {
             auto d = fresh("i" + std::to_string(w)); rows.push_back(d + " = ptrtoint.i" + std::to_string(w) + " " + value); value = d;
           }
-          rows.push_back("store.i" + std::to_string(w) + " " + p + " " + value);
+          sourceStore(p,value,w);
         } else if (auto *ld = dyn_cast<LoadInst>(&i)) {
           if(ld->getType()->isAggregateType()) {
             auto p=operand(ld->getPointerOperand());std::vector<std::string> ns;
             for(auto &field:fields(ld->getType())) {
               auto address=fieldPointer(p,field.offset),t="i"+std::to_string(width(field.type));
-              auto n=emit(t,"load."+t+" "+address);
+              auto n=sourceLoad(address,width(field.type));
               if(field.type->isPointerTy())n=emit("ptr","inttoptr "+n);
               ns.push_back(n);
             }
@@ -1421,7 +1511,7 @@ struct Entry {
           }
           auto p = operand(ld->getPointerOperand());
           auto w = ld->getType()->isPointerTy() ? m.getDataLayout().getPointerSizeInBits() : width(ld->getType());
-          auto value = fresh("i" + std::to_string(w)); rows.push_back(value + " = load.i" + std::to_string(w) + " " + p);
+          auto value = sourceLoad(p,w);
           if (ld->getType()->isPointerTy() && !tagged(a.get(ld))) { auto d = fresh("ptr"); rows.push_back(d + " = inttoptr " + value); value=d; }
           names[ld] = value;
         } else if (auto *r = dyn_cast<ReturnInst>(&i)) {
@@ -1814,7 +1904,7 @@ std::string launchObject(Entry &e, json::Object &record,
     pos = next;
   }
   if(sections.count("functions") && sections["functions"].empty())sections.erase("functions");
-  if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes || e.usesCCCalls)) {
+  if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes || e.usesCCCalls || e.usesSourceMemory)) {
     uint64_t heap = std::max(e.table.capacities[1],e.ccHeapBytes); unsigned h = 0, tab = 0, sc = 0;
     while ((uint64_t(1)<<h) < 4096 + heap) ++h;
     while ((uint64_t(1)<<tab) < ((e.f.hasFnAttribute("bennett.cc.allocator") || e.usesCCCalls) ? heap : e.localMemory.size())) ++tab;
@@ -2142,6 +2232,40 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
     b.SetInsertPoint(ok);
   };
   auto slot = [&](Type *t) { return b.CreateAlloca(t); };
+  auto launchByteOrder = [&](Value *value) -> Value * {
+    auto bits=cast<IntegerType>(value->getType())->getBitWidth();
+    if(m.getDataLayout().isLittleEndian() || bits<=8)return value;
+    // llvm.bswap requires an even number of bytes; launch carriers such as
+    // i24 still have a well-defined byte encoding.
+    Value *result=ConstantInt::get(value->getType(),0);
+    for(unsigned k=0;k<bits/8;++k) {
+      auto *byte=b.CreateAnd(b.CreateLShr(value,k*8),ConstantInt::get(value->getType(),255));
+      result=b.CreateOr(result,b.CreateShl(byte,bits-8-k*8));
+    }
+    return result;
+  };
+  struct NativeField { Type *type; SmallVector<unsigned> path; };
+  auto fields = [&](Type *type) {
+    std::vector<NativeField> result;
+    std::function<void(Type *,SmallVector<unsigned>)> visit=[&](Type *t,SmallVector<unsigned> path) {
+      if(t->isAggregateType()) {
+        auto count=t->isStructTy()?t->getStructNumElements():t->getArrayNumElements();
+        for(unsigned k=0;k<count;++k) {
+          auto nested=path;nested.push_back(k);
+          visit(t->isStructTy()?t->getStructElementType(k):t->getArrayElementType(),nested);
+        }
+      } else result.push_back({t,path});
+    };
+    visit(type,{});return result;
+  };
+  auto symbols=parse(object.split("section symbols\n").second.split('\n').first);
+  const json::Object *signature=nullptr;
+  for(auto &symbol:*symbols.getAsObject())if(symbol.second.getAsObject()->getString("name")==f.getName())
+    signature=symbol.second.getAsObject()->getObject("signature");
+  if(!signature)fail("output","missing native launch signature",&f);
+  std::vector<Value *> arguments;
+  if(record.getString("mode")!="reversible")for(auto &arg:f.args())
+    for(auto &field:fields(arg.getType()))arguments.push_back(field.path.empty()?&arg:b.CreateExtractValue(&arg,field.path));
   auto *program = slot(ptr), *args = slot(ptr), *run = slot(i64),
        *result = slot(ptr), *request = slot(ptr);
   auto *target =
@@ -2156,18 +2280,27 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
   auto *bs = record.getArray("budgets");
   status(
       b.CreateCall(api("bennett_args_new", i32, {size, ptr}),
-                   {ConstantInt::get(size, (record.getString("mode")=="reversible"?0:f.arg_size()) + bs->size()), args}));
+                   {ConstantInt::get(size, arguments.size() + bs->size()), args}));
   auto *av = b.CreateLoad(ptr, args);
   unsigned index = 0;
-  for (Argument &arg : f.args()) {
-    if(record.getString("mode")=="reversible")break;
-    auto w = arg.getType()->getIntegerBitWidth(), bytes = (w + 7) / 8;
+  for (auto *arg : arguments) {
+    auto isaType=(*signature->getArray("params"))[index].getAsString().value();
+    auto *type=arg->getType();
+    if(isaType.starts_with("qreg[")) {
+      Value *id=type->isPointerTy()?b.CreatePtrToInt(arg,i64):b.CreateZExtOrTrunc(arg,i64);
+      status(b.CreateCall(api("bennett_args_set_qreg",i32,{ptr,size,i64}),
+        {av,ConstantInt::get(size,index++),id}));continue;
+    }
+    auto w = type->isPointerTy()?m.getDataLayout().getPointerTypeSizeInBits(type):
+      type->isIntegerTy()?type->getIntegerBitWidth():unsigned(type->getPrimitiveSizeInBits());
+    auto bytes = (w + 7) / 8;
+    auto *bits=IntegerType::get(ctx,w);
+    Value *value=type->isPointerTy()?b.CreatePtrToInt(arg,bits):
+      type->isIntegerTy()?arg:b.CreateBitCast(arg,bits);
     auto *storage = slot(IntegerType::get(ctx, bytes * 8));
-    auto *value = b.CreateZExtOrTrunc(&arg, IntegerType::get(ctx, bytes * 8));
+    value = b.CreateZExtOrTrunc(value, IntegerType::get(ctx, bytes * 8));
     // Launch integers are little endian even on a big endian host.
-    if (!m.getDataLayout().isLittleEndian() && bytes > 1)
-      value = b.CreateCall(intrinsic(Intrinsic::bswap, {value->getType()}),
-                           {value});
+    value=launchByteOrder(value);
     b.CreateStore(value, storage);
     status(b.CreateCall(
         api("bennett_args_set_int", i32, {ptr, size, i32, ptr}),
@@ -2221,20 +2354,31 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
       ConstantInt::get(size, 0)));
   Value *ret = nullptr;
   if (!f.getReturnType()->isVoidTy()) {
+    if(f.getReturnType()->isAggregateType())ret=Constant::getNullValue(f.getReturnType());
+    unsigned index=0;
+    for(auto &field:fields(f.getReturnType())) {
     auto *kind = slot(i32), *width = slot(i32);
-    auto w = f.getReturnType()->getIntegerBitWidth(), bytes = (w + 7) / 8;
+    auto isaType=(*signature->getArray("results"))[index].getAsString().value();
+    auto *type=field.type;
+    auto w=isaType.starts_with("qreg[")?64u:type->isPointerTy()?m.getDataLayout().getPointerTypeSizeInBits(type):
+      type->isIntegerTy()?type->getIntegerBitWidth():unsigned(type->getPrimitiveSizeInBits());
+    auto bytes=(w+7)/8;
     auto *carrier = IntegerType::get(ctx, bytes * 8);
     auto *storage = slot(carrier);
     status(b.CreateCall(
         api("bennett_result_get", i32, {ptr, size, ptr, ptr, ptr, size}),
-        {res, ConstantInt::get(size, 0), kind, width, storage,
+        {res, ConstantInt::get(size, index++), kind, width, storage,
          ConstantInt::get(size, bytes)}));
-    require(b.CreateICmpEQ(b.CreateLoad(i32, kind), b.getInt32(0)));
+    require(b.CreateICmpEQ(b.CreateLoad(i32, kind), b.getInt32(isaType.starts_with("qreg[")?2:0)));
     require(b.CreateICmpEQ(b.CreateLoad(i32, width), b.getInt32(w)));
-    ret = b.CreateLoad(carrier, storage);
-    if (!m.getDataLayout().isLittleEndian() && bytes > 1)
-      ret = b.CreateCall(intrinsic(Intrinsic::bswap, {carrier}), {ret});
-    ret = b.CreateTruncOrBitCast(ret, f.getReturnType());
+    Value *value = b.CreateLoad(carrier, storage);
+    value=launchByteOrder(value);
+    auto bits=type->isPointerTy()?m.getDataLayout().getPointerTypeSizeInBits(type):
+      type->isIntegerTy()?type->getIntegerBitWidth():unsigned(type->getPrimitiveSizeInBits());
+    value=b.CreateZExtOrTrunc(value,IntegerType::get(ctx,bits));
+    value=type->isPointerTy()?b.CreateIntToPtr(value,type):type->isIntegerTy()?value:b.CreateBitCast(value,type);
+    ret=field.path.empty()?value:b.CreateInsertValue(ret,value,field.path);
+    }
   }
   status(b.CreateCall(api("bennett_run_close", i32, {ptr, i64}), {p, id}));
   b.CreateCall(api("bennett_result_free", b.getVoidTy(), {ptr}), {res});
@@ -2485,6 +2629,8 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
       e.budgets=std::move(callee.budgets);
       e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+      for(auto &proof:callee.controlledIdentities)e.controlledIdentities.push_back(std::move(proof));
+      e.usesSourceMemory|=callee.usesSourceMemory;
       e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);e.allocatedBytes+=callee.allocatedBytes;
       e.allocatorFaultService|=callee.allocatorFaultService;
       json::Array pt,rt;for(auto &t:callee.paramTypes)pt.push_back(t);for(auto &t:callee.resultTypes)rt.push_back(t);
@@ -2516,6 +2662,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
                       {"epsilon_total", json::Object{{"diamond", 0}}},
                       {"method", "sum_over_multiplicities"}}}};
     auto obj = launchObject(e, record, cert);
+    if(!e.controlledIdentities.empty())record["controlled_identity_proofs"]=std::move(e.controlledIdentities);
     write(dir + "/launch.bennett", obj);
     write(dir + "/all-coverage.json", jcs(json::Value(completeCoverage(obj))) + "\n");
     auto build = jcs(json::Value(std::move(record)));
