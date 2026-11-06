@@ -29,6 +29,7 @@ def drift():
     registry = tomllib.loads(dialect_blob('SPEC_VERSIONS.toml'))
     pin = tomllib.loads((ROOT / 'SPEC_VERSIONS.toml').read_text())
     return (registry['dialect'] != pin['dialect']
+            or registry['isa'] != pin['isa']
             or pin['specs']['bennett-dialect-spec'] != pin['dialect']
             or pin['specs']['bennett-isa-spec'] != pin['isa']
             or hashlib.sha256(dialect_text().encode()).hexdigest() != pin['dialect_sha256']

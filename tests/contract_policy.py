@@ -12,6 +12,7 @@ with tempfile.TemporaryDirectory() as d:
  root = Path(d)
  source = (c.ROOT / 'SPEC_VERSIONS.toml').read_text()
  for old, new in ((pins['dialect'], 'invalid-version'),
+                  (pins['isa'], '999'),
                   (pins['dialect_sha256'], '0' * 64),
                   (pins['commits']['bennett-dialect-spec'], '0' * 40)):
   (root / 'SPEC_VERSIONS.toml').write_text(source.replace(old, new))
