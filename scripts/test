@@ -11,7 +11,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 POLICIES = ('smoke', 'gate_policy', 'contract_policy', 'pin_policy')
 DRIVERS = ('recognition', 'analysis_edges', 'validation', 'scalars',
-           'address_spaces', 'register_classes')
+           'address_spaces', 'register_classes', 'entry_runtime')
 REGRESSIONS = ('shuffle', 'byval', 'global-diagnostic', 'byte-order', 'native-abi',
                'block-order', 'control', 'dynamic-gate', 'unresolved-call')
 
