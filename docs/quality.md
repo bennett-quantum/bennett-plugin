@@ -1,7 +1,7 @@
 # Quality floor
 
 The default test command is `timeout 180 scripts/test`, after building LLVM 18 and 23.
-It passed 21 driver commands in **25.549 seconds** with the LLVM 18 gcov build.
+It passed 23 driver commands in **94.786 seconds** with LLVM 18 and 23 release builds.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
@@ -57,6 +57,22 @@ structured ISA fault 5 and hand-derived nonfault results 16, 8 and 0. Pointer ro
 every 64-bit basis vector plus seeded samples. Host-tier reports require both source functions,
 so an empty report cannot pass. The additive-copy-cycle witness already checks a top result
 and bounded convergence in addition to its empty exact-atom expectation.
+
+The normalization checks parse the actual generated numerical modules with LLVM's IR reader,
+including every materialized helper. They reject intrinsic calls and vector or wide scalar
+values in every body; the wide suite also enforces byte-sized memory operations. Integer-runtime materialization introduces helpers
+with partial-limb memory operations which production normalizes in its next closure pass, so
+the first-stage integer check enforces its original intrinsic/vector contract before clang.
+The bounded default suite runs `tests/normalisation_scope.py --major 18` and `--major 23`: each mutates the real output
+and requires rejection of a scalar intrinsic, vector intrinsic, helper-body intrinsic, non-byte
+memory access, and memory intrinsic. The baseline below registers these two new verifier files;
+no existing-file allowance is raised.
+
+Other round-one replacements still inspect their original bug classes: mixed-native executes the
+emitted host.bc's byte-vector function for every byte and its native floating function; wide
+constant-shift checks execute the same generated function; pointer round trips cover every bit.
+The helper/global-key check supplements its original comparisons with executions of the same
+linked bodies and globals. Remaining removed subprocess assertions live in the shared harness.
 
 ## Function size and cognitive-complexity baseline
 
@@ -165,6 +181,8 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/native_hello.py": {"complexity": 3, "functions": 2, "length_max": 122, "length_p50": 18, "length_p90": 122, "over_300": 0, "trivial_wrappers": 0},
     "tests/native_layout.py": {"complexity": 20, "functions": 1, "length_max": 163, "length_p50": 163, "length_p90": 163, "over_300": 0, "trivial_wrappers": 0},
     "tests/native_link.py": {"complexity": 16, "functions": 5, "length_max": 222, "length_p50": 16, "length_p90": 222, "over_300": 0, "trivial_wrappers": 0},
+    "tests/normalisation_check.cpp": {"complexity": 56, "functions": 3, "length_max": 26, "length_p50": 13, "length_p90": 26, "over_300": 0, "trivial_wrappers": 0},
+    "tests/normalisation_scope.py": {"complexity": 16, "functions": 4, "length_max": 35, "length_p50": 12, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
     "tests/pin_policy.py": {"complexity": 31, "functions": 26, "length_max": 88, "length_p50": 10, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
     "tests/pinned_siblings.py": {"complexity": 6, "functions": 2, "length_max": 19, "length_p50": 13, "length_p90": 19, "over_300": 0, "trivial_wrappers": 0},
     "tests/prior_objects.py": {"complexity": 3, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},

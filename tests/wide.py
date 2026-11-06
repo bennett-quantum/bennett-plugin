@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """N22 limb semantics against Python integers, including loop/ABI/bitcast edges."""
 
-import argparse, ctypes, json, os, random, re, subprocess
+import argparse, ctypes, json, os, random
 from scalars import REF
 from contracts import validate_normalisation, plugin_command, ROOT as R
 
@@ -87,7 +87,7 @@ src.write_text("\n".join(source))
 out = d / "out.ll"
 e = dict(os.environ)
 e["BENNETT_ARITH_BITCODE"] = ""
-z = subprocess.run(
+run(
     [
         *plugin_command(a.major),
         "-bennett-normalise-only",
@@ -96,16 +96,9 @@ z = subprocess.run(
         "-o",
         str(out),
     ],
-    capture_output=True,
-    text=True,
     env=e,
 )
-assert z.returncode == 0, z.stderr
-validate_normalisation(
-    a.major,
-    "define void @memory(ptr %p, ptr %q) { %v = load i129, ptr %p, align 1\n store i129 %v, ptr %q, align 1\n ret void }",
-    d,
-)
+validate_normalisation(a.major, out, memory="byte-memory")
 # Runtime slots get a test-only stack allocator; arithmetic definitions come from the plugin.
 runtime = d / "stack.c"
 runtime.write_text(

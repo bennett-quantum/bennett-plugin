@@ -149,11 +149,7 @@ run(
         out,
     ]
 )
-validate_normalisation(
-    a.major,
-    "declare i8 @llvm.ctpop.i8(i8)\ndefine i8 @count(i8 %x) { %v = call i8 @llvm.ctpop.i8(i8 %x)\n ret i8 %v }",
-    d,
-)
+validate_normalisation(a.major, out)
 runtime = d / "stack.c"
 runtime.write_text(
     "#include <stdint.h>\n#include <unistd.h>\nstatic unsigned char s[1048576];static uint64_t sp;void *__bennett_rt_ss_push(uint64_t n,uint64_t a){sp=(sp+a-1)&-a;void*p=s+sp;sp+=n;return p;}void __bennett_rt_ss_pop(void*p){sp=(unsigned char*)p-s;}void __bennett_nz_fault(uint64_t n){_exit((int)n);}"

@@ -19,6 +19,7 @@ DRIVERS = (
     "address_spaces",
     "register_classes",
     "entry_runtime",
+    "normalisation_scope",
 )
 REGRESSIONS = (
     "shuffle",

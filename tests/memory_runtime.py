@@ -72,13 +72,7 @@ run(
         out,
     ]
 )
-validate_normalisation(
-    a.major,
-    "declare void @llvm.memmove.p0.p0.i32(ptr,ptr,i32,i1 immarg)\n"
-    "define void @move(ptr %d,ptr %s,i32 %n) {\n"
-    "call void @llvm.memmove.p0.p0.i32(ptr %d,ptr %s,i32 %n,i1 false)\nret void }",
-    d,
-)
+validate_normalisation(a.major, out)
 so = d / "memory.so"
 run([tool + "clang", "-shared", "-fPIC", "-O0", out, "-o", so])
 lib = ctypes.CDLL(str(so))

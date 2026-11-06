@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import tomllib
 
@@ -59,19 +60,20 @@ def plugin_command(major, pipeline="bennett"):
     ]
 
 
-def validate_normalisation(major, body, directory):
-    """The independent residual reader must reject raw IR and accept the result."""
-    source, normalised = directory / "residual-input.ll", directory / "residual-output.ll"
-    source.write_text(body)
-    command = plugin_command(major)
-    rejected = run([*command, "-bennett-validate-only", "-disable-output", source])
-    assert rejected.returncode != 0 and "BD-E-RESIDUAL" in rejected.stderr, rejected
-    run_checked([*command, "-bennett-normalise-only", source, "-S", "-o", normalised])
-    # Integer materialisation introduces helper bodies; production normalises
-    # that linked closure again before independent residual validation.
-    materialised = directory / "residual-materialised.ll"
-    run_checked([*command, "-bennett-normalise-only", normalised, "-S", "-o", materialised])
-    run_checked([*command, "-bennett-validate-only", "-disable-output", materialised])
+def validate_normalisation(major, normalised, memory="values"):
+    """Parse the actual output before clang can lower any missed LLVM operations."""
+    source = ROOT / "tests/normalisation_check.cpp"
+    directory = ROOT / f".tmp/normalisation-check/{major}"
+    directory.mkdir(parents=True, exist_ok=True)
+    checker = directory / ("check-" + hashlib.sha256(source.read_bytes()).hexdigest()[:16])
+    tool = f"/usr/lib/llvm-{major}/bin/"
+    if not checker.exists():
+        flags = run_checked([
+            tool + "llvm-config", "--cxxflags", "--ldflags", "--libs",
+            "core", "irreader", "--system-libs",
+        ]).stdout
+        run_checked([tool + "clang++", source, *shlex.split(flags), "-o", checker])
+    run_checked([checker, normalised, memory])
 
 
 def dialect_blob(path):
