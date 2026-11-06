@@ -36,18 +36,18 @@ sha = "1c29c8d731228b67902c3fa72e410e1bb71d16b4"
 note = "0.2.13 registry correction required by contract_policy.py; accepted spec text and corpus unchanged from 95a4b8d"
 
 [siblings."bennett-arith"]
-sha = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
+sha = "5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab"
 note = "commit named in SPEC_VERSIONS.toml [arith]"
 [siblings."bennett-arith".files]
 "dist/llvm18/bennett-arith.bc" = "8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1"
 "dist/llvm23/bennett-arith.bc" = "59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793"
 
 [siblings."bennett-runtimes"]
-sha = "2076014f81164ca75cc8f26cfe0081c2478cfdaf"
+sha = "248e468ca505c684bbf254e52eb8148f1e530c83"
 note = "publication hashed by tests/allocator_closure.py and tests/reversible.py"
 [siblings."bennett-runtimes".files]
-"dist/llvm18/bennett-runtimes.bc" = "4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f"
-"dist/llvm23/bennett-runtimes.bc" = "bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e"
+"dist/llvm18/bennett-runtimes.bc" = "bbc402fd9b97ce0c5cdf06eff864f77ea4bce22f619a0ad561b081f445f3c67a"
+"dist/llvm23/bennett-runtimes.bc" = "78bfc3f4c4ac2d269dc53e03a476fb67283b9d7e63592a6139ad2a7cd7ece884"
 
 [siblings."bennett-native-runtimes"]
 sha = "248e468ca505c684bbf254e52eb8148f1e530c83"
