@@ -1259,7 +1259,7 @@ struct Entry {
     rows.push_back("trap");
     rows.push_back("^" + done + "(" + q + ":qreg[" + std::to_string(width) + "]):");
   }
-  void lower() {
+  void prepareLowering() {
     setupSnapshot();
     // Descriptor memory has no device representation: its fields are virtual
     // operands. Elide only local storage whose complete use closure is records.
@@ -1381,6 +1381,121 @@ struct Entry {
       blocks[&bb] = "b" + std::to_string(bn++);
     for (BasicBlock &bb : f)
       for (PHINode &p : bb.phis()) destinations(&p);
+  }
+  enum class CallFlow { Continue, EndBlock };
+  CallFlow lowerCall(CallBase *c) {
+    auto *g = resolve(c->getCalledOperand());
+    if(!g && ccNames && !c->isInlineAsm()) {
+      auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
+      auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
+      std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
+      for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
+        if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
+          candidates[functionAddress(candidate)]=candidate;
+      for(auto &candidate:candidates)keys.push_back(candidate.first);
+      auto args=callArguments(*c);
+      auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
+      auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
+      compareTree(value,pw,keys,[&](uint64_t key) {
+        if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
+        auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
+        std::vector<std::string> values;
+        if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
+        rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
+        rows.push_back("br ^"+done+"("+join(values)+")");
+      },bad);
+      rows.push_back("^"+bad+"():");rows.push_back("trap");
+      std::vector<std::string> bindings;
+      if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
+      rows.push_back("^"+done+"("+join(bindings)+"):");releaseCallArguments(args);propagateExit();usesCCCalls=true;return CallFlow::Continue;
+    }
+    if (!g)
+      unimplemented("§17.4 indirect CC call", 1, c);
+    auto n = g->getName();
+    if (n.starts_with("llvm.lifetime.") ||
+        (!memoryDescriptors && n.starts_with("llvm.memset.") &&
+         descriptorObjects.count(
+             getUnderlyingObject(c->getArgOperand(0)))))
+      return CallFlow::Continue;
+    if(rTier && n.starts_with("__bennett_effect_")) {
+      auto suffix=n.drop_front(StringRef("__bennett_effect_").size());auto parts=suffix.split('_');
+      effectModels.insert(parts.first.str());std::vector<std::string> args;
+      for(auto &v:c->args())args.push_back(operand(v));
+      rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));return CallFlow::Continue;
+    }
+    if (n == "__bennett_nz_fault") {
+      if(auto *asmMD=c->getMetadata("bennett.asm")) {
+        std::string block;unsigned ordinal=0;
+        for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
+        asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
+          {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
+      }
+      // Newly materialised allocator closures report the explicit code
+      // through §11.5 before trapping. The payload is private storage,
+      // not an extra logical heap allocation on a failing path.
+      if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
+        reportedFault(c->getArgOperand(0));return CallFlow::EndBlock;
+      }
+      rows.push_back("trap"); return CallFlow::EndBlock;
+    }
+    if (n == "llvm.trap") { rows.push_back("trap"); return CallFlow::EndBlock; }
+    if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
+      auto w = integer(a.get(c->getArgOperand(1)), c);
+      auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
+      if (files.count(c)) {
+        // No site is executed twice in this acyclic entry-local file.
+        // Distinct nonzero identities are stable across stores and loads;
+        // free retires the live tag before any later use can match it.
+        auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
+        rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
+        names[c] = tag;
+        rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
+      } else names[c] = q;
+      allocateRegister(*c, q, w);
+    } else if (n == "__bennett_qfree")
+      withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
+    else if (n == "__bennett_oracle")
+      descriptor(*c);
+    else if (n == "__bennett_inplace")
+      inplace(*c);
+    else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
+    else if (n == "__bennett_gate" || n == "__bennett_measure")
+      gate(*c);
+    else if(n=="__bennett_nz_alloc") {
+      auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
+    } else if(n=="__bennett_nz_free") {
+      auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
+      auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
+    } else if (ccNames && ccNames->count(g)) {
+      usesCCCalls=true;
+      // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
+      // ISA calls bind typed operands, keep a callee environment and
+      // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
+      auto args=callArguments(*c);
+      auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
+      if(c->getType()->isVoidTy())rows.push_back(call);
+      else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
+      releaseCallArguments(args);propagateExit();
+    } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
+              !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
+      // A reached missing import is F(8). Continue naming the source
+      // tail in an unreachable block so successor uses remain valid.
+      if(!c->getType()->isVoidTy()) {
+        auto ns=destinations(c);auto fs=fields(c->getType());
+        for(unsigned k=0;k<ns.size();++k) {
+          if(fs[k].type->isPointerTy())rows.push_back(ns[k]+" = inttoptr "+number(0));
+          else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
+        }
+      }
+      unresolvedCall(n);
+      rows.push_back("^missing" + std::to_string(dispatchBlock++) + "tail():");
+      return CallFlow::Continue;
+    } else
+      unimplemented("§17.4 CC marker/call lowering", 1, c);
+    return CallFlow::Continue;
+  }
+  void lower() {
+    prepareLowering();
     auto edge = [&](BasicBlock *to, BasicBlock *from) {
       std::vector<std::string> values;
       for (PHINode &p : to->phis()) {auto vs=operands(p.getIncomingValueForBlock(from));values.insert(values.end(),vs.begin(),vs.end());}
@@ -1430,114 +1545,7 @@ struct Entry {
           if(!target || (!target->getName().starts_with("llvm.dbg.") && !target->getName().starts_with("llvm.lifetime.") && !target->getName().starts_with("__bennett_nz_rstep")))countRStep();
         }
         if (auto *c = dyn_cast<CallBase>(&i)) {
-          auto *g = resolve(c->getCalledOperand());
-          if(!g && ccNames && !c->isInlineAsm()) {
-            auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
-            auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
-            std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
-            for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
-              if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
-                candidates[functionAddress(candidate)]=candidate;
-            for(auto &candidate:candidates)keys.push_back(candidate.first);
-            auto args=callArguments(*c);
-            auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
-            auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
-            compareTree(value,pw,keys,[&](uint64_t key) {
-              if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
-              auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
-              std::vector<std::string> values;
-              if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
-              rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
-              rows.push_back("br ^"+done+"("+join(values)+")");
-            },bad);
-            rows.push_back("^"+bad+"():");rows.push_back("trap");
-            std::vector<std::string> bindings;
-            if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
-            rows.push_back("^"+done+"("+join(bindings)+"):");releaseCallArguments(args);propagateExit();usesCCCalls=true;continue;
-          }
-          if (!g)
-            unimplemented("§17.4 indirect CC call", 1, c);
-          auto n = g->getName();
-          if (n.starts_with("llvm.lifetime.") ||
-              (!memoryDescriptors && n.starts_with("llvm.memset.") &&
-               descriptorObjects.count(
-                   getUnderlyingObject(c->getArgOperand(0)))))
-            continue;
-          if(rTier && n.starts_with("__bennett_effect_")) {
-            auto suffix=n.drop_front(StringRef("__bennett_effect_").size());auto parts=suffix.split('_');
-            effectModels.insert(parts.first.str());std::vector<std::string> args;
-            for(auto &v:c->args())args.push_back(operand(v));
-            rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));continue;
-          }
-          if (n == "__bennett_nz_fault") {
-            if(auto *asmMD=c->getMetadata("bennett.asm")) {
-              std::string block;unsigned ordinal=0;
-              for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
-              asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
-                {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
-            }
-            // Newly materialised allocator closures report the explicit code
-            // through §11.5 before trapping. The payload is private storage,
-            // not an extra logical heap allocation on a failing path.
-            if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
-              reportedFault(c->getArgOperand(0));break;
-            }
-            rows.push_back("trap"); break;
-          }
-          if (n == "llvm.trap") { rows.push_back("trap"); break; }
-          if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
-            auto w = integer(a.get(c->getArgOperand(1)), c);
-            auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
-            if (files.count(c)) {
-              // No site is executed twice in this acyclic entry-local file.
-              // Distinct nonzero identities are stable across stores and loads;
-              // free retires the live tag before any later use can match it.
-              auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
-              rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
-              names[c] = tag;
-              rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
-            } else names[c] = q;
-            allocateRegister(*c, q, w);
-          } else if (n == "__bennett_qfree")
-            withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
-          else if (n == "__bennett_oracle")
-            descriptor(*c);
-          else if (n == "__bennett_inplace")
-            inplace(*c);
-          else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
-          else if (n == "__bennett_gate" || n == "__bennett_measure")
-            gate(*c);
-          else if(n=="__bennett_nz_alloc") {
-            auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
-          } else if(n=="__bennett_nz_free") {
-            auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
-            auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
-          } else if (ccNames && ccNames->count(g)) {
-            usesCCCalls=true;
-            // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
-            // ISA calls bind typed operands, keep a callee environment and
-            // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
-            auto args=callArguments(*c);
-            auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
-            if(c->getType()->isVoidTy())rows.push_back(call);
-            else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
-            releaseCallArguments(args);propagateExit();
-          } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
-                    !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
-            // A reached missing import is F(8). Continue naming the source
-            // tail in an unreachable block so successor uses remain valid.
-            if(!c->getType()->isVoidTy()) {
-              auto ns=destinations(c);auto fs=fields(c->getType());
-              for(unsigned k=0;k<ns.size();++k) {
-                if(fs[k].type->isPointerTy())rows.push_back(ns[k]+" = inttoptr "+number(0));
-                else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
-              }
-            }
-            unresolvedCall(n);
-            rows.push_back("^missing" + std::to_string(dispatchBlock++) + "tail():");
-            continue;
-          } else
-            unimplemented("§17.4 CC marker/call lowering", 1, c);
+          if (lowerCall(c) == CallFlow::EndBlock) break;
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
           auto vs=operands(insert->getAggregateOperand()),part=operands(insert->getInsertedValueOperand());
           auto fs=fields(insert->getType());unsigned k=0;
@@ -2450,7 +2458,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
                       {p, id, result, request}));
   if(record.getString("mode")=="reversible") {
     // §19.2's one launch request. Entries needing argv/envp byte storage
-    // remain an explicit bp-ivy mechanic, rather than passing host pointers.
+    // require explicit byte marshalling, rather than passing host pointers.
     auto *req=b.CreateLoad(ptr,request);require(b.CreateIsNotNull(req));
     auto *service=b.CreateCall(api("bennett_request_service",ptr,{ptr}),{req});
     auto *same=b.CreateCall(api("strcmp",i32,{ptr,ptr}),{service,string("bennett.argv")});require(b.CreateICmpEQ(same,b.getInt32(0)));
@@ -2508,8 +2516,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 
 } // namespace
 #include "Reversible.inc"
-void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
-                     StringRef budgetDefault, StringRef budgetFile) {
+bool specialiseRegisterWidths(Module &m, Analysis &a) {
   // Finite source widths become distinct static roots before register-file
   // construction. Unbounded widths retain the explicit BLK-1 obligation.
   std::vector<std::pair<CallInst *,std::vector<uint64_t>>> allocations;
@@ -2517,7 +2524,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     if(auto *c=dyn_cast<CallInst>(&i);c && c->getCalledFunction() &&
        (c->getCalledFunction()->getName()=="__bennett_qalloc" || c->getCalledFunction()->getName()=="__bennett_qborrow") && !isa<ConstantInt>(c->getArgOperand(1))) {
       auto v=a.get(c->getArgOperand(1));std::vector<uint64_t> widths;
-      if(v.top)unimplemented("§25.1 BLK-1 dynamic widths (blocked: bp-2tw)",3,c);
+      if(v.top)unimplemented("§25.1 BLK-1 dynamic widths",3,c);
       for(auto &x:v.atoms)if(x.kind==Atom::Int)widths.push_back(x.integer.getLimitedValue());
       std::sort(widths.begin(),widths.end());widths.erase(std::unique(widths.begin(),widths.end()),widths.end());allocations.push_back({c,widths});
     }
@@ -2544,9 +2551,12 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
         rb.CreateCondBr(rb.CreateICmpULT(c->getArgOperand(1),key),left,right);tree(left,lo,mid);tree(right,mid+1,hi);
       };tree(head,0,site.second.size());c->replaceAllUsesWith(phi);c->eraseFromParent();
     }
-    Analysis specialised(m);specialised.run();lowerProduction(m,specialised,out,stack,budgetDefault,budgetFile);return;
+    return true;
   }
 
+  return false;
+}
+BudgetTable productionBudget(Module &m, Analysis &a, StringRef budgetDefault, StringRef budgetFile) {
   SmallVector<StringRef> components;
   budgetDefault.split(components, ',');
   std::vector<uint64_t> defaults;
@@ -2572,6 +2582,15 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
               table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
         }
   }
+  return table;
+}
+void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
+                     StringRef budgetDefault, StringRef budgetFile) {
+  if (specialiseRegisterWidths(m, a)) {
+    Analysis specialised(m);specialised.run();
+    lowerProduction(m,specialised,out,stack,budgetDefault,budgetFile);return;
+  }
+  auto table = productionBudget(m, a, budgetDefault, budgetFile);
   // CC arithmetic uses the same linked definitions as L and native comparison.
   // Keep recursive numerical closures as §14.1 CC calls; acyclic closures
   // retain their established inlining and object identities.
