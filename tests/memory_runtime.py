@@ -2,7 +2,7 @@
 """N26: every memory intrinsic, ordinary helper closure, logical memory and faults."""
 
 import argparse, ctypes, json, re, subprocess, shutil
-from contracts import ROOT as R
+from contracts import ROOT as R, plugin_command, validate_normalisation
 from scalars import REF
 
 p = argparse.ArgumentParser()
@@ -72,7 +72,13 @@ run(
         out,
     ]
 )
-assert not re.search("call void @llvm.", out.read_text())
+validate_normalisation(
+    a.major,
+    "declare void @llvm.memmove.p0.p0.i32(ptr,ptr,i32,i1 immarg)\n"
+    "define void @move(ptr %d,ptr %s,i32 %n) {\n"
+    "call void @llvm.memmove.p0.p0.i32(ptr %d,ptr %s,i32 %n,i1 false)\nret void }",
+    d,
+)
 so = d / "memory.so"
 run([tool + "clang", "-shared", "-fPIC", "-O0", out, "-o", so])
 lib = ctypes.CDLL(str(so))
@@ -245,8 +251,53 @@ def key(body):
     return json.loads(rep.read_text())["regions"][0]["candidates"][0]["key"]
 
 
+def memory_value(body, name):
+    source = d / f"{name}.ll"
+    normalised, library = d / f"{name}-normalised.ll", d / f"{name}.so"
+    source.write_text(
+        body + "\ndefine i8 @probe(ptr %p) { %r = call i8 @f(ptr %p)\n"
+        " %value = load i8, ptr %p\n ret i8 %value }\n"
+    )
+    run(
+        [
+            *plugin_command(a.major),
+            "-bennett-normalise-only",
+            source,
+            "-S",
+            "-o",
+            normalised,
+        ]
+    )
+    run([tool + "clang", "-shared", "-fPIC", "-O0", normalised, "-o", library])
+    probe = ctypes.CDLL(str(library)).probe
+    probe.argtypes, probe.restype = [ctypes.c_void_p], ctypes.c_uint8
+    storage = ctypes.create_string_buffer(bytes([255]), 1)
+    return probe(storage)
+
+
 body = "declare void @__bennett_rt_memset(ptr,i8,i64)\ndefine internal i8 @f(ptr %p) { call void @__bennett_rt_memset(ptr %p,i8 42,i64 1)\n ret i8 0 }"
 linked = "@seed = internal global i8 VALUE\ndefine void @__bennett_rt_memset(ptr %p,i8 %v,i64 %n) { %x = load i8,ptr @seed\n store i8 %x,ptr %p\n ret void }"
+for name, source, expected in (
+    ("primitive", body, 42),
+    (
+        "linked-seven",
+        body.replace(
+            "declare void @__bennett_rt_memset(ptr,i8,i64)",
+            linked.replace("VALUE", "7"),
+        ),
+        7,
+    ),
+    (
+        "linked-eight",
+        body.replace(
+            "declare void @__bennett_rt_memset(ptr,i8,i64)",
+            linked.replace("VALUE", "8"),
+        ),
+        8,
+    ),
+    ("unrelated", body + "\n@unrelated = internal global i8 7", 42),
+):
+    assert memory_value(source, name) == expected, (name, expected)
 assert key(body) != key(
     body.replace(
         "declare void @__bennett_rt_memset(ptr,i8,i64)", linked.replace("VALUE", "7")

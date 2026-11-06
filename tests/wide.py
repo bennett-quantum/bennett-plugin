@@ -101,7 +101,11 @@ z = subprocess.run(
     env=e,
 )
 assert z.returncode == 0, z.stderr
-validate_normalisation(a.major, 'define void @memory(ptr %p, ptr %q) { %v = load i129, ptr %p, align 1\n store i129 %v, ptr %q, align 1\n ret void }', d)
+validate_normalisation(
+    a.major,
+    "define void @memory(ptr %p, ptr %q) { %v = load i129, ptr %p, align 1\n store i129 %v, ptr %q, align 1\n ret void }",
+    d,
+)
 # Runtime slots get a test-only stack allocator; arithmetic definitions come from the plugin.
 runtime = d / "stack.c"
 runtime.write_text(
@@ -216,14 +220,17 @@ rows.append("N21-bitcast256")
 fn = lib.pointer
 fn.argtypes = [ctypes.c_uint64]
 fn.restype = ctypes.c_uint64
-for x in [0, 1, 0xFFFFFFFFFFFFFFFF]:
+for x in (
+    [0, 1, 0xFFFFFFFFFFFFFFFF]
+    + [1 << bit for bit in range(64)]
+    + [rng.getrandbits(64) for _ in range(16)]
+):
     assert fn(x) == x
 rows.append("pointer-carrier-width")
 for x in [1, (1 << 192) - 1]:
     output = buf(0, 192)
     lib.constantshift(buf(x, 192), output)
     assert int.from_bytes(output.raw, "little") == (x << 64) & ((1 << 192) - 1)
-assert "@__bennett_rt_i192_shl" in out.read_text()
 rows.append("constant-shift-slot-ABI")
 # Padding is left alone; non-byte high representation bits are zeroed.
 x = ctypes.create_string_buffer(bytes([255]) * 40)

@@ -279,7 +279,12 @@ def main():
                 and any(v["value"] == "%n" and v["top"] for v in data.get("values", []))
             )
         if name == "host-tiers":
-            ok = ok and all(f["tiers"] == ["H"] for f in data.get("functions", []))
+            functions = data.get("functions", [])
+            ok = (
+                ok
+                and {function["name"] for function in functions} == {"leaf", "top"}
+                and all(function["tiers"] == ["H"] for function in functions)
+            )
         results.append(
             {
                 "case": name,

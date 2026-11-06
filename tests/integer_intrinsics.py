@@ -149,7 +149,11 @@ run(
         out,
     ]
 )
-validate_normalisation(a.major, 'declare i8 @llvm.ctpop.i8(i8)\ndefine i8 @count(i8 %x) { %v = call i8 @llvm.ctpop.i8(i8 %x)\n ret i8 %v }', d)
+validate_normalisation(
+    a.major,
+    "declare i8 @llvm.ctpop.i8(i8)\ndefine i8 @count(i8 %x) { %v = call i8 @llvm.ctpop.i8(i8 %x)\n ret i8 %v }",
+    d,
+)
 runtime = d / "stack.c"
 runtime.write_text(
     "#include <stdint.h>\n#include <unistd.h>\nstatic unsigned char s[1048576];static uint64_t sp;void *__bennett_rt_ss_push(uint64_t n,uint64_t a){sp=(sp+a-1)&-a;void*p=s+sp;sp+=n;return p;}void __bennett_rt_ss_pop(void*p){sp=(unsigned char*)p-s;}void __bennett_nz_fault(uint64_t n){_exit((int)n);}"
@@ -397,6 +401,49 @@ for x in [0, 1, (1 << 192) - 1]:
     )
     assert data["code"] == 0 and data["payload"] == int(x == 1), data
 rows.append("production-count-slot-overflow-saturation")
+# Unsigned fixed-point division is floor((1 * 2^4) / divisor), except divisor
+# zero is the structured dialect fault 5. Observe the fault through the ISA
+# interpreter as well as the isolated native exit-code checks above.
+fault_source = d / "division-fault.ll"
+fault_source.write_text("""declare i8 @llvm.udiv.fix.i8(i8,i8,i32)
+define i8 @divide(i8 %divisor) {
+ %value = call i8 @llvm.udiv.fix.i8(i8 1,i8 %divisor,i32 4)
+ ret i8 %value
+}
+!llvm.module.flags = !{!0}
+!0 = !{i32 1, !"bennett.sstack", i64 256}
+""")
+fault_object = d / "division-fault"
+run(
+    [
+        *plugin_command(a.major),
+        "-bennett-oracle=divide",
+        "-bennett-scalar-shape=IN(8,zext);tgt=8",
+        "-bennett-scalar-stack=4096",
+        "-bennett-scalar-heap=4096",
+        "-bennett-out=" + str(fault_object),
+        "-disable-output",
+        fault_source,
+    ]
+)
+run([REF, "check", fault_object / "ref.bennett"])
+for divisor, code, payload in ((0, 5, 0), (1, 0, 16), (2, 0, 8), (255, 0, 0)):
+    result = json.loads(
+        run(
+            [
+                REF,
+                "run-oracle",
+                fault_object / "ref.bennett",
+                "ref",
+                "--input",
+                str(divisor),
+                "--budget",
+                "1000000,4096,4096,256",
+            ]
+        ).stdout
+    )
+    assert (result["code"], result["payload"]) == (code, payload), result
+rows.append("production-division-zero-structured-fault")
 result = dict(major=a.major, cases=len(rows), passed=len(rows), results=rows)
 (R / f".tmp/integer-intrinsics-{a.major}.json").write_text(
     json.dumps(result, indent=2) + "\n"

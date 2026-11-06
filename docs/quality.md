@@ -1,7 +1,7 @@
 # Quality floor
 
 The default test command is `timeout 180 scripts/test`, after building LLVM 18 and 23.
-It passed 21 driver commands in **25.404 seconds** with the LLVM 18 gcov build.
+It passed 21 driver commands in **25.549 seconds** with the LLVM 18 gcov build.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
@@ -50,6 +50,13 @@ derived and tested in allocator_closure.py, including the separate 128-byte heap
 Shared native/device globals remain promised and pending the published native-sharing contract;
 the approved native adapter interim prints that fact and exits 125 before state can reset.
 
+
+The remaining audit weak witnesses also have observable checks: helper/global key differences
+are paired with native memory results 42, 7 and 8; the unsigned fixed-point division test checks
+structured ISA fault 5 and hand-derived nonfault results 16, 8 and 0. Pointer round trips cover
+every 64-bit basis vector plus seeded samples. Host-tier reports require both source functions,
+so an empty report cannot pass. The additive-copy-cycle witness already checks a top result
+and bounded convergence in addition to its empty exact-atom expectation.
 
 ## Function size and cognitive-complexity baseline
 
@@ -131,7 +138,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/aggregate_rows.py": {"complexity": 26, "functions": 1, "length_max": 179, "length_p50": 179, "length_p90": 179, "over_300": 0, "trivial_wrappers": 0},
     "tests/allocator_closure.py": {"complexity": 27, "functions": 2, "length_max": 153, "length_p50": 2, "length_p90": 153, "over_300": 0, "trivial_wrappers": 1},
     "tests/analysis_clock.py": {"complexity": 1, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_edges.py": {"complexity": 22, "functions": 1, "length_max": 69, "length_p50": 69, "length_p90": 69, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 65, "length_p50": 65, "length_p90": 65, "over_300": 0, "trivial_wrappers": 0},
     "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_defaults.py": {"complexity": 4, "functions": 1, "length_max": 57, "length_p50": 57, "length_p90": 57, "over_300": 0, "trivial_wrappers": 0},
@@ -147,11 +154,11 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/entry_snapshot.py": {"complexity": 35, "functions": 4, "length_max": 119, "length_p50": 52, "length_p90": 119, "over_300": 0, "trivial_wrappers": 0},
     "tests/gate_policy.py": {"complexity": 2, "functions": 1, "length_max": 8, "length_p50": 8, "length_p90": 8, "over_300": 0, "trivial_wrappers": 1},
     "tests/general_dispatch.py": {"complexity": 28, "functions": 3, "length_max": 233, "length_p50": 72, "length_p90": 233, "over_300": 0, "trivial_wrappers": 0},
-    "tests/integer_intrinsics.py": {"complexity": 505, "functions": 3, "length_max": 4, "length_p50": 2, "length_p90": 4, "over_300": 0, "trivial_wrappers": 1},
+    "tests/integer_intrinsics.py": {"complexity": 506, "functions": 3, "length_max": 4, "length_p50": 2, "length_p90": 4, "over_300": 0, "trivial_wrappers": 1},
     "tests/key_audit.py": {"complexity": 20, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "tests/launch_runtime.c": {"complexity": 76, "functions": 14, "length_max": 11, "length_p50": 6, "length_p90": 11, "over_300": 0, "trivial_wrappers": 2},
     "tests/materialisation.py": {"complexity": 27, "functions": 2, "length_max": 135, "length_p50": 13, "length_p90": 135, "over_300": 0, "trivial_wrappers": 0},
-    "tests/memory_runtime.py": {"complexity": 57, "functions": 1, "length_max": 20, "length_p50": 20, "length_p90": 20, "over_300": 0, "trivial_wrappers": 0},
+    "tests/memory_runtime.py": {"complexity": 58, "functions": 2, "length_max": 22, "length_p50": 20, "length_p90": 22, "over_300": 0, "trivial_wrappers": 0},
     "tests/native_checked.py": {"complexity": 20, "functions": 1, "length_max": 208, "length_p50": 208, "length_p90": 208, "over_300": 0, "trivial_wrappers": 0},
     "tests/native_comparison.py": {"complexity": 5, "functions": 3, "length_max": 182, "length_p50": 2, "length_p90": 182, "over_300": 0, "trivial_wrappers": 1},
     "tests/native_fixtures.py": {"complexity": 8, "functions": 1, "length_max": 146, "length_p50": 146, "length_p90": 146, "over_300": 0, "trivial_wrappers": 0},
