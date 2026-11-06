@@ -1236,13 +1236,13 @@ struct Entry {
       }
     }
     auto domain = a.get(call.getArgOperand(0));
-    auto allocate = [&](uint64_t index) {
-      rows.push_back(q + " = qreg.new " + classes.at(index) + " " + std::to_string(width));
+    auto allocate = [&](uint64_t index, const std::string &destination) {
+      rows.push_back(destination + " = qreg.new " + classes.at(index) + " " + std::to_string(width));
     };
     if (singletonInt(domain)) {
       auto index = integer(domain, &call);
       if (index >= classes.size()) fail("BD-E-OPERAND", "register class index outside the link table", &call);
-      allocate(index);
+      allocate(index, q);
       return;
     }
     std::vector<uint64_t> keys;
@@ -1251,12 +1251,13 @@ struct Entry {
     auto value = operand(call.getArgOperand(0));
     auto id = std::to_string(dispatchBlock++), done = "class" + id + "done", bad = "class" + id + "bad";
     compareTree(value, 64, keys, [&](uint64_t index) {
-      allocate(index);
-      rows.push_back("br ^" + done + "()");
+      auto instance = fresh("qreg[" + std::to_string(width) + "]");
+      allocate(index, instance);
+      rows.push_back("br ^" + done + "(" + instance + ")");
     }, bad);
     rows.push_back("^" + bad + "():");
     rows.push_back("trap");
-    rows.push_back("^" + done + "():");
+    rows.push_back("^" + done + "(" + q + ":qreg[" + std::to_string(width) + "]):");
   }
   void lower() {
     setupSnapshot();
@@ -2270,6 +2271,24 @@ json::Object completeCoverage(StringRef object,
 // the target JSON at runtime; it is copied by bennett_load before launch.
 void hostStub(Function &f, StringRef object, const json::Object &record) {
   Module &m = *f.getParent();
+  std::set<const Value *> visited;
+  std::set<const GlobalVariable *> sharedGlobals;
+  std::function<void(const Value *)> findState = [&](const Value *value) {
+    if (!visited.insert(value).second) return;
+    if (auto *function = dyn_cast<Function>(value)) {
+      if (!function->isDeclaration())
+        for (const auto &instruction : instructions(function)) findState(&instruction);
+      return;
+    }
+    if (auto *global = dyn_cast<GlobalVariable>(value)) {
+      if (!global->isConstant()) sharedGlobals.insert(global);
+      if (global->hasInitializer()) findState(global->getInitializer());
+      return;
+    }
+    if (auto *user = dyn_cast<User>(value))
+      for (const auto &operand : user->operands()) findState(operand);
+  };
+  findState(&f);
   auto &ctx = m.getContext();
   auto *ptr = PointerType::get(ctx, 0);
   auto *i32 = Type::getInt32Ty(ctx), *i64 = Type::getInt64Ty(ctx);
@@ -2289,6 +2308,19 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
        *bad = BasicBlock::Create(ctx, "launch.failed", &f);
   IRBuilder<> b(entry);
   IRBuilder<> err(bad);
+  if (!sharedGlobals.empty()) {
+    // Maintainer-approved interim until the native-sharing contract publishes.
+    auto message = "bennett: shared global state is promised and pending the native-sharing contract "
+                   "(bp-acm; b-dialect-spec-6u6) for " + f.getName().str() + "\n";
+    auto *text = b.CreateGlobalString(message);
+    auto write = m.getOrInsertFunction("write", size, i32, ptr, size);
+    b.CreateCall(write, {b.getInt32(2), text, ConstantInt::get(size, message.size())});
+    auto exit = m.getOrInsertFunction("_Exit", b.getVoidTy(), i32);
+    b.CreateCall(exit, {b.getInt32(125)});
+    b.CreateUnreachable();
+    err.CreateUnreachable();
+    return;
+  }
   auto intrinsic = [&](Intrinsic::ID id,
                        ArrayRef<Type *> types = ArrayRef<Type *>()) {
 #if LLVM_VERSION_MAJOR >= 23

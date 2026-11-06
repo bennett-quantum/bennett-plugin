@@ -691,8 +691,26 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   {
     Analysis selection(m,&f);selection.run();
     selection.releaseTransferGraphs();
-    for(auto &g:m)if(!g.isDeclaration() && selection.tiers[&g].empty())g.deleteBody();
-    for(auto &g:m)if(!g.isDeclaration() && selection.tiers[&g]==std::set<std::string>{"H"})g.deleteBody();
+    std::set<const Function *> deviceClosure;
+    std::function<void(Function *)> retain = [&](Function *function) {
+      if (!deviceClosure.insert(function).second || function->isDeclaration()) return;
+      for (auto &instruction : instructions(function))
+        if (auto *call = dyn_cast<CallBase>(&instruction)) {
+          if (auto *callee = call->getCalledFunction()) retain(callee);
+          else for (auto *callee : selection.candidates(call->getCalledOperand(), call->getFunctionType())) retain(callee);
+        }
+    };
+    retain(&f);
+    for (auto entry : {std::make_pair("bennett.entry.snapshot", "__bennett_rt_entry_replay"),
+                       std::make_pair("bennett.ss.init", "__bennett_rt_ss_init")}) {
+      if (!m.getModuleFlag(entry.first)) continue;
+      auto *function = m.getFunction(entry.second);
+      if (!function || function->isDeclaration())
+        fail("BD-E-ENTRY-RUNTIME", std::string("missing linked definition for ") + entry.second, &f);
+      retain(function);
+    }
+    for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g].empty())g.deleteBody();
+    for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g]==std::set<std::string>{"H"})g.deleteBody();
   }
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
   if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));

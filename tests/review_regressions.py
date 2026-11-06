@@ -21,7 +21,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--major', type=int, required=True, choices=(18, 23))
     parser.add_argument('--plugin', type=Path, help='Use an explicitly selected instrumentation build')
-    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native', 'unresolved-call'))
+    parser.add_argument('--promised-bp-acm', action='store_true',
+                        help='Run the promised shared-global semantics pending the native-sharing contract')
+    parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'global-diagnostic', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native', 'unresolved-call'))
     args = parser.parse_args()
     tool = f'/usr/lib/llvm-{args.major}/bin/'
     plugin = args.plugin or ROOT / f'build/libbennett-plugin-{args.major}.so'
@@ -31,7 +33,9 @@ def main():
                '-passes=bennett', '-bennett-dialect=0.2.13', '-disable-output']
     rows = []
     failures = []
-    for case in args.case or ('shuffle', 'byval', 'global-counter'):
+    if args.case and 'global-counter' in args.case and not args.promised_bp_acm:
+        parser.error('global-counter requires --promised-bp-acm; native sharing is promised and pending')
+    for case in args.case or ('shuffle', 'byval', 'global-diagnostic'):
         if case == 'unresolved-call':
             original = (ROOT / 'tests/probes/review-host-import.ll').read_text()
             successor = original.replace(' ret i32 %z', ' br label %after\nafter:\n ret i32 %z')
@@ -309,7 +313,7 @@ define i16 @top() {{
                         actual = result['payload'] if tier == 'L' else int(result['results'][0]['value'])
                         assert actual == expected and (result.get('code', 0) == 0), (endian, operation, tier, expected, result)
                         rows.append(dict(case=case, endian=endian, operation=operation, tier=tier, actual=actual))
-        if case == 'global-counter':
+        if case in ('global-counter', 'global-diagnostic'):
             original = (ROOT / 'tests/probes/review-global-counter.ll').read_text()
             extra_entry = original + original[original.index('define i32 @top()'):].replace('@top()', '@other()')
             for name, body, actions, expected in [
@@ -332,7 +336,13 @@ define i16 @top() {{
                 environment = dict(os.environ, BENNETT_TARGET=(ROOT / 'tests/probes/review-launch-target.json').read_text())
                 actual = subprocess.run([str(executable)], capture_output=True, text=True,
                                         env=environment, timeout=120)
-                ok = actual.returncode == 0 and actual.stdout == expected
+                if case == 'global-diagnostic':
+                    ok = (actual.returncode == 125 and not actual.stdout
+                          and all(text in actual.stderr for text in
+                                  ('bp-acm', 'b-dialect-spec-6u6', 'promised', 'pending'))
+                          and 'unsupported' not in actual.stderr.lower())
+                else:
+                    ok = actual.returncode == 0 and actual.stdout == expected
                 rows.append(dict(case=case, name=name, expected=expected, actual=actual.stdout,
                                  exit=actual.returncode, stderr=actual.stderr, ok=ok))
                 if not ok:
