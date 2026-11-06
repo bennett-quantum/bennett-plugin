@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Default, bounded checks; scripts/gate also runs the slow integration drivers."""
+
 import argparse
 import json
 import os
@@ -9,49 +10,81 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICIES = ('smoke', 'gate_policy', 'contract_policy', 'pin_policy')
-DRIVERS = ('recognition', 'analysis_edges', 'validation', 'scalars',
-           'address_spaces', 'register_classes', 'entry_runtime')
-REGRESSIONS = ('shuffle', 'byval', 'global-diagnostic', 'byte-order', 'native-abi',
-               'block-order', 'control', 'dynamic-gate', 'unresolved-call')
+POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet")
+DRIVERS = (
+    "recognition",
+    "analysis_edges",
+    "validation",
+    "scalars",
+    "address_spaces",
+    "register_classes",
+    "entry_runtime",
+)
+REGRESSIONS = (
+    "shuffle",
+    "byval",
+    "global-diagnostic",
+    "byte-order",
+    "native-abi",
+    "block-order",
+    "control",
+    "dynamic-gate",
+    "unresolved-call",
+)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--major', action='append', type=int, choices=(18, 23))
+    parser.add_argument("--major", action="append", type=int, choices=(18, 23))
     args = parser.parse_args()
     environment = dict(os.environ)
-    for key in ('DISPLAY', 'WAYLAND_DISPLAY', 'DBUS_SESSION_BUS_ADDRESS', 'BROWSER'):
+    for key in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "BROWSER"):
         environment.pop(key, None)
-    temporary = ROOT / '.tmp/tests'
+    temporary = ROOT / ".tmp/tests"
     temporary.mkdir(parents=True, exist_ok=True)
-    environment.setdefault('TMPDIR', str(temporary))
-    environment['PYTHONDONTWRITEBYTECODE'] = '1'
-    commands = [[sys.executable, '-B', f'tests/{name}.py'] for name in POLICIES]
+    environment.setdefault("TMPDIR", str(temporary))
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    commands = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
     for major in args.major or (18, 23):
-        commands.extend([sys.executable, '-B', f'tests/{name}.py', '--major', str(major)]
-                        for name in DRIVERS)
-        commands.append([sys.executable, '-B', 'tests/review_regressions.py', '--major', str(major),
-                         *(argument for name in REGRESSIONS for argument in ('--case', name))])
+        commands.extend(
+            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major)]
+            for name in DRIVERS
+        )
+        commands.append(
+            [
+                sys.executable,
+                "-B",
+                "tests/review_regressions.py",
+                "--major",
+                str(major),
+                *(argument for name in REGRESSIONS for argument in ("--case", name)),
+            ]
+        )
     started = time.monotonic()
     for command in commands:
         remaining = 180 - (time.monotonic() - started)
         if remaining <= 0:
-            raise SystemExit('default tests exceeded the 180-second allowance')
-        result = subprocess.run(command, cwd=ROOT, env=environment, text=True,
-                                capture_output=True, timeout=min(120, remaining))
-        label = ' '.join(command[2:])
-        print(f'{label}: exit {result.returncode}', flush=True)
+            raise SystemExit("default tests exceeded the 180-second allowance")
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=min(120, remaining),
+        )
+        label = " ".join(command[2:])
+        print(f"{label}: exit {result.returncode}", flush=True)
         if result.returncode:
             print(result.stdout)
             print(result.stderr, file=sys.stderr)
             return result.returncode
     elapsed = time.monotonic() - started
-    receipt = {'commands': len(commands), 'elapsed_s': round(elapsed, 3)}
-    (temporary / 'default.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    receipt = {"commands": len(commands), "elapsed_s": round(elapsed, 3)}
+    (temporary / "default.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt))
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

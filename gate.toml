@@ -10,6 +10,10 @@ BENNETT_ARITH_PINNED_ROOT = "{sibling:bennett-arith}/dist"
 BENNETT_ALLOCATOR_PINNED_ROOT = "{sibling:bennett-runtimes}/dist"
 
 [[check]]
+name = "quality baseline"
+argv = ["python3", "-B", "scripts/quality.py", "--check"]
+
+[[check]]
 name = "plugin gate"
 argv = ["scripts/gate"]
 
