@@ -6,7 +6,7 @@ dialect_sha256 = "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda
 "bennett-dialect-spec" = "0.2.13"
 "bennett-isa-spec" = "0.8"
 [commits]
-"bennett-dialect-spec" = "95a4b8d06933018a07fef3516296a25fd582fcde"
+"bennett-dialect-spec" = "1c29c8d731228b67902c3fa72e410e1bb71d16b4"
 [arith]
 commit = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
 llvm18_path = ".tmp/gate/cache/bennett-arith@0dea42d001ff/bennett-arith/dist/llvm18/bennett-arith.bc"

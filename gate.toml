@@ -32,8 +32,8 @@ outputs = ["reference-interpreter/target/release/bennett-isa-ref"]
 env = { CARGO_BUILD_JOBS = "3" }
 
 [siblings."bennett-dialect-spec"]
-sha = "95a4b8d06933018a07fef3516296a25fd582fcde"
-note = "the accepted 0.2.13 contract commit named in SPEC_VERSIONS.toml"
+sha = "1c29c8d731228b67902c3fa72e410e1bb71d16b4"
+note = "0.2.13 registry correction required by contract_policy.py; accepted spec text and corpus unchanged from 95a4b8d"
 
 [siblings."bennett-arith"]
 sha = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
@@ -74,9 +74,9 @@ outputs = ["target/release/libbennett_vm.so"]
 needs = ["bennett-isa-spec"]
 
 [siblings."bennett-targets"]
-sha = "3ef86a56cb352fbe4bb4f7e7c0b295f23682ee29"
-note = "target publication for native comparison's ideal-all-to-all model"
+sha = "dd036711936c496f53f6f1a9bebeb686335bf7cc"
+note = "pushed publication of ideal-all-to-all.json used by native_comparison.py and native_link.py; identical at 3ef86a56"
 
 [siblings."bennett-conformance"]
-sha = "e39501e30bcbc0e67046fce24d3354f775a8f78f"
-note = "freeze the previously live rung-2 C fixture publication at its observed HEAD"
+sha = "6e6a6f1ebd69f6e81f4f7ea2dd15ea775733e616"
+note = "pushed rung-2 fixtures and sha256.json used by native_fixtures.py; identical at e39501e3"
