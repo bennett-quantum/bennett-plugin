@@ -1,7 +1,7 @@
 # Quality floor
 
 The default test command is `timeout 180 scripts/test`, after building LLVM 18 and 23.
-It passed 21 driver commands in **25.263 seconds** with the LLVM 18 gcov build.
+It passed 21 driver commands in **25.404 seconds** with the LLVM 18 gcov build.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
@@ -26,7 +26,9 @@ timeout 240 python3 tests/review_regressions.py --major 18 --case mixed-native
 timeout 90 scripts/coverage
 ```
 
-The same instrumentation is available as `-DBENNETT_COVERAGE=ON` in a single-major GCC configuration.
+The same gcov instrumentation is available as `-DBENNETT_COVERAGE=ON` in a single-major GCC
+configuration; that option uses -O0. The measured run above uses -O1 to keep the large numerical
+solver paths within their explicit resource allowances.
 Coverage counts executable lines under `src/`, including inline headers and includes, and merges
 repeated header counters by source line. It is a measurement, with no threshold.
 
