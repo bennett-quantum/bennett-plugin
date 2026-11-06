@@ -13,9 +13,8 @@ additional failures, plugin errors, changed exits and missing checks exit 1.
 """
 import argparse,concurrent.futures,hashlib,json,os,re,shutil,subprocess,sys,tarfile,io
 from pathlib import Path
-from contracts import drift,PIN
+from contracts import drift,PIN,sibling
 R=Path(__file__).resolve().parents[1]
-CORPUS=Path(os.environ.get('BENNETT_SIBLINGS') or R.parent)/'bennett-dialect-spec/corpus/legality'
 def run(args,timeout=30):
  try:
   x=subprocess.run(list(map(str,args)),capture_output=True,text=True,errors="replace",timeout=timeout)
@@ -24,6 +23,7 @@ def run(args,timeout=30):
 def pipelines(major):
  return [*[f'default<O{i}>' for i in range(4)],*(['default<Os>','default<Oz>'] if major==18 else []),'lto-pre-link<O3>','lto<O3>','thinlto-pre-link<O3>','thinlto<O3>','default<O3>,default<O3>,default<O3>','strip','strip-nondebug','mergefunc']
 def bootstrap():
+ CORPUS=sibling('bennett-dialect-spec')/'corpus/legality'
  snapshot=R/'.tmp/blackbox'/PIN
  dst=snapshot/'corpus/legality'
  if not dst.exists():
@@ -136,7 +136,8 @@ def summarize(cells):
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,action='append');p.add_argument('--case',action='append');p.add_argument('--jobs',type=int,default=4);a=p.parse_args()
  for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os.environ.pop(key,None)
- (R/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(R/'.tmp')
+ (R/'.tmp').mkdir(exist_ok=True);os.environ.setdefault('TMPDIR',str(R/'.tmp'))
+ CORPUS=sibling('bennett-dialect-spec')/'corpus/legality'
  current=run(['git','-C',CORPUS.parent.parent,'rev-parse','HEAD'])[1].strip()
  if drift():print('accepted dialect contract drift; executing pinned fixtures '+PIN,file=sys.stderr)
  plugin_hashes={str(m):hashlib.sha256((R/f'build/libbennett-plugin-{m}.so').read_bytes()).hexdigest() for m in (a.major or [18,23])}

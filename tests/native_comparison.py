@@ -13,7 +13,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from contracts import ROOT as R, SIBLINGS
+from contracts import ROOT as R, sibling
 
 
 def sha(path):
@@ -21,8 +21,7 @@ def sha(path):
 
 
 def vm_library():
-    return Path(os.environ.get('BENNETT_VM_NATIVE_LIBRARY',
-                                SIBLINGS / 'bennett-vm/target/release/libbennett_vm.so'))
+    return sibling('bennett-vm') / 'target/release/libbennett_vm.so'
 
 
 def main():
@@ -106,7 +105,7 @@ def main():
     backend.bennett_last_error.restype = c.c_char_p
     obj = output / 'native_probe/launch.bennett'
     data = obj.read_bytes()
-    target = json.loads((SIBLINGS / 'bennett-targets/targets/ideal-all-to-all.json').read_text())
+    target = json.loads((sibling('bennett-targets') / 'targets/ideal-all-to-all.json').read_text())
     encoded = json.dumps(target, sort_keys=True, separators=(',', ':')).encode()
     object_buffer, target_buffer = c.create_string_buffer(data), c.create_string_buffer(encoded)
     program = c.c_void_p()

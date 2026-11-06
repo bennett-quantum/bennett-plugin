@@ -22,18 +22,18 @@ name = "reference interpreter (debug)"
 cwd = "reference-interpreter"
 argv = ["cargo", "build", "--offline"]
 outputs = ["reference-interpreter/target/debug/bennett-isa-ref"]
-env = { CARGO_BUILD_JOBS = "4" }
+env = { CARGO_BUILD_JOBS = "3" }
 
 [[siblings."bennett-isa-spec".build]]
 name = "reference interpreter (release)"
 cwd = "reference-interpreter"
 argv = ["cargo", "build", "--offline", "--release"]
 outputs = ["reference-interpreter/target/release/bennett-isa-ref"]
-env = { CARGO_BUILD_JOBS = "4" }
+env = { CARGO_BUILD_JOBS = "3" }
 
 [siblings."bennett-dialect-spec"]
-sha = "023f5a771a814270634db3be9cfde88ded69f975"
-note = "the accepted 0.2.10 contract commit named in SPEC_VERSIONS.toml"
+sha = "95a4b8d06933018a07fef3516296a25fd582fcde"
+note = "the accepted 0.2.13 contract commit named in SPEC_VERSIONS.toml"
 
 [siblings."bennett-arith"]
 sha = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
@@ -48,3 +48,35 @@ note = "publication hashed by tests/allocator_closure.py and tests/reversible.py
 [siblings."bennett-runtimes".files]
 "dist/llvm18/bennett-runtimes.bc" = "4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f"
 "dist/llvm23/bennett-runtimes.bc" = "bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e"
+
+[siblings."bennett-native-runtimes"]
+sha = "248e468ca505c684bbf254e52eb8148f1e530c83"
+repo = "bennett-runtimes"
+note = "native-only support and checker publication in SPEC_VERSIONS.toml; allocator stays at its own pin"
+[siblings."bennett-native-runtimes".files]
+"dist/llvm18/musl-sysroot/lib/native-support.bc" = "c7a1306784e7f487c040b724e2074294ff687f149bf6403a9e403973a833e596"
+"dist/llvm23/musl-sysroot/lib/native-support.bc" = "f7fee923e2b06d1c4106439e46ed03936a9ee7721d3498d008e298cb5265cade"
+"scripts/native-check" = "bb11d8498a8403a415a77910193302b00bb1978d6ee24c0079bab5aa69ab5c2e"
+"scripts/native-check.cpp" = "a5c383379ce3dcf5a53eca274aa446e968d533c13516a64a9d80dd6e3298828d"
+
+[siblings."bennett-vm"]
+sha = "805f0ec3481365132d517fefd5b5c12cbd39a845"
+note = "freeze the previously live native comparison launch API dependency at its observed HEAD"
+[[siblings."bennett-vm".build]]
+name = "launch API library (debug)"
+argv = ["cargo", "build", "--offline", "--lib", "-j3"]
+outputs = ["target/debug/libbennett_vm.so"]
+needs = ["bennett-isa-spec"]
+[[siblings."bennett-vm".build]]
+name = "launch API library (release)"
+argv = ["cargo", "build", "--offline", "--release", "--lib", "-j3"]
+outputs = ["target/release/libbennett_vm.so"]
+needs = ["bennett-isa-spec"]
+
+[siblings."bennett-targets"]
+sha = "3ef86a56cb352fbe4bb4f7e7c0b295f23682ee29"
+note = "target publication for native comparison's ideal-all-to-all model"
+
+[siblings."bennett-conformance"]
+sha = "e39501e30bcbc0e67046fce24d3354f775a8f78f"
+note = "freeze the previously live rung-2 C fixture publication at its observed HEAD"

@@ -12,7 +12,7 @@ import shutil
 import subprocess
 
 from allocator_closure import RUNTIME_SHA
-from contracts import ROOT as R, SIBLINGS, arith_path
+from contracts import ROOT as R, sibling, arith_path
 from native_comparison import sha
 from native_link import build, resolved_layout, run, update_object
 
@@ -23,8 +23,7 @@ def main():
     a = p.parse_args()
     t = f'/usr/lib/llvm-{a.major}/bin/'
     plugin = R / f'build/libbennett-plugin-{a.major}.so'
-    runtime = Path(os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT',
-                                  SIBLINGS / 'bennett-runtimes/dist')) / f'llvm{a.major}/bennett-runtimes.bc'
+    runtime = sibling('bennett-runtimes') / f'dist/llvm{a.major}/bennett-runtimes.bc'
     assert sha(runtime) == RUNTIME_SHA[a.major]
     source = R / 'tests/probes/r-hello.c'
     source_identity = sha(source)

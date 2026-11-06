@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Descriptor built by C stores (§8.1): same reference object as §16 inc8."""
 import argparse,json,re,shutil,subprocess
-from contracts import ROOT as R,DIALECT,PIN,dialect_text
+from contracts import ROOT as R,dialect_blob,dialect_text
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',type=int,required=True);p.add_argument('--require-production',action='store_true',help='production smoke probe: an unimplemented diagnostic is failure');a=p.parse_args();d=R/f'.tmp/descriptors/{a.major}';d.mkdir(parents=True,exist_ok=True)
  # Use the published ABI header as a fixture, not a sibling implementation.
- header=subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/bennett_markers.h'],text=True);(d/'bennett_markers.h').write_text(header)
+ header=dialect_blob('spec/bennett_markers.h');(d/'bennett_markers.h').write_text(header)
  # Field names are avoided so this tests the published positional ABI too.
  src=d/'in.c';src.write_text('''#include "bennett_markers.h"
 unsigned char inc8(unsigned char x) { return (unsigned char)(x+1); }

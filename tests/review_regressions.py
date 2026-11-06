@@ -6,9 +6,8 @@ import os
 from pathlib import Path
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
-SIBLINGS = Path(os.environ.get('BENNETT_SIBLINGS', ROOT.parent))
-REF = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+from contracts import ROOT, sibling
+REF = sibling('bennett-isa-spec') / 'reference-interpreter/target/debug/bennett-isa-ref'
 
 
 def run(command, timeout=120):
@@ -113,7 +112,7 @@ define double @device_fp(double %x) {
             # The published add closure has over 114k location cells. Its
             # exercised call chain exceeds 65,536 cells; retain that boundary
             # and give the successful numerical witness a sufficient stack.
-            numerical_ref = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref'
+            numerical_ref = sibling('bennett-isa-spec') / 'reference-interpreter/target/release/bennett-isa-ref'
             boundary = json.loads(run([numerical_ref, 'run-oracle', obj, 'ref', '--input', '4607182418800017408',
                                        '--budget', '1000000,65536,65536,128']).stdout)
             assert boundary['code'] == 3 and boundary['payload'] == 0, boundary
@@ -252,7 +251,7 @@ define i32 @main() {
  ret i32 %status
 }
 ''')
-                    library = SIBLINGS / 'bennett-vm/target/debug'
+                    library = sibling('bennett-vm') / 'target/debug'
                     executable = directory / 'native'
                     run([tool + 'clang', directory / 'host.bc', harness, '-L' + str(library),
                          '-Wl,-rpath,' + str(library), '-lbennett_vm', '-o', executable])
@@ -321,7 +320,7 @@ define i16 @top() {{
                                    'printf("%u %u host_global=%u\\n",a,b,g); return 0;}\n')
                 run([*command, '-bennett-out=' + str(directory), source])
                 run([tool + 'opt', '-passes=verify', '-disable-output', directory / 'host.bc'])
-                library = SIBLINGS / 'bennett-vm/target/debug'
+                library = sibling('bennett-vm') / 'target/debug'
                 executable = directory / 'counter'
                 run([tool + 'clang', directory / 'host.bc', harness, '-L' + str(library),
                      '-Wl,-rpath,' + str(library), '-lbennett_vm', '-o', executable])

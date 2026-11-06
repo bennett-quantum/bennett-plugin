@@ -12,7 +12,7 @@ import struct
 import subprocess
 import tomllib
 
-from contracts import ROOT as R, SIBLINGS, arith_path
+from contracts import ROOT as R, sibling, arith_path
 from native_comparison import sha, vm_library
 
 CAPACITY = 8 * 1024 * 1024
@@ -25,8 +25,7 @@ def run(cmd):
 
 
 def support(major):
-    root = Path(os.environ.get('BENNETT_NATIVE_SUPPORT_PINNED_ROOT',
-                               SIBLINGS / 'bennett-runtimes/dist'))
+    root = sibling('bennett-native-runtimes') / 'dist'
     path = root / f'llvm{major}/musl-sysroot/lib/native-support.bc'
     pin = tomllib.loads((R / 'SPEC_VERSIONS.toml').read_text())['native_comparison']
     assert sha(path) == pin[f'llvm{major}_support_sha256'], ('native support pin changed', path)
@@ -38,7 +37,7 @@ def build(major, directory, native, metadata, obj, harness, runtime=None, heap_l
     os.environ['BENNETT_VM_ENGINE'] = 'interpreter'
     t = f'/usr/lib/llvm-{major}/bin/'
     library = vm_library()
-    target = json.loads((SIBLINGS / 'bennett-targets/targets/ideal-all-to-all.json').read_text())
+    target = json.loads((sibling('bennett-targets') / 'targets/ideal-all-to-all.json').read_text())
     encoded = json.dumps(target, sort_keys=True, separators=(',', ':')).encode()
     target_literal = ','.join(map(str, encoded))
     wrapper = directory / 'launcher.c'
@@ -128,7 +127,7 @@ define i32 @{flush}(ptr %stream) {{
     # pipeline over the fixed materialised instruction stream.
     run([t + 'llc', '-O2', '-filetype=obj', '-relocation-model=static', ready, '-o', program_object])
     run([t + 'clang', '-O2', '-no-pie', '-fno-merge-all-constants', program_object, wrapper, blob,
-         '-I' + str(SIBLINGS / 'bennett-isa-spec/include'),
+         '-I' + str(sibling('bennett-isa-spec') / 'include'),
          '-Wl,--wrap=main',
          '-L' + str(library.parent), '-lbennett_vm', '-Wl,-rpath,' + str(library.parent),
          '-o', executable])

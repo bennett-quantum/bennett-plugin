@@ -4,7 +4,7 @@ import os,subprocess,tempfile
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
 for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']:os.environ.pop(key,None)
-os.environ['TMPDIR']=str(R/'.tmp')
+os.environ.setdefault('TMPDIR',str(R/'.tmp'))
 for major in [18,23]:
  with tempfile.TemporaryDirectory(dir=R/'.tmp') as tmp:
   src=Path(tmp)/'prelink.ll';src.write_text('define void @__bennett_qfree(ptr %h) { ret void }\n')
@@ -44,8 +44,8 @@ define void @top() {
   # Every ABI 0.2 prototype is checked through the actual C frontend. Wrappers
   # use parameter names from the published header, not a duplicate signature map.
   import re
-  from contracts import DIALECT,PIN,dialect_text
-  header=subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/bennett_markers.h'],text=True)
+  from contracts import dialect_blob,dialect_text
+  header=dialect_blob('spec/bennett_markers.h')
   hp=Path(tmp)/'markers.h';hp.write_text(header)
   prototypes=header.split('/* BEGIN PROTOTYPES */')[1].split('/* END PROTOTYPES */')[0]
   wrappers=[]

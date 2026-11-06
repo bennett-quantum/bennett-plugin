@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Production CC launch acceptance, independent ISA check and launch execution."""
 import argparse,hashlib,json,os,re,shutil,subprocess
-from contracts import ROOT as R,DIALECT,SIBLINGS,PIN,dialect_text
-REF=SIBLINGS/'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+from contracts import ROOT as R,sibling,dialect_blob,dialect_text
+REF=sibling('bennett-isa-spec')/'reference-interpreter/target/debug/bennett-isa-ref'
 # Host allowance only: compiler/proof subprocesses can exceed a minute on the
 # shared host. ISA budgets remain explicit in each command and fixture.
 def run(args):return subprocess.run(list(map(str,args)),capture_output=True,text=True,timeout=600)
 def main():
  p=argparse.ArgumentParser();p.add_argument('--major',required=True,type=int);a=p.parse_args();d=R/f'.tmp/production/{a.major}';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
- (d/'bennett_markers.h').write_text(subprocess.check_output(['git','-C',str(DIALECT),'show',PIN+':spec/bennett_markers.h'],text=True))
+ (d/'bennett_markers.h').write_text(dialect_blob('spec/bennett_markers.h'))
  fixture=re.search(r'```isa object=inc8\n(.*?)```',dialect_text(),re.S)[1].encode()
  report={'major':a.major,'cases':[]}
  for x in (0,7,255):
@@ -48,7 +48,7 @@ unsigned top(unsigned arg) {
   row['record_bindings']=build['object_hash']==hashes['object_hash']==cert['bindings']['object_hash'] and cert['bindings']['closure_hash']==hashes['symbols']['top']['closure_hash'] and cert['producer']['version'].endswith(hashlib.sha256((objdir/'top/build.json').read_bytes().rstrip(b'\n')).hexdigest())
   row['coverage_points']=len(cov['entries'])>0 and all(e['point'][0]==hashes['symbols']['top']['interface_hash'] for e in cov['entries'])
   native=dest/'host-test'
-  cc=run([tool+'clang',objdir/'host.bc',R/'tests/launch_runtime.c','-I'+str(SIBLINGS/'bennett-isa-spec/include'),f'-DEXPECTED={((x+1)&255)+11}','-o',native])
+  cc=run([tool+'clang',objdir/'host.bc',R/'tests/launch_runtime.c','-I'+str(sibling('bennett-isa-spec')/'include'),f'-DEXPECTED={((x+1)&255)+11}','-o',native])
   if cc.returncode==0:
    os.environ['BENNETT_TARGET']='{}';os.environ['CAPTURE_OBJECT']=str(dest/'embedded.bennett');execution=run([native]);row['host_protocol']=execution.returncode==0 and (dest/'embedded.bennett').read_bytes()==obj.read_bytes();row['host_output']=execution.stdout+execution.stderr
   else:row['host_protocol']=False;row['host_output']=cc.stderr

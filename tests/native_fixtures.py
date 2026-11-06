@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import shutil
 
-from contracts import ROOT as R, SIBLINGS, arith_path
+from contracts import ROOT as R, sibling, arith_path
 from allocator_closure import RUNTIME_SHA
 from native_comparison import sha
 from native_link import build, resolved_layout, run, update_object
@@ -19,11 +19,10 @@ def main():
     a = p.parse_args()
     t = f'/usr/lib/llvm-{a.major}/bin/'
     plugin = R / f'build/libbennett-plugin-{a.major}.so'
-    runtime_root = Path(os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT',
-                                       SIBLINGS / 'bennett-runtimes/dist'))
+    runtime_root = sibling('bennett-runtimes') / 'dist'
     runtime = runtime_root / f'llvm{a.major}/bennett-runtimes.bc'
     assert sha(runtime) == RUNTIME_SHA[a.major], 'production runtime pin changed'
-    fixture = SIBLINGS / 'bennett-conformance/ladder/rung-2/fixtures'
+    fixture = sibling('bennett-conformance') / 'ladder/rung-2/fixtures'
     source, harness, baseline_source = [fixture / name for name in
         ('hashtable_marked.c', 'main_golden.c', 'hashtable.c')]
     source_hashes = {str(path): sha(path) for path in (source, harness, baseline_source)}

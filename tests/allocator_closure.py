@@ -2,7 +2,7 @@
 """Published allocator closure in CC: exact byte operations, history and faults."""
 import argparse, hashlib, json, shutil, subprocess, tomllib, os
 from pathlib import Path
-from contracts import ROOT as R, SIBLINGS
+from contracts import ROOT as R, sibling
 from production import REF as DEBUG_REF
 REF = DEBUG_REF.parent.parent / 'release/bennett-isa-ref'
 # Published aligned-allocator runtime, 2076014f81164ca75cc8f26cfe0081c2478cfdaf.
@@ -11,7 +11,7 @@ def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--major',type=int,required=True);a=ap.parse_args()
     tool=f'/usr/lib/llvm-{a.major}/bin/';plugin=R/f'build/libbennett-plugin-{a.major}.so'
-    runtime=Path(os.environ['BENNETT_ALLOCATOR_PINNED_ROOT'])/f'llvm{a.major}/bennett-runtimes.bc' if os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT') else SIBLINGS/f'bennett-runtimes/dist/llvm{a.major}/bennett-runtimes.bc'
+    runtime=sibling('bennett-runtimes')/f'dist/llvm{a.major}/bennett-runtimes.bc'
     assert sha(runtime)==RUNTIME_SHA[a.major]
     # Use the same SHA-pinned arith publication as the rest of the gate.
     pin=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith']

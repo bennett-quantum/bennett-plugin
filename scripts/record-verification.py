@@ -13,10 +13,10 @@ import argparse, datetime, hashlib, json, os, re, subprocess, sys
 from pathlib import Path
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / 'tests'))
-from contracts import PIN, SIBLINGS, dialect_text, drift
+from contracts import PIN, sibling, dialect_text, drift
 
 MAJORS = (18, 23)
-ISA_REF = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+ISA_REF = sibling('bennett-isa-spec') / 'reference-interpreter/target/debug/bennett-isa-ref'
 SUMMARY_KEYS = ('cases_run', 'cases_agree', 'cases_deferred', 'cases_blocked', 'cases_diverge')
 
 
@@ -177,7 +177,7 @@ def main():
         'dialect': '0.2.13', 'dialect_commit': PIN, 'isa': '0.8',
         'arith': __import__('tomllib').loads((R/'SPEC_VERSIONS.toml').read_text())['arith'],
         'arith_gate_paths': {str(m):str(__import__('contracts').arith_path(m)) for m in MAJORS},
-        'allocator_gate_root': os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT'),
+        'allocator_gate_root': str(sibling('bennett-runtimes') / 'dist'),
         'plugin_sha256': gate['plugin_sha256'],
         'gate': {'command': 'scripts/gate', 'exit': a.gate_exit, 'accepted_contract_drift': False,
                  'contract_head_drift': gate['contract_head_drift'], 'contract_worktree_drift': gate['contract_worktree_drift'],

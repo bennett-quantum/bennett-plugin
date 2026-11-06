@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Offline dual-major build. Uses CMake when present, llvm-config otherwise."""
-import concurrent.futures, hashlib, os, shutil, subprocess, tomllib
+import concurrent.futures, hashlib, os, shutil, subprocess, sys, tomllib
 from pathlib import Path
 R=Path(__file__).resolve().parents[1]
 for key in ['DISPLAY','WAYLAND_DISPLAY','DBUS_SESSION_BUS_ADDRESS','BROWSER']: os.environ.pop(key,None)
-(R/'.tmp').mkdir(exist_ok=True);os.environ['TMPDIR']=str(R/'.tmp')
+(R/'.tmp').mkdir(exist_ok=True);os.environ.setdefault('TMPDIR',str(R/'.tmp'))
+sys.path.insert(0, str(R/'tests'))
+from contracts import arith_path
+arith_paths={major:arith_path(major) for major in (18,23)}
 if shutil.which('cmake'):
  subprocess.run(['cmake','-S',str(R),'-B',str(R/'build')],check=True)
- subprocess.run(['cmake','--build',str(R/'build'),'-j','4'],check=True)
+ subprocess.run(['cmake','--build',str(R/'build'),'-j','3'],check=True)
 else:
  print('cmake unavailable: offline llvm-config build (CMake configuration unverified)',flush=True)
  pins=tomllib.loads((R/'SPEC_VERSIONS.toml').read_text())['arith']
  def build(major):
   tool=Path(f'/usr/lib/llvm-{major}/bin')
   flags=subprocess.check_output([str(tool/'llvm-config'),'--cxxflags'],text=True).split()
-  definitions=[f'-DBENNETT_ARITH_DEFAULT_PATH="{pins[f"llvm{major}_path"]}"',
+  definitions=[f'-DBENNETT_ARITH_DEFAULT_PATH="{arith_paths[major]}"',
                f'-DBENNETT_ARITH_DEFAULT_SHA256="{pins[f"llvm{major}_sha256"]}"']
   compile_flags=[*flags,'-std=c++17','-fPIC','-g','-O2',*definitions]
   dest=R/f'build/llvm{major}';dest.mkdir(parents=True,exist_ok=True)

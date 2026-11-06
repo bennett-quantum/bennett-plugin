@@ -1,6 +1,7 @@
 status = "milestone-1-in-progress"
 dialect = "0.2.13"
 isa = "0.8"
+dialect_sha256 = "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda15"
 [specs]
 "bennett-dialect-spec" = "0.2.13"
 "bennett-isa-spec" = "0.8"
@@ -8,9 +9,9 @@ isa = "0.8"
 "bennett-dialect-spec" = "95a4b8d06933018a07fef3516296a25fd582fcde"
 [arith]
 commit = "0dea42d001ffe832493fa0711da4a59b8cc1dd10"
-llvm18_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm18/bennett-arith.bc"
+llvm18_path = ".tmp/gate/cache/bennett-arith@0dea42d001ff/bennett-arith/dist/llvm18/bennett-arith.bc"
 llvm18_sha256 = "8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1"
-llvm23_path = "/home/tobias/Projects/bennett-workspace/bennett-arith/dist/llvm23/bennett-arith.bc"
+llvm23_path = ".tmp/gate/cache/bennett-arith@0dea42d001ff/bennett-arith/dist/llvm23/bennett-arith.bc"
 llvm23_sha256 = "59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793"
 
 # Native-only transports/tools; production runtime remains the separate allocator pin.

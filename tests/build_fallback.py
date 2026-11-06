@@ -26,9 +26,15 @@ def main():
     (fixture / 'scripts').mkdir()
     shutil.copy2(ROOT / 'scripts/build', fixture / 'scripts/build')
     shutil.copy2(ROOT / 'SPEC_VERSIONS.toml', fixture / 'SPEC_VERSIONS.toml')
+    shutil.copy2(ROOT / 'gate.toml', fixture / 'gate.toml')
+    (fixture / 'tests').mkdir()
+    for name in ('contracts.py', 'pinned_siblings.py'):
+        shutil.copy2(ROOT / 'tests' / name, fixture / 'tests' / name)
+    (fixture / '.tmp/gate').mkdir(parents=True)
+    (fixture / '.tmp/gate/cache').symlink_to(ROOT / '.tmp/gate/cache', target_is_directory=True)
     compiler = shutil.which('g++')
     assert compiler
-    for name in ('python3', 'as', 'ld'):
+    for name in ('python3', 'git', 'as', 'ld'):
         target = shutil.which(name)
         assert target, name
         (shim / name).symlink_to(target)
@@ -55,7 +61,11 @@ sys.exit(99)
         flags = flags[:flags.index('-c')]
         syntax = subprocess.run([compiler, *flags, '-fsyntax-only', fixture / 'src/SoftFloat.cpp'],
                                 capture_output=True, text=True, timeout=60)
-        expected = [f'-DBENNETT_ARITH_DEFAULT_PATH="{pins["arith"][f"llvm{major}_path"]}"',
+        arith_sha = tomllib.loads((ROOT / 'gate.toml').read_text())['siblings']['bennett-arith']['sha']
+        arith_root = (Path(os.environ['BENNETT_GATE_LAYOUT']) / 'bennett-arith'
+                      if os.environ.get('BENNETT_GATE_LAYOUT') else
+                      fixture / f'.tmp/gate/cache/bennett-arith@{arith_sha[:12]}/bennett-arith')
+        expected = [f'-DBENNETT_ARITH_DEFAULT_PATH="{arith_root}/dist/llvm{major}/bennett-arith.bc"',
                     f'-DBENNETT_ARITH_DEFAULT_SHA256="{pins["arith"][f"llvm{major}_sha256"]}"']
         ok = syntax.returncode == 0 and all(flag in flags for flag in expected)
         rows.append(dict(major=major, ok=ok, flags=flags, error=syntax.stderr))

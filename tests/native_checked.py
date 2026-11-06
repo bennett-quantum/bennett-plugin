@@ -10,7 +10,7 @@ import subprocess
 import tomllib
 
 from allocator_closure import RUNTIME_SHA
-from contracts import ROOT as R, SIBLINGS, arith_path
+from contracts import ROOT as R, sibling, arith_path
 from native_comparison import sha
 from native_link import build, resolved_layout, run, update_object
 
@@ -21,10 +21,10 @@ def main():
     a = p.parse_args()
     t = f'/usr/lib/llvm-{a.major}/bin/'
     plugin = R / f'build/libbennett-plugin-{a.major}.so'
-    root = Path(os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT', SIBLINGS / 'bennett-runtimes/dist'))
+    root = sibling('bennett-runtimes') / 'dist'
     runtime = root / f'llvm{a.major}/bennett-runtimes.bc'
     assert sha(runtime) == RUNTIME_SHA[a.major]
-    tools = Path(os.environ.get('BENNETT_NATIVE_TOOL_ROOT', SIBLINGS / 'bennett-runtimes'))
+    tools = sibling('bennett-native-runtimes')
     checker = tools / 'scripts/native-check'
     pin = tomllib.loads((R / 'SPEC_VERSIONS.toml').read_text())['native_comparison']
     assert sha(checker) == pin['checker_script_sha256'], 'published checker CLI changed'

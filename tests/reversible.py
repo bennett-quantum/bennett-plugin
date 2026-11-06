@@ -2,7 +2,7 @@
 """Pinned §19.2 R mode: executable successful paths with an ISA-7 verdict."""
 import argparse, hashlib, json, os, shutil, subprocess, time
 from pathlib import Path
-from contracts import ROOT as R, SIBLINGS, arith_path
+from contracts import ROOT as R, sibling, arith_path
 from production import REF
 
 def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -54,7 +54,7 @@ def main():
  # Full ordinary musl program: both majors must pass vector intrinsic lowering
  # and emit checked R artifacts. Typed budget faults remain the ISA-7 blocker.
  d=R/f'.tmp/reversible/{m}/r-hello';shutil.rmtree(d,ignore_errors=True);d.mkdir(parents=True)
- runtime_root=Path(os.environ['BENNETT_ALLOCATOR_PINNED_ROOT']) if os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT') else SIBLINGS/'bennett-runtimes/dist'
+ runtime_root=sibling('bennett-runtimes')/'dist'
  runtime=runtime_root/f'llvm{m}/bennett-runtimes.bc'
  expected={18:'4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f',23:'bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e'}
  assert sha(runtime)==expected[m], 'runtime publication changed'
