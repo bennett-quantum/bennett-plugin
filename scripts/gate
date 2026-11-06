@@ -21,13 +21,8 @@ PYTHON
 export BENNETT_ARITH_PINNED_ROOT
 "$root/scripts/build"
 python3 "$root/tests/build_defaults.py"
-python3 "$root/tests/smoke.py"
-python3 "$root/tests/gate_policy.py"
-python3 "$root/tests/contract_policy.py"
-python3 "$root/tests/pin_policy.py"
+"$root/scripts/test"
 for major in 18 23; do
-  python3 "$root/tests/recognition.py" --major "$major"
-  python3 "$root/tests/analysis_edges.py" --major "$major"
   python3 "$root/tests/analysis_performance.py" --major "$major"
   python3 "$root/tests/reference_images.py" --major "$major"
   python3 "$root/tests/materialisation.py" --major "$major"
@@ -47,8 +42,6 @@ for major in 18 23; do
   python3 "$root/tests/memory_runtime.py" --major "$major"
   python3 "$root/tests/region_keys.py" --major "$major"
   python3 "$root/tests/key_audit.py" --major "$major"
-  python3 "$root/tests/validation.py" --major "$major"
-  python3 "$root/tests/scalars.py" --major "$major"
   python3 "$root/tests/descriptors.py" --major "$major"
   python3 "$root/tests/production.py" --major "$major"
   python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console --case inplace-inout --case inplace-not-inverse --case inplace-small-budget --case inplace-second-small-budget --case memory-layouts --case wide-output --case unnamed-layouts
@@ -59,6 +52,7 @@ for major in 18 23; do
   python3 "$root/tests/production_records.py" --major "$major"
   python3 "$root/tests/shadow_stack.py" --major "$major"
   python3 "$root/tests/production_lifts.py" --major "$major" --case entry-replay-byte --case rung4-mini --case rung8-mini --case listsum --case shadow-n24
+  python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
 done
 # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
 python3 "$root/tests/entry_snapshot.py" --major 18 &

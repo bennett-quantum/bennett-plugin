@@ -59,6 +59,21 @@ def plugin_command(major, pipeline="bennett"):
     ]
 
 
+def validate_normalisation(major, body, directory):
+    """The independent residual reader must reject raw IR and accept the result."""
+    source, normalised = directory / "residual-input.ll", directory / "residual-output.ll"
+    source.write_text(body)
+    command = plugin_command(major)
+    rejected = run([*command, "-bennett-validate-only", "-disable-output", source])
+    assert rejected.returncode != 0 and "BD-E-RESIDUAL" in rejected.stderr, rejected
+    run_checked([*command, "-bennett-normalise-only", source, "-S", "-o", normalised])
+    # Integer materialisation introduces helper bodies; production normalises
+    # that linked closure again before independent residual validation.
+    materialised = directory / "residual-materialised.ll"
+    run_checked([*command, "-bennett-normalise-only", normalised, "-S", "-o", materialised])
+    run_checked([*command, "-bennett-validate-only", "-disable-output", materialised])
+
+
 def dialect_blob(path):
     return subprocess.check_output(
         ["git", "-C", str(sibling("bennett-dialect-spec")), "show", f"{PIN}:{path}"],
