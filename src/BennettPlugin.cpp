@@ -422,12 +422,12 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     }
     if(rEntry) {
       lowerReversible(m,a,*rEntry,Output,StackCells,BudgetDefault,BudgetTableFile,Disk);
-      errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7 (bp-is0)\n";
+      errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7\n";
       std::exit(3);
     }
     for (Function &f : m)
       if (a.tiers[&f].count("R"))
-        fail("unimplemented", "§25.1 BLK-5 (blocked: bp-is0)", &f);
+        fail("unimplemented", "§25.1 BLK-5", &f);
     for (Function &f : m)
       for (Instruction &i : instructions(f))
         if (auto *c = dyn_cast<CallBase>(&i))
@@ -436,7 +436,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
                     g->getName() == "__bennett_qborrow")) {
             auto width = a.get(c->getArgOperand(1));
             if (width.top)
-              fail("unimplemented", "§25.1 BLK-1 (blocked: bp-2tw)", c);
+              fail("unimplemented", "§25.1 BLK-1", c);
           }
     lowerProduction(m, a, Output, StackCells, BudgetDefault, BudgetTableFile);
     return PreservedAnalyses::none();
