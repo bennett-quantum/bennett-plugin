@@ -2276,12 +2276,10 @@ json::Object completeCoverage(StringRef object,
   }
   return json::Object{{"entries", std::move(entries)}};
 }
-// The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
-// the target JSON at runtime; it is copied by bennett_load before launch.
-void hostStub(Function &f, StringRef object, const json::Object &record) {
-  Module &m = *f.getParent();
+// Discover source state while every reachable entry still has its original body.
+bool sharesGlobalState(Function &f) {
   std::set<const Value *> visited;
-  std::set<const GlobalVariable *> sharedGlobals;
+  bool sharedState = false;
   std::function<void(const Value *)> findState = [&](const Value *value) {
     if (!visited.insert(value).second) return;
     if (auto *function = dyn_cast<Function>(value)) {
@@ -2290,7 +2288,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
       return;
     }
     if (auto *global = dyn_cast<GlobalVariable>(value)) {
-      if (!global->isConstant()) sharedGlobals.insert(global);
+      sharedState |= !global->isConstant();
       if (global->hasInitializer()) findState(global->getInitializer());
       return;
     }
@@ -2298,6 +2296,12 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
       for (const auto &operand : user->operands()) findState(operand);
   };
   findState(&f);
+  return sharedState;
+}
+// The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
+// the target JSON at runtime; it is copied by bennett_load before launch.
+void hostStub(Function &f, StringRef object, const json::Object &record, bool sharedState) {
+  Module &m = *f.getParent();
   auto &ctx = m.getContext();
   auto *ptr = PointerType::get(ctx, 0);
   auto *i32 = Type::getInt32Ty(ctx), *i64 = Type::getInt64Ty(ctx);
@@ -2317,7 +2321,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
        *bad = BasicBlock::Create(ctx, "launch.failed", &f);
   IRBuilder<> b(entry);
   IRBuilder<> err(bad);
-  if (!sharedGlobals.empty()) {
+  if (sharedState) {
     // Maintainer-approved interim until the native-sharing contract publishes.
     auto message = "bennett: shared global state is promised and pending the native-sharing contract "
                    "(bp-acm; b-dialect-spec-6u6) for " + f.getName().str() + "\n";
@@ -2515,6 +2519,15 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 }
 
 } // namespace
+// Freeze all dependencies before the first host body is replaced.
+void replaceHostEntries(ArrayRef<Function *> entries, StringRef out) {
+  std::map<Function *, bool> sharedState;
+  for (auto *entry : entries) sharedState.emplace(entry, sharesGlobalState(*entry));
+  for(auto *entry:entries) {
+    auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
+    hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject(),sharedState.at(entry));
+  }
+}
 #include "Reversible.inc"
 bool specialiseRegisterWidths(Module &m, Analysis &a) {
   // Finite source widths become distinct static roots before register-file
@@ -2830,10 +2843,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   // Snapshot analysis of every entry sees the linked source memory, before
   // native stubs add embedded objects and launch-API string globals.
   a.releaseTransferGraphs();
-  for(auto *entry:entries) {
-    auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
-    hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject());
-  }
+  replaceHostEntries(entries, out);
   normaliseWideABI(*device);
   for (Function &f : *device)
     if (!f.isDeclaration() && a.tiers[m.getFunction(f.getName())].count("L"))

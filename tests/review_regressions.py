@@ -15,6 +15,138 @@ REF = sibling("bennett-isa-spec") / "reference-interpreter/target/debug/bennett-
 from contracts import run_checked as run
 
 
+def global_cases(case, command, tool, work):
+    rows, failures = [], []
+    original = (ROOT / "tests/probes/review-global-counter.ll").read_text()
+    extra_entry = original + original[
+        original.index("define i32 @top()") :
+    ].replace("@top()", "@other()")
+    helper = original.replace("@top()", "@helper()")
+    prefix, helper_body = helper.split("define i32 @helper()", 1)
+    top = """define i32 @top() {
+ %q = call ptr @__bennett_qalloc(i64 0, i64 1)
+ call void @__bennett_qfree(ptr %q)
+ %v = call i32 @helper()
+ ret i32 %v
+}
+"""
+    for name, body, actions, expected in [
+        (
+            "repeat",
+            original,
+            "unsigned a=top(), b=top();",
+            "1 2 host_global=2\n",
+        ),
+        (
+            "host-write",
+            original,
+            "unsigned a=top(); g=40; unsigned b=top();",
+            "1 41 host_global=41\n",
+        ),
+        (
+            "two-entries",
+            extra_entry,
+            "unsigned a=top(), b=other();",
+            "1 2 host_global=2\n",
+        ),
+        (
+            "helper-first",
+            helper + top,
+            "unsigned a=top(), b=top();",
+            "1 2 host_global=2\n",
+        ),
+        (
+            "top-first",
+            prefix + top + "define i32 @helper()" + helper_body,
+            "unsigned a=top(), b=top();",
+            "1 2 host_global=2\n",
+        ),
+    ]:
+        directory = work / case / name
+        directory.mkdir(parents=True, exist_ok=True)
+        source, harness = directory / "input.ll", directory / "main.c"
+        source.write_text(body)
+        harness.write_text(
+            "#include <stdio.h>\nextern unsigned top(void), other(void), g;\n"
+            "int main(void) {"
+            + actions
+            + 'printf("%u %u host_global=%u\\n",a,b,g); return 0;}\n'
+            + "void *__bennett_qalloc(unsigned long long c,unsigned long long n){return 0;}\n"
+            + "void __bennett_qfree(void *p){}\n"
+        )
+        native = directory / "source-native"
+        run([tool + "clang", source, harness, "-o", native])
+        baseline = run([native])
+        assert baseline.stdout == expected, (name, baseline.stdout, expected)
+        run([*command, "-bennett-out=" + str(directory), source])
+        run(
+            [
+                tool + "opt",
+                "-passes=verify",
+                "-disable-output",
+                directory / "host.bc",
+            ]
+        )
+        library = sibling("bennett-vm") / "target/debug"
+        executable = directory / "counter"
+        run(
+            [
+                tool + "clang",
+                directory / "host.bc",
+                harness,
+                "-L" + str(library),
+                "-Wl,-rpath," + str(library),
+                "-lbennett_vm",
+                "-o",
+                executable,
+            ]
+        )
+        environment = dict(
+            os.environ,
+            BENNETT_TARGET=(
+                ROOT / "tests/probes/review-launch-target.json"
+            ).read_text(),
+        )
+        actual = subprocess.run(
+            [str(executable)],
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=120,
+        )
+        if case == "global-diagnostic":
+            ok = (
+                actual.returncode == 125
+                and not actual.stdout
+                and all(
+                    text in actual.stderr
+                    for text in (
+                        "bp-acm",
+                        "b-dialect-spec-6u6",
+                        "promised",
+                        "pending",
+                    )
+                )
+                and "unsupported" not in actual.stderr.lower()
+            )
+        else:
+            ok = actual.returncode == 0 and actual.stdout == expected
+        rows.append(
+            dict(
+                case=case,
+                name=name,
+                expected=expected,
+                actual=actual.stdout,
+                exit=actual.returncode,
+                stderr=actual.stderr,
+                ok=ok,
+            )
+        )
+        if not ok:
+            failures.append(rows[-1])
+    return rows, failures
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--major", type=int, required=True, choices=(18, 23))
@@ -700,106 +832,9 @@ define i16 @top() {{
                             )
                         )
         if case in ("global-counter", "global-diagnostic"):
-            original = (ROOT / "tests/probes/review-global-counter.ll").read_text()
-            extra_entry = original + original[
-                original.index("define i32 @top()") :
-            ].replace("@top()", "@other()")
-            for name, body, actions, expected in [
-                (
-                    "repeat",
-                    original,
-                    "unsigned a=top(), b=top();",
-                    "1 2 host_global=2\n",
-                ),
-                (
-                    "host-write",
-                    original,
-                    "unsigned a=top(); g=40; unsigned b=top();",
-                    "1 41 host_global=41\n",
-                ),
-                (
-                    "two-entries",
-                    extra_entry,
-                    "unsigned a=top(), b=other();",
-                    "1 2 host_global=2\n",
-                ),
-            ]:
-                directory = work / case / name
-                directory.mkdir(parents=True, exist_ok=True)
-                source, harness = directory / "input.ll", directory / "main.c"
-                source.write_text(body)
-                harness.write_text(
-                    "#include <stdio.h>\nextern unsigned top(void), other(void), g;\n"
-                    "int main(void) {"
-                    + actions
-                    + 'printf("%u %u host_global=%u\\n",a,b,g); return 0;}\n'
-                )
-                run([*command, "-bennett-out=" + str(directory), source])
-                run(
-                    [
-                        tool + "opt",
-                        "-passes=verify",
-                        "-disable-output",
-                        directory / "host.bc",
-                    ]
-                )
-                library = sibling("bennett-vm") / "target/debug"
-                executable = directory / "counter"
-                run(
-                    [
-                        tool + "clang",
-                        directory / "host.bc",
-                        harness,
-                        "-L" + str(library),
-                        "-Wl,-rpath," + str(library),
-                        "-lbennett_vm",
-                        "-o",
-                        executable,
-                    ]
-                )
-                environment = dict(
-                    os.environ,
-                    BENNETT_TARGET=(
-                        ROOT / "tests/probes/review-launch-target.json"
-                    ).read_text(),
-                )
-                actual = subprocess.run(
-                    [str(executable)],
-                    capture_output=True,
-                    text=True,
-                    env=environment,
-                    timeout=120,
-                )
-                if case == "global-diagnostic":
-                    ok = (
-                        actual.returncode == 125
-                        and not actual.stdout
-                        and all(
-                            text in actual.stderr
-                            for text in (
-                                "bp-acm",
-                                "b-dialect-spec-6u6",
-                                "promised",
-                                "pending",
-                            )
-                        )
-                        and "unsupported" not in actual.stderr.lower()
-                    )
-                else:
-                    ok = actual.returncode == 0 and actual.stdout == expected
-                rows.append(
-                    dict(
-                        case=case,
-                        name=name,
-                        expected=expected,
-                        actual=actual.stdout,
-                        exit=actual.returncode,
-                        stderr=actual.stderr,
-                        ok=ok,
-                    )
-                )
-                if not ok:
-                    failures.append(rows[-1])
+            global_rows, global_failures = global_cases(case, command, tool, work)
+            rows.extend(global_rows)
+            failures.extend(global_failures)
         if case == "byval":
             original = (ROOT / "tests/probes/review-byval.ll").read_text()
             duplicate = original.replace(
