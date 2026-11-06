@@ -1825,6 +1825,7 @@ std::string linkReferences(Entry &e) {
     stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
   }
   heapLimit=std::max(heapLimit,e.ccHeapBytes);
+  if (parsed.empty()) heapLimit = std::max(heapLimit, e.table.capacities[1]);
   for (auto address : e.functionAddresses)
     if (address >= heap && address - heap < heapLimit)
       fail("BD-E-COMPARISON-LAYOUT", "function address overlaps the heap", &e.f);
@@ -2745,6 +2746,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
       e.budgets=std::move(callee.budgets);
       e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+      e.functionAddresses.insert(callee.functionAddresses.begin(),callee.functionAddresses.end());
       e.trappedCalls.insert(callee.trappedCalls.begin(),callee.trappedCalls.end());
       for(auto &proof:callee.controlledIdentities)e.controlledIdentities.push_back(std::move(proof));
       e.usesSourceMemory|=callee.usesSourceMemory;
