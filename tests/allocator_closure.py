@@ -5,8 +5,8 @@ from pathlib import Path
 from contracts import ROOT as R, sibling
 from production import REF as DEBUG_REF
 REF = DEBUG_REF.parent.parent / 'release/bennett-isa-ref'
-# Published aligned-allocator runtime, 2076014f81164ca75cc8f26cfe0081c2478cfdaf.
-RUNTIME_SHA = {18:'4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f',23:'bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e'}
+# Artifact identities come from the immutable runtime publication in gate.toml.
+RUNTIME_SHA = {major: tomllib.loads((R / 'gate.toml').read_text())['siblings']['bennett-runtimes']['files'][f'dist/llvm{major}/bennett-runtimes.bc'] for major in (18, 23)}
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--major',type=int,required=True);a=ap.parse_args()

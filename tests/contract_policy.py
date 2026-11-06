@@ -50,7 +50,7 @@ for major in (18,23):
  manifest=c.arith_manifest(major)
  pins=c.tomllib.loads((c.ROOT/'SPEC_VERSIONS.toml').read_text())['arith']
  assert manifest['bitcode_sha256']==pins[f'llvm{major}_sha256']
- assert len(manifest['exports'])==1134, (major,len(manifest['exports']))
+ assert len(manifest['exports'])==1141, (major,len(manifest['exports']))
  names={row['name'] for row in manifest['exports']}
- assert {'__bennett_sf_add_ppcf128','__bennett_sf_sin_f128'} <= names
-print('arith M2: configured hashes and 1134-export immutable manifests verified on both majors')
+ assert {'__bennett_sf_add_ppcf128','__bennett_sf_sin_f128', '__bennett_sf_cmps_f64_rm'} <= names
+print('arith M2: configured hashes and 1141-export immutable manifests verified on both majors')

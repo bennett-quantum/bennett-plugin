@@ -39,8 +39,8 @@ note = "0.2.13 registry correction required by contract_policy.py; accepted spec
 sha = "5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab"
 note = "commit named in SPEC_VERSIONS.toml [arith]"
 [siblings."bennett-arith".files]
-"dist/llvm18/bennett-arith.bc" = "8d99956e8741803f2115e48fa28c6c71795fb0041e992f8835851b71dd4b6fc1"
-"dist/llvm23/bennett-arith.bc" = "59563a3a10949b1ea48ca8b79027310ac9f9f7e28c85a30e70a013ced04a6793"
+"dist/llvm18/bennett-arith.bc" = "a027f16991c06f39eb1305f28da0b1504651791bdd3533888171aa54e704f7ff"
+"dist/llvm23/bennett-arith.bc" = "8216b27231c36d750c326bbaef384011a1bdf7f7dbb717b8b8f5167551163f79"
 
 [siblings."bennett-runtimes"]
 sha = "248e468ca505c684bbf254e52eb8148f1e530c83"
