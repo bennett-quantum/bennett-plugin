@@ -1,28 +1,30 @@
 # Quality floor
 
 The default test command is `timeout 180 scripts/test`, after building LLVM 18 and 23.
-It passed 23 driver commands in **94.786 seconds** with LLVM 18 and 23 release builds.
+It passed 23 driver commands in **92.048 seconds** with LLVM 18 gcov and LLVM 23 release builds.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
 
 ## Coverage
 
-Measured executable-line coverage: **70.53% (4896 / 6942 lines)**, GCC/gcov 13, LLVM 18.
-The instrumented configuration used:
+Measured executable-line coverage: **66.86% (4646 / 6949 lines)**, GCC/gcov 13, LLVM 18.
+This refresh measures the default suite and the changed numerical/reversible drivers, with
+counters cleared before execution. The instrumented configuration and commands were:
 
 ```sh
-cmake -S . -B build/coverage18 -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm   -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG="-O1 -g1 --coverage"   -DCMAKE_MODULE_LINKER_FLAGS=--coverage -DBENNETT_OUTPUT_DIR="$PWD/build"
-timeout 900 cmake --build build/coverage18 -j2
+cmake -S . -B build/coverage18 -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG="-O1 -g1 --coverage" -DCMAKE_MODULE_LINKER_FLAGS=--coverage -DBENNETT_OUTPUT_DIR="$PWD/build"
+timeout 240 cmake --build build/coverage18 -j3
+python3 -B - <<'RESET'
+from pathlib import Path
+for path in Path("build/coverage18").rglob("*.gcda"):
+    path.unlink()
+RESET
 timeout 180 scripts/test
-timeout 180 python3 tests/allocator_closure.py --major 18
-timeout 180 python3 tests/cc_calls.py --major 18
-timeout 180 python3 tests/wide.py --major 18
-timeout 180 python3 tests/integer_intrinsics.py --major 18
-timeout 180 python3 tests/production.py --major 18
-timeout 180 python3 tests/production_budgets.py --major 18
-timeout 180 python3 tests/production_lifts.py --major 18 --case entry-replay-byte --case rung4-mini --case rung8-mini --case listsum --case shadow-n24
-timeout 240 python3 tests/review_regressions.py --major 18 --case mixed-native
+timeout 180 python3 -B tests/wide.py --major 18
+timeout 180 python3 -B tests/integer_intrinsics.py --major 18
+timeout 180 python3 -B tests/memory_runtime.py --major 18
+timeout 180 python3 -B tests/reversible.py --major 18
 timeout 90 scripts/coverage
 ```
 
@@ -32,14 +34,16 @@ solver paths within their explicit resource allowances.
 Coverage counts executable lines under `src/`, including inline headers and includes, and merges
 repeated header counters by source line. It is a measurement, with no threshold.
 
-The five least-covered files in that run were Reversible.inc (0/124), Snapshot.cpp (0/57),
-runtime/NativeComparison.inc (0/1), runtime/SingleFrame.inc (0/1), and NativeComparison.cpp (15/355).
-Reversible and general snapshot construction belong to the slow launch/history suites; the default
-entry-stack fixture tests its published microvector instead of the general snapshot constructor.
-The one-line runtime includes embed C source data. Instrumenting generated guest code would measure
-the runtime implementation, rather than this plugin. NativeComparison.cpp's address/target adapters
-are exercised by the slow native comparison/layout drivers. These focused measurements do not claim
-full gate coverage or any LLVM 23 coverage.
+The five least-covered files are Snapshot.cpp (0/57), runtime/NativeComparison.inc (0/1),
+runtime/SingleFrame.inc (0/1), NativeComparison.cpp (15/355), and SoftFloat.cpp (58/269).
+General snapshot construction belongs to the slow launch/history suites; the default entry-stack
+fixture tests its published microvector. The one-line runtime includes embed C source data;
+instrumenting generated guest code would measure runtime behavior rather than the plugin.
+NativeComparison.cpp's address/target adapters and broad soft-float operations belong to the
+slow native-comparison/layout/soft-float drivers. The optional mixed-native device floating probe
+hit its subprocess timeout during this round (bp-r3r); its host checks completed.
+Reversible.inc now has 118/124 covered lines after the repaired focused reversible driver.
+These focused measurements do not claim full gate coverage or LLVM 23 coverage.
 
 ## Contracts and remaining mechanics
 
