@@ -10,9 +10,10 @@ define i64 @top(i64 %mode) {
   %retire = select i1 %dead, ptr %p, ptr null
   call void @free(ptr %retire)
   ; malloc(4) owns a 16-byte ABI-rounded primitive allocation. Its padding
-  ; is live and zero-filled; byte 16 is outside the allocation.
+  ; is live and zero-filled. The published allocator then creates a separate
+  ; live 32-byte bookkeeping record. Byte 48 lies past both live intervals.
   %padding = icmp eq i64 %mode, 1
-  %offset = select i1 %padding, i64 4, i64 16
+  %offset = select i1 %padding, i64 4, i64 48
   %past = getelementptr i8, ptr %p, i64 %offset
   %address = select i1 %dead, ptr %p, ptr %past
   %v = load volatile i8, ptr %address
