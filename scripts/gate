@@ -20,6 +20,7 @@ PYTHON
 )"
 export BENNETT_ARITH_PINNED_ROOT
 "$root/scripts/build"
+python3 "$root/tests/build_defaults.py"
 python3 "$root/tests/smoke.py"
 python3 "$root/tests/gate_policy.py"
 python3 "$root/tests/contract_policy.py"

@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def repository(path, files):
-    """Write a tiny Git fixture directly; the job runner owns Git mutations."""
+    """Write a tiny Git fixture with immutable objects and a detached HEAD."""
     objects = path / '.git/objects'
     objects.mkdir(parents=True)
     (path / '.git/refs').mkdir()
@@ -125,7 +125,7 @@ class PinPolicy(unittest.TestCase):
     def test_contract_rejects_stale_versions_commits_and_bytes(self):
         metadata = self.root / 'SPEC_VERSIONS.toml'
         original = metadata.read_text()
-        for old, new in (('0.2.13', '0.2.14'), (self.sha, 'f' * 40),
+        for old, new in (('0.2.13', '0.2.14'), ('0.8', '999'), (self.sha, 'f' * 40),
                          (hashlib.sha256(b'# accepted dialect fixture\n').hexdigest(), 'f' * 64)):
             with self.subTest(field=old):
                 metadata.write_text(original.replace(old, new))
@@ -235,6 +235,50 @@ for module, path in expected.items():
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f'.tmp/gate/cache/bennett-arith@{self.sha[:12]}', result.stdout)
         self.assertNotIn(f'{self.workspace}/bennett-arith/dist', result.stdout)
+
+    def configure_cmake(self, major, label):
+        if not (self.root / 'CMakeLists.txt').exists():
+            shutil.copy2(ROOT / 'CMakeLists.txt', self.root / 'CMakeLists.txt')
+            shutil.copytree(ROOT / 'src', self.root / 'src')
+            metadata = self.root / 'SPEC_VERSIONS.toml'
+            text = metadata.read_text()
+            for m in (18, 23):
+                text = text.replace(f'llvm{m}_path="{self.workspace}/bennett-arith',
+                                    f'llvm{m}_path = ".tmp/gate/cache/bennett-arith@{self.sha[:12]}/bennett-arith')
+                text = text.replace(f'llvm{m}_sha256=', f'llvm{m}_sha256 = ')
+            metadata.write_text(text)
+        build = self.root / f'build/{label}-{major}'
+        result = subprocess.run(['cmake', '-S', self.root, '-B', build,
+                                 f'-DLLVM_DIR=/usr/lib/llvm-{major}/lib/cmake/llvm',
+                                 '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON'],
+                                cwd=self.workspace, env=self.env, capture_output=True,
+                                text=True, timeout=30)
+        return result, build
+
+    def test_cmake_uses_absolute_pinned_arithmetic_paths(self):
+        for layout in (False, True):
+            if layout:
+                self.env['BENNETT_GATE_LAYOUT'] = str(self.layout)
+            for major in (18, 23):
+                with self.subTest(layout=layout, major=major):
+                    result, build = self.configure_cmake(major, f'layout-{layout}')
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    checkout = (self.layout / 'bennett-arith' if layout else self.root /
+                                f'.tmp/gate/cache/bennett-arith@{self.sha[:12]}/bennett-arith')
+                    path = checkout / f'dist/llvm{major}/bennett-arith.bc'
+                    commands = json.loads((build / 'compile_commands.json').read_text())
+                    for command in commands:
+                        self.assertIn(str(path), command['command'])
+
+    def test_cmake_rejects_missing_pinned_arithmetic(self):
+        for major in (18, 23):
+            with self.subTest(major=major):
+                missing = (self.root / f'.tmp/gate/cache/bennett-arith@{self.sha[:12]}'
+                           / f'bennett-arith/dist/llvm{major}/bennett-arith.bc')
+                missing.unlink()
+                result, _ = self.configure_cmake(major, 'missing')
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(str(missing), result.stderr)
 
     def test_missing_cache_has_one_actionable_message(self):
         shutil.rmtree(self.cache)

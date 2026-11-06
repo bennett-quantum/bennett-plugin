@@ -21,15 +21,27 @@ else()
   target_include_directories(BennettPlugin SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
   target_compile_definitions(BennettPlugin PRIVATE ${LLVM_DEFINITIONS})
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/SPEC_VERSIONS.toml")
+    "${CMAKE_CURRENT_SOURCE_DIR}/SPEC_VERSIONS.toml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/gate.toml"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/contracts.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/pinned_siblings.py")
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c
+      "import sys; sys.path.insert(0, sys.argv[1] + '/tests'); from contracts import arith_path; print(arith_path(int(sys.argv[2])).absolute())"
+      "${CMAKE_CURRENT_SOURCE_DIR}" "${LLVM_VERSION_MAJOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    RESULT_VARIABLE arith_status OUTPUT_VARIABLE arith_path ERROR_VARIABLE arith_error
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT arith_status STREQUAL "0")
+    message(FATAL_ERROR "Pinned arithmetic LLVM ${LLVM_VERSION_MAJOR} unavailable:\n${arith_error}")
+  endif()
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/SPEC_VERSIONS.toml" spec_pins)
-  foreach(field path sha256)
-    string(REGEX MATCH "llvm${LLVM_VERSION_MAJOR}_${field} = \"([^\"]+)\"" arith_pin "${spec_pins}")
-    if(NOT arith_pin)
-      message(FATAL_ERROR "Missing arith LLVM ${LLVM_VERSION_MAJOR} ${field} pin")
-    endif()
-    set(arith_${field} "${CMAKE_MATCH_1}")
-  endforeach()
+  string(REGEX MATCH "llvm${LLVM_VERSION_MAJOR}_sha256 = \"([^\"]+)\"" arith_pin "${spec_pins}")
+  if(NOT arith_pin)
+    message(FATAL_ERROR "Missing arith LLVM ${LLVM_VERSION_MAJOR} sha256 pin")
+  endif()
+  set(arith_sha256 "${CMAKE_MATCH_1}")
   target_compile_definitions(BennettPlugin PRIVATE
     BENNETT_ARITH_DEFAULT_PATH="${arith_path}"
     BENNETT_ARITH_DEFAULT_SHA256="${arith_sha256}")
