@@ -581,8 +581,12 @@ struct Entry {
   unsigned dispatchBlock = 0;
   Function *selectedCallee = nullptr;
   bool generalDescriptor = false;
+  std::set<uint64_t> functionAddresses;
   uint64_t functionAddress(Function *fn) {
-    if (auto address = comparisonFunctionAddress(*fn)) return *address;
+    if (auto address = comparisonFunctionAddress(*fn)) {
+      functionAddresses.insert(*address);
+      return *address;
+    }
     if (hasComparisonLayout())
       fail("BD-E-COMPARISON-LAYOUT", "missing function address", fn);
     // Standalone comparison link, matching the module-order convention used
@@ -590,7 +594,13 @@ struct Entry {
     uint64_t address=4096;
     for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
     address=alignTo(address,uint64_t(4096));
-    for(auto &g:m) { if(&g==fn)return address; address+=16; }
+    for(auto &g:m) {
+      if(&g==fn) {
+        functionAddresses.insert(address);
+        return address;
+      }
+      address+=16;
+    }
     llvm_unreachable("function missing from comparison link");
   }
   AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
@@ -1214,6 +1224,40 @@ struct Entry {
     }
   }
 #include "runtime/CallerSnapshot.inc"
+  void allocateRegister(CallBase &call, const std::string &q, uint64_t width) {
+    std::vector<std::string> classes = {"any"};
+    if (auto *metadata = m.getModuleFlag("bennett.classes")) {
+      auto *table = dyn_cast<MDNode>(metadata);
+      if (!table) fail("BD-E-OPERAND", "malformed register class table", &call);
+      for (auto &item : table->operands()) {
+        auto *name = dyn_cast<MDString>(item.get());
+        if (!name) fail("BD-E-OPERAND", "malformed register class name", &call);
+        classes.push_back(name->getString().str());
+      }
+    }
+    auto domain = a.get(call.getArgOperand(0));
+    auto allocate = [&](uint64_t index) {
+      rows.push_back(q + " = qreg.new " + classes.at(index) + " " + std::to_string(width));
+    };
+    if (singletonInt(domain)) {
+      auto index = integer(domain, &call);
+      if (index >= classes.size()) fail("BD-E-OPERAND", "register class index outside the link table", &call);
+      allocate(index);
+      return;
+    }
+    std::vector<uint64_t> keys;
+    for (uint64_t index = 0; index < classes.size(); ++index)
+      if (domain.top || domain.atoms.count(*intValue(index).atoms.begin())) keys.push_back(index);
+    auto value = operand(call.getArgOperand(0));
+    auto id = std::to_string(dispatchBlock++), done = "class" + id + "done", bad = "class" + id + "bad";
+    compareTree(value, 64, keys, [&](uint64_t index) {
+      allocate(index);
+      rows.push_back("br ^" + done + "()");
+    }, bad);
+    rows.push_back("^" + bad + "():");
+    rows.push_back("trap");
+    rows.push_back("^" + done + "():");
+  }
   void lower() {
     setupSnapshot();
     // Descriptor memory has no device representation: its fields are virtual
@@ -1441,10 +1485,7 @@ struct Entry {
           }
           if (n == "llvm.trap") { rows.push_back("trap"); break; }
           if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
-            auto cls = integer(a.get(c->getArgOperand(0)), c),
-                 w = integer(a.get(c->getArgOperand(1)), c);
-            if (cls)
-              unimplemented("§3.4 configured register class", 1, c);
+            auto w = integer(a.get(c->getArgOperand(1)), c);
             auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
             if (files.count(c)) {
               // No site is executed twice in this acyclic entry-local file.
@@ -1455,7 +1496,7 @@ struct Entry {
               names[c] = tag;
               rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
             } else names[c] = q;
-            rows.push_back(q + " = qreg.new any " + std::to_string(w));
+            allocateRegister(*c, q, w);
           } else if (n == "__bennett_qfree")
             withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
           else if (n == "__bennett_oracle")
@@ -1482,8 +1523,8 @@ struct Entry {
             releaseCallArguments(args);propagateExit();
           } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
                     !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
-            // A reached missing import is F(8). Give unreachable successor
-            // blocks names for the unused result without executing source work.
+            // A reached missing import is F(8). Continue naming the source
+            // tail in an unreachable block so successor uses remain valid.
             if(!c->getType()->isVoidTy()) {
               auto ns=destinations(c);auto fs=fields(c->getType());
               for(unsigned k=0;k<ns.size();++k) {
@@ -1491,7 +1532,9 @@ struct Entry {
                 else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
               }
             }
-            unresolvedCall(n);break;
+            unresolvedCall(n);
+            rows.push_back("^missing" + std::to_string(dispatchBlock++) + "tail():");
+            continue;
           } else
             unimplemented("§17.4 CC marker/call lowering", 1, c);
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
@@ -1769,6 +1812,10 @@ std::string linkReferences(Entry &e) {
   std::map<const GlobalVariable *,uint64_t> sourceBases;
   for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
   json::Object globals,interfaces;
+  // Function identities occupy their own address range before the standalone
+  // heap. Include even unreferenced source data used to place those identities.
+  if (!hasComparisonLayout() && !e.functionAddresses.empty())
+    base = std::max(base, *e.functionAddresses.rbegin() + 1);
   uint64_t heap=comparisonHeapBase().value_or(alignTo(base,uint64_t(4096))),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
   for(auto &ref:e.references) {
@@ -1777,6 +1824,9 @@ std::string linkReferences(Entry &e) {
     stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
   }
   heapLimit=std::max(heapLimit,e.ccHeapBytes);
+  for (auto address : e.functionAddresses)
+    if (address >= heap && address - heap < heapLimit)
+      fail("BD-E-COMPARISON-LAYOUT", "function address overlaps the heap", &e.f);
   if(parsed.empty())while((uint64_t(1)<<stack)<std::max(uint64_t(e.stack),e.table.capacities[2]))++stack;
   uint64_t endAddress=heap+heapLimit,memCount=0;
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
@@ -1910,8 +1960,8 @@ std::string launchObject(Entry &e, json::Object &record,
       if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty() || mapped) unified=true;
     }
   }
-  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty()) && !e.references.empty();
-  if(unified || (e.references.empty() && !e.ccGlobals.empty())) {
+  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty() || !e.functionAddresses.empty()) && !e.references.empty();
+  if(unified || (e.references.empty() && (!e.ccGlobals.empty() || !e.functionAddresses.empty()))) {
     ref=linkReferences(e);
     if(e.references.empty()) ref="bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 coverage=0.8 target=0.8 ptr_width="+
         std::to_string(e.m.getDataLayout().getPointerSizeInBits())+ref;

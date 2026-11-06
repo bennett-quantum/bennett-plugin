@@ -20,10 +20,11 @@ def run(command, timeout=120):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--major', type=int, required=True, choices=(18, 23))
+    parser.add_argument('--plugin', type=Path, help='Use an explicitly selected instrumentation build')
     parser.add_argument('--case', action='append', choices=('shuffle', 'byval', 'global-counter', 'byte-order', 'native-abi', 'block-order', 'control', 'dynamic-gate', 'mixed-native', 'unresolved-call'))
     args = parser.parse_args()
     tool = f'/usr/lib/llvm-{args.major}/bin/'
-    plugin = ROOT / f'build/libbennett-plugin-{args.major}.so'
+    plugin = args.plugin or ROOT / f'build/libbennett-plugin-{args.major}.so'
     work = ROOT / f'.tmp/review-regressions/{args.major}'
     work.mkdir(parents=True, exist_ok=True)
     command = [tool + 'opt', '-load-pass-plugin=' + str(plugin),
@@ -34,6 +35,9 @@ def main():
         if case == 'unresolved-call':
             original = (ROOT / 'tests/probes/review-host-import.ll').read_text()
             successor = original.replace(' ret i32 %z', ' br label %after\nafter:\n ret i32 %z')
+            after_call = original.replace(
+                ' ret i32 %z',
+                ' %next = add i32 %x, 1\n br label %after\nafter:\n ret i32 %next')
             indirect = original.replace(' %safe =', ' %safe =', 1).replace(
                 ' br i1 %safe', ' %callee = select i1 %safe, ptr @identity, ptr @host_fn\n br i1 %safe')
             indirect = indirect.replace('call i32 @host_fn(i32 %x)', 'call i32 %callee(i32 %x)')
@@ -47,7 +51,8 @@ def main():
 }
 define internal i32 @helper(i32 %x) {
 ''' + original[start:]
-            for name, body in [('review', original), ('successor', successor), ('indirect', indirect), ('callee', helper)]:
+            for name, body in [('review', original), ('successor', successor),
+                               ('after-call', after_call), ('indirect', indirect), ('callee', helper)]:
                 directory = work / case / name
                 directory.mkdir(parents=True, exist_ok=True)
                 source = directory / 'input.ll'
