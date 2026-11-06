@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pinned §19.2 R mode: executable successful paths with an ISA-7 verdict."""
 
-import argparse, hashlib, json, os, shutil, subprocess, time
+import argparse, hashlib, json, os, shutil, subprocess, time, tomllib
 from pathlib import Path
 from contracts import ROOT as R, sibling, arith_path
 from production import REF
@@ -61,7 +61,7 @@ def main():
                 "-bennett-out=" + str(d / "out"),
                 "-disable-output",
             ],
-            3,
+            code=3,
         )
         for f in ["host.bc", "device.bc"]:
             run([tool + "opt", "-passes=verify", d / "out" / f, "-disable-output"])
@@ -177,7 +177,7 @@ def main():
                 "-bennett-out=" + str(d / "out"),
                 "-disable-output",
             ],
-            3,
+            code=3,
         )
         obj = d / "out/main/launch.bennett"
         run([REF, "check", obj])
@@ -213,11 +213,9 @@ def main():
     d.mkdir(parents=True)
     runtime_root = sibling("bennett-runtimes") / "dist"
     runtime = runtime_root / f"llvm{m}/bennett-runtimes.bc"
-    expected = {
-        18: "4ca7fb401658e145c611aa4b3817d1b5fe1623c4d973c04be8b80a0b5893633f",
-        23: "bbdef17b6cbb05636ab97276a651705b115f6c5ec9622fb5ff391ba197f0179e",
-    }
-    assert sha(runtime) == expected[m], "runtime publication changed"
+    publication = tomllib.loads((R / "gate.toml").read_text())["siblings"]["bennett-runtimes"]
+    expected = publication["files"][f"dist/llvm{m}/bennett-runtimes.bc"]
+    assert sha(runtime) == expected, "runtime publication changed"
     sysroot = runtime.parent / "musl-sysroot"
     arith = arith_path(m)
     source = R / "tests/probes/r-hello.c"
@@ -277,7 +275,7 @@ def main():
             "-bennett-out=" + str(d / "out"),
             "-disable-output",
         ],
-        3,
+        code=3,
     )
     (d / "production.stderr").write_text(z.stderr)
     row = dict(
