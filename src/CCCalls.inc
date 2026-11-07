@@ -1,4 +1,4 @@
-// ISA 0.8 §9.2: full CC memory envelopes and recursive SCC identities.
+// Selected ISA §9.2: full CC memory envelopes and recursive SCC identities.
 void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
                  json::Object &signature, const std::string &body,
                  std::map<std::string,std::string> &hashes, json::Object &symbols,
@@ -29,13 +29,8 @@ void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
     for(auto line:lines)memory+="data "+line.str()+"\n";
   }
   if(sections.count("layout")) {
-    auto layout=parse(sections.at("layout"));std::map<std::string,std::string> leaves;
-    for(auto &v:*layout.getAsObject()) {
-      if(v.first=="globals")for(auto &g:*v.second.getAsObject())leaves["globals."+g.first.str()]=jcs(g.second);
-      else if(v.first=="interface_regions")for(auto &o:*v.second.getAsObject())for(auto &r:*o.second.getAsObject())leaves["interface_regions."+o.first.str()+"."+r.first.str()]=jcs(r.second);
-      else leaves[v.first.str()]=jcs(v.second);
-    }
-    for(auto &leaf:leaves)memory+="layout "+leaf.first+" "+leaf.second+"\n";
+    auto layout=parse(sections.at("layout"));
+    memory += layoutEnvelope(*layout.getAsObject());
   }
   std::function<void(std::string)> visit=[&](std::string name) {
     if(hashes.count(name))return;

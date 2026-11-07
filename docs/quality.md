@@ -416,6 +416,8 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/production_records.py": {"complexity": 19, "functions": 1, "length_max": 60, "length_p50": 60, "length_p90": 60, "over_300": 0, "trivial_wrappers": 0},
     "tests/production_shapes.py": {"complexity": 57, "functions": 1, "length_max": 319, "length_p50": 319, "length_p90": 319, "over_300": 1, "trivial_wrappers": 0},
     "tests/quality_ratchet.py": {"complexity": 2, "functions": 2, "length_max": 35, "length_p50": 17, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
+    "tests/r_envelopes.py": {"complexity": 44, "functions": 8, "length_max": 56, "length_p50": 7, "length_p90": 56, "over_300": 0, "trivial_wrappers": 2},
+    "tests/r_typed_faults.py": {"complexity": 52, "functions": 5, "length_max": 233, "length_p50": 25, "length_p90": 233, "over_300": 0, "trivial_wrappers": 2},
     "tests/recognition.py": {"complexity": 62, "functions": 1, "length_max": 129, "length_p50": 129, "length_p90": 129, "over_300": 0, "trivial_wrappers": 0},
     "tests/reference_images.py": {"complexity": 8, "functions": 1, "length_max": 60, "length_p50": 60, "length_p90": 60, "over_300": 0, "trivial_wrappers": 0},
     "tests/region_keys.py": {"complexity": 28, "functions": 1, "length_max": 24, "length_p50": 24, "length_p90": 24, "over_300": 0, "trivial_wrappers": 0},

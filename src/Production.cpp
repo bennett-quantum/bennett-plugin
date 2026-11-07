@@ -103,6 +103,66 @@ std::string join(const std::vector<std::string> &v, StringRef sep = ", ") {
   }
   return s;
 }
+enum class LayoutScope { Classical, Oracle, Globals, WithoutInterfaces };
+struct LayoutLeaf {
+  std::vector<std::string> path;
+  std::string value;
+};
+// ISA 0.9 §9.2/K47 uses original key components. Legacy 0.8 retains
+// its dotted identity, including the old ordering and collision behaviour.
+std::string layoutEnvelope(const json::Object &layout,
+                          LayoutScope scope = LayoutScope::Classical,
+                          StringRef owner = "",
+                          const std::set<std::string> &referenced = {}) {
+  const bool structured = rContractProfile();
+  std::map<std::string, LayoutLeaf> leaves;
+  auto append = [&](std::vector<std::string> path, const json::Value &value) {
+    json::Array components;
+    for (const auto &part : path) components.push_back(part);
+    auto key = structured ? jcs(json::Value(std::move(components))) : join(path, ".");
+    leaves[key] = {std::move(path), jcs(value)};
+  };
+  for (const auto &member : layout) {
+    auto key = member.first.str();
+    if (key == "globals")
+      for (const auto &global : *member.second.getAsObject())
+        append({key, global.first.str()}, global.second);
+    else if (key == "interface_regions")
+      for (const auto &regionOwner : *member.second.getAsObject())
+        for (const auto &region : *regionOwner.second.getAsObject())
+          append({key, regionOwner.first.str(), region.first.str()}, region.second);
+    else append({key}, member.second);
+  }
+  std::string result;
+  for (const auto &entry : leaves) {
+    const auto &path = entry.second.path;
+    bool include = false;
+    switch (scope) {
+    case LayoutScope::Classical: include = true; break;
+    case LayoutScope::WithoutInterfaces: include = path[0] != "interface_regions"; break;
+    case LayoutScope::Oracle:
+      include = path[0] != "interface_regions" ||
+          (structured ? StringRef(path[1]) == owner :
+           StringRef(entry.first).starts_with("interface_regions." + owner.str() + "."));
+      break;
+    case LayoutScope::Globals:
+      include = path[0] == "globals" && referenced.count(path[1]);
+      break;
+    }
+    if (include) result += "layout " + entry.first + " " + entry.second.value + "\n";
+  }
+  return result;
+}
+void requireMemoryFreeReferenceLayout(const json::Object &layout, const Value *at) {
+  for (const auto &member : layout) {
+    if (member.first == "globals" && !member.second.getAsObject()->empty())
+      unimplemented("§16.3 multi-region data layout", 1, at);
+    if (member.first == "interface_regions")
+      for (const auto &owner : *member.second.getAsObject())
+        if (!owner.second.getAsObject()->empty())
+          unimplemented("§16.3 multi-region interface layout", 1, at);
+  }
+}
 std::string decimal(const APInt &v) {
   SmallString<48> s;
   v.toString(s, 10, false);
@@ -491,7 +551,8 @@ struct Entry {
     llvm::sort(keys);
     auto bad = "faultCode" + std::to_string(dispatchBlock++);
     compareTree(operand(code), 64, keys, [&](uint64_t value) {
-      rows.push_back("fault " + std::to_string(value ? value : 4));
+      const uint64_t effective = value ? value : 4; // ISA §5.4 effective cause.
+      rows.push_back("fault " + std::to_string(effective));
     }, bad);
     // No value outside the proven set can reach this validation guard.
     rows.push_back("^" + bad + "():");rows.push_back("trap");
@@ -1955,12 +2016,6 @@ std::string linkReferences(Entry &e) {
   json::Object layout{{"A_tab",tab},{"H",h},{"S_cells",int64_t(stack)},{"globals",std::move(globals)},
     {"heap_base",int64_t(heap)},{"heap_limit_max",int64_t(heapLimit)},{"interface_regions",std::move(interfaces)},{"null_size",4096},{"ptr_width",pw}};
   if(!e.diskDataKey.empty())layout["block_image"]=globalSymbols.at(e.diskDataKey);
-  std::map<std::string,std::string> allLeaves;
-  for(auto &v:layout) {
-    if(v.first=="globals") for(auto &g:*v.second.getAsObject()) allLeaves["globals."+g.first.str()]=jcs(g.second);
-    else if(v.first=="interface_regions") for(auto &o:*v.second.getAsObject()) for(auto &r:*o.second.getAsObject()) allLeaves["interface_regions."+o.first.str()+"."+r.first.str()]=jcs(r.second);
-    else allLeaves[v.first.str()]=jcs(v.second);
-  }
   // JSON Object iteration differs between LLVM majors. Definition order is
   // part of the full object bytes even when all interface hashes agree.
   std::sort(functions.begin(),functions.end(),[](const Symbol &a,const Symbol &b) { return a.name < b.name; });
@@ -1994,11 +2049,8 @@ std::string linkReferences(Entry &e) {
       }
       canonical+=rest.substr(last);std::string images,leaves;
       for(auto &v:data)if(f.kind=="oracle" || referenced.count(v.first))images+="data "+v.first+" "+v.second+"\n";
-      for(auto &v:allLeaves) {
-        bool include=f.kind=="oracle" ? !StringRef(v.first).starts_with("interface_regions.") || StringRef(v.first).starts_with("interface_regions."+f.name+".") : false;
-        if(f.kind=="lproc" && StringRef(v.first).starts_with("globals."))include=referenced.count(StringRef(v.first).drop_front(8).str());
-        if(include)leaves+="layout "+v.first+" "+v.second+"\n";
-      }
+      auto scope = f.kind == "oracle" ? LayoutScope::Oracle : LayoutScope::Globals;
+      leaves = layoutEnvelope(layout, scope, f.name, referenced);
       envelopes+=prefix+jcs(f.sig)+"\n"+canonical+"\n"+images+leaves+refs;
     }
     auto digest=hash(envelopes);for(unsigned i=0;i<group.size();++i)hashes[group[i]]=cyclic?hash(digest+":"+std::to_string(i)):digest;
@@ -2124,15 +2176,8 @@ std::string launchObject(Entry &e, json::Object &record,
       env += body + "\n";
       if (name[0] != 'L') {
         auto layout = parse(extra["layout"]);
-        std::map<std::string, std::string> leaves;
-        for (auto &v : *layout.getAsObject()) {
-          if (v.first == "globals" || v.first == "interface_regions") {
-            if (v.first == "globals" && !v.second.getAsObject()->empty()) unimplemented("§16.3 multi-region data layout", 1, &e.f);
-            if (v.first == "interface_regions") for (auto &r : *v.second.getAsObject())
-              if (!r.second.getAsObject()->empty()) unimplemented("§16.3 multi-region interface layout", 1, &e.f);
-          } else leaves[v.first.str()] = jcs(v.second);
-        }
-        for (auto &v : leaves) env += "layout " + v.first + " " + v.second + "\n";
+        requireMemoryFreeReferenceLayout(*layout.getAsObject(), &e.f);
+        env += layoutEnvelope(*layout.getAsObject());
       }
       changed[name] = hash(env + refs);
       (*sym)["interface_hash"] = changed[name];
@@ -2179,13 +2224,9 @@ std::string launchObject(Entry &e, json::Object &record,
     std::string memoryEnvelope;
     if(sections.count("layout")) {
       if(sections.count("data")){SmallVector<StringRef> lines;StringRef(sections["data"]).split(lines,'\n');for(auto line:lines)memoryEnvelope+="data "+line.str()+"\n";}
-      auto layout=parse(sections["layout"]);std::map<std::string,std::string> leaves;
-      for(auto &v:*layout.getAsObject()) {
-        if(v.first=="globals")for(auto &g:*v.second.getAsObject())leaves["globals."+g.first.str()]=jcs(g.second);
-        else if(v.first=="interface_regions" && name!="xor128") {for(auto &owner:*v.second.getAsObject())for(auto &region:*owner.second.getAsObject())leaves["interface_regions."+owner.first.str()+"."+region.first.str()]=jcs(region.second);}
-        else if(v.first!="interface_regions")leaves[v.first.str()]=jcs(v.second);
-      }
-      for(auto &leaf:leaves)memoryEnvelope+="layout "+leaf.first+" "+leaf.second+"\n";
+      auto layout=parse(sections["layout"]);
+      auto scope = name == "xor128" ? LayoutScope::WithoutInterfaces : LayoutScope::Classical;
+      memoryEnvelope += layoutEnvelope(*layout.getAsObject(), scope);
     }
     hashes[name]=hash("isa=" + producerISA() + "\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+item.first+"\n"+canonical+"\n"+memoryEnvelope+refs);
     (*so)[std::to_string(so->size())]=json::Object{{"name",name},{"kind",name=="xor128"?"oracle":"cc"},{"signature",parse(item.first)},{"interface_hash",hashes.at(name)}};
@@ -2206,23 +2247,6 @@ std::string launchObject(Entry &e, json::Object &record,
       refs += hashes.at(name) + "\n";
   }
   canonical += body.substr(last);
-  std::map<std::string, std::string> leaves;
-  if (sections.count("layout")) {
-    auto layout = parse(sections["layout"]);
-    for (auto &x : *layout.getAsObject()) {
-      auto n = x.first.str();
-      if (n == "globals" || n == "interface_regions") {
-        for (auto &y : *x.second.getAsObject())
-          if (n == "globals")
-            leaves[n + "." + y.first.str()] = jcs(y.second);
-          else
-            for (auto &z : *y.second.getAsObject())
-              leaves[n + "." + y.first.str() + "." + z.first.str()] =
-                  jcs(z.second);
-      } else
-        leaves[n] = jcs(x.second);
-    }
-  }
   std::string envelope =
       "isa=" + producerISA() + "\nptr_width=" +
       std::to_string(e.m.getDataLayout().getPointerSizeInBits()) + "\n" +
@@ -2238,8 +2262,8 @@ std::string launchObject(Entry &e, json::Object &record,
     for (auto l : lines)
       envelope += "data " + l.str() + "\n";
   }
-  for (auto &x : leaves)
-    envelope += "layout " + x.first + " " + x.second + "\n";
+  if (sections.count("layout"))
+    envelope += layoutEnvelope(*parse(sections["layout"]).getAsObject());
   if(e.allocatorFaultService) envelope += "device bennett.fault {\"version\":\"0.2.10\"}\n";
   envelope += refs;
   auto ih = e.usesCCCalls ? hashes.at(e.f.getName().str()) : hash(envelope);
@@ -2359,7 +2383,7 @@ bool sharesGlobalState(Function &f, Analysis &analysis) {
   }
   return false;
 }
-// The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
+// The host uses the selected published launch C ABI. BENNETT_TARGET supplies
 // the target JSON at runtime; it is copied by bennett_load before launch.
 void hostStub(Function &f, StringRef object, const json::Object &record, bool sharedState) {
   Module &m = *f.getParent();
