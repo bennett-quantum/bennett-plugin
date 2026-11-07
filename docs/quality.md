@@ -1,11 +1,61 @@
 # Quality floor
 
 The default test command is `timeout 900 scripts/test`, after building LLVM 18 and 23.
-The gate-fixture regression run passed **25/25 commands in 21.370 seconds**, exit 0,
+The expanded gate-coverage run passed **82/82 commands in 132.057 seconds**, exit 0,
 with release builds for both LLVM majors. The driver retains its 180-second internal allowance.
-The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
+The gate-only checks and their prerequisites are listed below; the full gate runs them after the default suite.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
+
+## Shadow-stack linkage and gate coverage
+
+The complete published budget-stage driver now runs by default on LLVM 18 and 23,
+after its production-fixture prerequisite, together with the shadow-stack lifetime
+and fault driver. The budget-stage acceptance includes both byte-exact H16/H32
+objects, the equivalent N24 source object, no-rematch and steps-only selection,
+all 316 budget prefixes, resolved tokens and the launch result. Four altered-runtime
+cases must still refuse the structural proof with the logical-frame-validation diagnostic.
+
+Archived source builds locate the regression at `5d86488` (parent `0d42b13`):
+the parent passes all nine records on both majors; the child loses the linked initializer
+during private-clone pruning and fails with multiply-defined stack helpers. Preserving
+the implicit stack methods also preserves external state-user bodies, whose removal
+would erase evidence that must refuse the single-frame proof. The runtime pin is unrelated.
+
+The gate audit also exposed LLVM 23 native finalization following a forwarding source
+definition past its provenance attribute. Finalization now checks the aliased definition.
+Both majors pass all six native/interpreter result and fault comparisons. A mutation
+removing provenance must still fail before producing a finalization report.
+
+Every formerly gate-only driver that completed within the focused 60-second allowance
+is now in the default suite with its original case arguments. This includes build-default
+checks, analysis performance, reference images, materialisation, aggregate rows, allocator
+closure, native comparison/layout/fixtures/hello/checked, CC calls/switch, reversible,
+the complete soft-float driver, wide and integer intrinsics, memory runtime, region keys
+and key audit, descriptors, production/environments/dispatch/shapes/budgets/records,
+budget-stage, shadow-stack and production lifts. The gate calls this shared suite
+instead of repeating those drivers. Independent major groups run concurrently with
+two workers, preserving prerequisite order within each major. Reversible and generated
+dispatch executions use the gate-pinned release interpreter; debug checks/hashes and
+all vectors and semantic assertions remain.
+
+The remaining gate-only commands are exhaustive:
+
+| Command | Focused audit wall time | Reason |
+| --- | ---: | --- |
+| `scripts/build` | cold build measured by the final gate | Prerequisite to the test command |
+| `review_regressions.py --case mixed-native` | LLVM 18/23 both >60 s | Compiler and native integration |
+| `entry_snapshot.py` | LLVM 18/23 both >60 s | Snapshot executions |
+| `production_cross_major.py` | 0.214 s on incomplete artifacts | Requires both complete snapshot suites (>60 s) |
+| `prior_objects.py` | 0.215 s to first mismatch | Requires the complete object set, including snapshots |
+| `corpus_gate.py` | >60 s | Full contract corpus and optimization matrix |
+
+The bounded artifact audit refuses the intentionally incomplete snapshot sets. It also
+identifies an existing prior-object mismatch (`bp-trh`): the old binding-block-byte launch
+hash reproduces with the archived parent compiler; current output reserves function-address
+space and orders symbols differently. The prior receipt and its exact hash expectation
+remain unchanged. Focused timeouts are runtime measurements, not full-gate acceptance;
+the exact-head gate record and final timings are recorded in the job's resume evidence.
 
 ## Soft-float gate regressions
 

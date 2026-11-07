@@ -7,6 +7,10 @@ from contracts import ROOT as R, sibling, arith_path
 from production import REF
 
 
+# Execute with the gate-pinned release oracle; keep independent debug checks.
+RUN_REF = REF.parent.parent / "release/bennett-isa-ref"
+
+
 def sha(p):
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
@@ -81,7 +85,7 @@ def main():
         executions = []
         for reverse in [False, True]:
             argv = [
-                REF,
+                RUN_REF,
                 "run-program",
                 obj,
                 "main",
@@ -123,7 +127,7 @@ def main():
             value = json.loads(
                 run(
                     [
-                        REF,
+                        RUN_REF,
                         "run-program",
                         obj,
                         "main",
@@ -184,7 +188,7 @@ def main():
         value = json.loads(
             run(
                 [
-                    REF,
+                    RUN_REF,
                     "run-program",
                     obj,
                     "main",
@@ -296,9 +300,8 @@ def main():
     for file in ["device.bc", "host.bc"]:
         run([tool + "opt", "-passes=verify", d / "out" / file, "-disable-output"])
     obj = d / "out/main/launch.bennett"
-    release_ref = REF.parent.parent / "release/bennett-isa-ref"
-    run([release_ref, "check", obj])
-    run([release_ref, "hash", obj])
+    run([RUN_REF, "check", obj])
+    run([RUN_REF, "hash", obj])
     assert (
         json.loads((d / "out/main/blockers.json").read_text())[0]["code"] == "BD-B-ISA7"
     )
@@ -307,7 +310,7 @@ def main():
         materialised_verified=True,
         materialised_sha256=sha(d / "out/device.bc"),
         object_sha256=sha(obj),
-        checker_sha256=sha(release_ref),
+        checker_sha256=sha(RUN_REF),
     )
     rows.append(row)
     result = dict(major=m, cases=len(rows), passed=len(rows), results=rows)

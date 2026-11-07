@@ -6,6 +6,10 @@ from contracts import ROOT as R, dialect_text
 from production_environments import program
 
 
+# Execute with the gate-pinned release oracle; keep independent debug checks.
+RUN_REF = REF.parent.parent / "release/bennett-isa-ref"
+
+
 def cases():
     def observe(src, first, q="%x", bit=0):
         return (
@@ -294,7 +298,7 @@ def execute(major, d):
         for arg, expected in inputs:
             z = run(
                 [
-                    REF,
+                    RUN_REF,
                     "run-program",
                     obj,
                     "top",

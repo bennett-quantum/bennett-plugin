@@ -2,6 +2,8 @@
 """Default, bounded checks; scripts/gate also runs the slow integration drivers."""
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from itertools import repeat
 import json
 import os
 from pathlib import Path
@@ -10,7 +12,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet")
+POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet", "build_defaults")
 DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
@@ -20,10 +22,48 @@ DRIVERS = {
     "register_classes": (),
     "entry_runtime": (),
     "normalisation_scope": (),
+    "analysis_performance": (),
+    "reference_images": (),
+    "materialisation": (),
+    "aggregate_rows": (),
+    "allocator_closure": (),
+    "native_comparison": (),
+    "native_layout": (),
+    "native_fixtures": (),
+    "native_hello": (),
+    "native_checked": (),
+    "cc_calls": (),
+    "cc_switch": (),
+    "reversible": (),
+    "softfloat": (),
+    "wide": (),
+    "integer_intrinsics": (),
+    "memory_runtime": (),
+    "region_keys": (),
+    "key_audit": (),
+    "descriptors": (),
     "production": (),
+    "production_environments": tuple(
+        argument
+        for name in (
+            "memory-handle", "retired-handle", "combined-devices", "multiple-outputs",
+            "heterogeneous-layouts", "pointer-layouts", "return-console", "inplace-inout",
+            "inplace-not-inverse", "inplace-small-budget", "inplace-second-small-budget",
+            "memory-layouts", "wide-output", "unnamed-layouts",
+        )
+        for argument in ("--case", name)
+    ),
+    "production_dispatch": (),
+    "production_shapes": (),
+    "production_budgets": (),
     "budget_stage": (),
+    "production_records": (),
     "shadow_stack": (),
-    "softfloat": ("--case", "analysis-closure", "--case", "published-cc"),
+    "production_lifts": tuple(
+        argument
+        for name in ("entry-replay-byte", "rung4-mini", "rung8-mini", "listsum", "shadow-n24")
+        for argument in ("--case", name)
+    ),
 }
 
 REGRESSIONS = (
@@ -39,35 +79,10 @@ REGRESSIONS = (
 )
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--major", action="append", type=int, choices=(18, 23))
-    args = parser.parse_args()
-    environment = dict(os.environ)
-    for key in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "BROWSER"):
-        environment.pop(key, None)
-    temporary = ROOT / ".tmp/tests"
-    temporary.mkdir(parents=True, exist_ok=True)
-    environment.setdefault("TMPDIR", str(temporary))
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    commands = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
-    for major in args.major or (18, 23):
-        commands.extend(
-            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
-            for name, options in DRIVERS.items()
-        )
-        commands.append(
-            [
-                sys.executable,
-                "-B",
-                "tests/review_regressions.py",
-                "--major",
-                str(major),
-                *(argument for name in REGRESSIONS for argument in ("--case", name)),
-            ]
-        )
-    started = time.monotonic()
+def run_commands(commands, environment, started):
+    receipts = []
     for command in commands:
+        command_started = time.monotonic()
         remaining = 180 - (time.monotonic() - started)
         if remaining <= 0:
             raise SystemExit("default tests exceeded the 180-second allowance")
@@ -79,16 +94,49 @@ def main():
             capture_output=True,
             timeout=min(120, remaining),
         )
+        receipts.append({"argv": command[2:], "elapsed_s": round(time.monotonic() - command_started, 3)})
         label = " ".join(command[2:])
         print(f"{label}: exit {result.returncode}", flush=True)
         if result.returncode:
             print(result.stdout)
             print(result.stderr, file=sys.stderr)
-            return result.returncode
-    elapsed = time.monotonic() - started
-    receipt = {"commands": len(commands), "elapsed_s": round(elapsed, 3)}
+            raise SystemExit(result.returncode)
+    return receipts
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--major", action="append", type=int, choices=(18, 23))
+    args = parser.parse_args()
+    environment = dict(os.environ)
+    for key in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "BROWSER"):
+        environment.pop(key, None)
+    temporary = ROOT / ".tmp/tests"
+    temporary.mkdir(parents=True, exist_ok=True)
+    environment.setdefault("TMPDIR", str(temporary))
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    policies = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
+    groups = [
+        [
+            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
+            for name, options in DRIVERS.items()
+        ] + [[
+            sys.executable, "-B", "tests/review_regressions.py", "--major", str(major),
+            *(argument for name in REGRESSIONS for argument in ("--case", name)),
+        ]]
+        for major in args.major or (18, 23)
+    ]
+    started = time.monotonic()
+    receipts = run_commands(policies, environment, started)
+    # Independent major-local artifacts; preserve prerequisite order within each major.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        receipts += sum(pool.map(run_commands, groups, repeat(environment), repeat(started)), [])
+    receipt = {
+        "commands": len(receipts), "elapsed_s": round(time.monotonic() - started, 3),
+        "checks": receipts,
+    }
     (temporary / "default.json").write_text(json.dumps(receipt, indent=2) + "\n")
-    print(json.dumps(receipt))
+    print(json.dumps({key: receipt[key] for key in ("commands", "elapsed_s")}))
     return 0
 
 
