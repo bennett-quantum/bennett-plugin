@@ -2,6 +2,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/NoFolder.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/TargetParser/Triple.h"
 using namespace llvm;
 namespace bennett {
 Value *n22Packing(Value *v) {
@@ -260,7 +262,7 @@ void normaliseWideFP(Function &f) {
 }
 
 namespace bennett {
-Function *normaliseWideABI(Module &m,Function *root) {
+static Function *normaliseWideIntegerABI(Module &m,Function *root) {
   auto &ctx=m.getContext();
   std::function<Type *(Type *)> shape=[&](Type *t)->Type * {
     if(wide(t)) {SmallVector<Type *> fields;unsigned n=t->getIntegerBitWidth();for(unsigned k=0;k<(n+63)/64;++k)fields.push_back(IntegerType::get(ctx,std::min(64u,n-64*k)));return StructType::get(ctx,fields);}
@@ -360,4 +362,5 @@ Function *normaliseWideABI(Module &m,Function *root) {
   }
   return root;
 }
+#include "Varargs.inc"
 }

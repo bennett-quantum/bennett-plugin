@@ -4,6 +4,7 @@
 #include "llvm/IR/Operator.h"
 using namespace llvm;
 namespace bennett {
+bool isVaOperation(const Instruction &i);
 // A reader of materialised IR, deliberately separate from the producer. Neither
 // annotations from the producer nor runtime-looking names exempt an instruction.
 void validateResidual(Module &m, bool classical, const std::set<Function *> *variants) {
@@ -86,11 +87,11 @@ void validateResidual(Module &m, bool classical, const std::set<Function *> *var
       if(isa<AllocaInst>(i))reject("V11",&i);
       if(call && !classical)if(auto *g=resolve(call->getCalledOperand());g && g->isDeclaration() && !g->isIntrinsic() && g->getName()!="__bennett_nz_fault" && g->getName()!="__bennett_nz_alloc" && g->getName()!="__bennett_nz_free")reject("V12",&i);
       checkType(i.getType(),&i);for(Value *v:i.operands())checkType(v->getType(),&i);
-      bool eh=isa<VAArgInst>(i)||isa<InvokeInst>(i)||isa<LandingPadInst>(i)||isa<ResumeInst>(i)||isa<FuncletPadInst>(i)||isa<CatchSwitchInst>(i)||isa<CleanupReturnInst>(i)||isa<CatchReturnInst>(i);
+      bool eh=isVaOperation(i)||isa<InvokeInst>(i)||isa<LandingPadInst>(i)||isa<ResumeInst>(i)||isa<FuncletPadInst>(i)||isa<CatchSwitchInst>(i)||isa<CleanupReturnInst>(i)||isa<CatchReturnInst>(i);
       if(call)if(auto *g=call->getCalledFunction()) {
-        auto n=g->getName();eh|=n=="setjmp"||n=="_setjmp"||n=="sigsetjmp"||n=="__sigsetjmp"||n.starts_with("llvm.va_start")||n.starts_with("llvm.va_end")||n.starts_with("llvm.va_copy");
+        auto n=g->getName();eh|=n=="setjmp"||n=="_setjmp"||n=="sigsetjmp"||n=="__sigsetjmp";
       }
-      if(eh)reject("V15",&i);
+      if(eh)reject(isVaOperation(i)?"V15 §14.3 N23 surviving va operation":"V15",&i);
       if(call && call->isInlineAsm())reject("V16",&i);
       if(auto *intr=dyn_cast<IntrinsicInst>(&i))if(intr->getCalledFunction()->getName().starts_with("llvm.")) {
         auto n=intr->getCalledFunction()->getName().drop_front(5).split('.').first;

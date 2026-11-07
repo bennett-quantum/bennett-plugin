@@ -1,3 +1,4 @@
+void prepareVarargsStack(Module &m,Function *&root,uint64_t capacity);
 // §15.2 rows without an IR replacement trap only when reached.
 static void normaliseRAsm(Function &f, json::Array &coverage) {
   SmallVector<CallInst *> sites;
@@ -40,7 +41,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
       GlobalValue::ExternalLinkage,entryName,m);
   IRBuilder<> builder(BasicBlock::Create(m.getContext(),"launch",launch));builder.CreateRet(builder.getInt32(0));
   // The published runtime supplies logical frames; no native allocator is used.
-  prepareStack(m,*root,table.capacities[4]);
+  prepareVarargsStack(m,root,table.capacities[4]);
   materialiseStackRuntime(m,table.capacities[4]);
   auto *init=m.getFunction("__bennett_rt_ss_init");
   json::Array asmCoverage;
