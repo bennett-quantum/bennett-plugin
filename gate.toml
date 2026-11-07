@@ -39,6 +39,11 @@ env = { CARGO_BUILD_JOBS = "3" }
 sha = "1c29c8d731228b67902c3fa72e410e1bb71d16b4"
 note = "0.2.13 registry correction required by contract_policy.py; accepted spec text and corpus unchanged from 95a4b8d"
 
+[siblings."bennett-r-contract-dialect"]
+repo = "bennett-dialect-spec"
+sha = "4bca41b49eb0999449c9475cb15e78b1e83d18e2"
+note = "Council-accepted classical R profile 0.3-r1 / ISA 0.9; separate from the unchanged 0.2.13 track"
+
 [siblings."bennett-arith"]
 sha = "5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab"
 note = "commit named in SPEC_VERSIONS.toml [arith]"
