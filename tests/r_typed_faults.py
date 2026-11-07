@@ -10,6 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -102,6 +103,7 @@ static char prefix[] = "x";
     def produce(name, body, steps=10000, runtime="", code=0):
         directory = work / name
         directory.mkdir(exist_ok=True)
+        shutil.rmtree(directory / "out", ignore_errors=True)
         source = directory / "input.c"
         source.write_text(declarations + runtime + body)
         bitcode = directory / "input.bc"
