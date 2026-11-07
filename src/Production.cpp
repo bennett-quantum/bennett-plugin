@@ -581,8 +581,12 @@ struct Entry {
   unsigned dispatchBlock = 0;
   Function *selectedCallee = nullptr;
   bool generalDescriptor = false;
+  std::set<uint64_t> functionAddresses;
   uint64_t functionAddress(Function *fn) {
-    if (auto address = comparisonFunctionAddress(*fn)) return *address;
+    if (auto address = comparisonFunctionAddress(*fn)) {
+      functionAddresses.insert(*address);
+      return *address;
+    }
     if (hasComparisonLayout())
       fail("BD-E-COMPARISON-LAYOUT", "missing function address", fn);
     // Standalone comparison link, matching the module-order convention used
@@ -590,7 +594,13 @@ struct Entry {
     uint64_t address=4096;
     for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
     address=alignTo(address,uint64_t(4096));
-    for(auto &g:m) { if(&g==fn)return address; address+=16; }
+    for(auto &g:m) {
+      if(&g==fn) {
+        functionAddresses.insert(address);
+        return address;
+      }
+      address+=16;
+    }
     llvm_unreachable("function missing from comparison link");
   }
   AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
@@ -1214,7 +1224,42 @@ struct Entry {
     }
   }
 #include "runtime/CallerSnapshot.inc"
-  void lower() {
+  void allocateRegister(CallBase &call, const std::string &q, uint64_t width) {
+    std::vector<std::string> classes = {"any"};
+    if (auto *metadata = m.getModuleFlag("bennett.classes")) {
+      auto *table = dyn_cast<MDNode>(metadata);
+      if (!table) fail("BD-E-OPERAND", "malformed register class table", &call);
+      for (auto &item : table->operands()) {
+        auto *name = dyn_cast<MDString>(item.get());
+        if (!name) fail("BD-E-OPERAND", "malformed register class name", &call);
+        classes.push_back(name->getString().str());
+      }
+    }
+    auto domain = a.get(call.getArgOperand(0));
+    auto allocate = [&](uint64_t index, const std::string &destination) {
+      rows.push_back(destination + " = qreg.new " + classes.at(index) + " " + std::to_string(width));
+    };
+    if (singletonInt(domain)) {
+      auto index = integer(domain, &call);
+      if (index >= classes.size()) fail("BD-E-OPERAND", "register class index outside the link table", &call);
+      allocate(index, q);
+      return;
+    }
+    std::vector<uint64_t> keys;
+    for (uint64_t index = 0; index < classes.size(); ++index)
+      if (domain.top || domain.atoms.count(*intValue(index).atoms.begin())) keys.push_back(index);
+    auto value = operand(call.getArgOperand(0));
+    auto id = std::to_string(dispatchBlock++), done = "class" + id + "done", bad = "class" + id + "bad";
+    compareTree(value, 64, keys, [&](uint64_t index) {
+      auto instance = fresh("qreg[" + std::to_string(width) + "]");
+      allocate(index, instance);
+      rows.push_back("br ^" + done + "(" + instance + ")");
+    }, bad);
+    rows.push_back("^" + bad + "():");
+    rows.push_back("trap");
+    rows.push_back("^" + done + "(" + q + ":qreg[" + std::to_string(width) + "]):");
+  }
+  void prepareLowering() {
     setupSnapshot();
     // Descriptor memory has no device representation: its fields are virtual
     // operands. Elide only local storage whose complete use closure is records.
@@ -1336,6 +1381,121 @@ struct Entry {
       blocks[&bb] = "b" + std::to_string(bn++);
     for (BasicBlock &bb : f)
       for (PHINode &p : bb.phis()) destinations(&p);
+  }
+  enum class CallFlow { Continue, EndBlock };
+  CallFlow lowerCall(CallBase *c) {
+    auto *g = resolve(c->getCalledOperand());
+    if(!g && ccNames && !c->isInlineAsm()) {
+      auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
+      auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
+      std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
+      for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
+        if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
+          candidates[functionAddress(candidate)]=candidate;
+      for(auto &candidate:candidates)keys.push_back(candidate.first);
+      auto args=callArguments(*c);
+      auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
+      auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
+      compareTree(value,pw,keys,[&](uint64_t key) {
+        if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
+        auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
+        std::vector<std::string> values;
+        if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
+        rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
+        rows.push_back("br ^"+done+"("+join(values)+")");
+      },bad);
+      rows.push_back("^"+bad+"():");rows.push_back("trap");
+      std::vector<std::string> bindings;
+      if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
+      rows.push_back("^"+done+"("+join(bindings)+"):");releaseCallArguments(args);propagateExit();usesCCCalls=true;return CallFlow::Continue;
+    }
+    if (!g)
+      unimplemented("§17.4 indirect CC call", 1, c);
+    auto n = g->getName();
+    if (n.starts_with("llvm.lifetime.") ||
+        (!memoryDescriptors && n.starts_with("llvm.memset.") &&
+         descriptorObjects.count(
+             getUnderlyingObject(c->getArgOperand(0)))))
+      return CallFlow::Continue;
+    if(rTier && n.starts_with("__bennett_effect_")) {
+      auto suffix=n.drop_front(StringRef("__bennett_effect_").size());auto parts=suffix.split('_');
+      effectModels.insert(parts.first.str());std::vector<std::string> args;
+      for(auto &v:c->args())args.push_back(operand(v));
+      rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));return CallFlow::Continue;
+    }
+    if (n == "__bennett_nz_fault") {
+      if(auto *asmMD=c->getMetadata("bennett.asm")) {
+        std::string block;unsigned ordinal=0;
+        for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
+        asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
+          {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
+      }
+      // Newly materialised allocator closures report the explicit code
+      // through §11.5 before trapping. The payload is private storage,
+      // not an extra logical heap allocation on a failing path.
+      if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
+        reportedFault(c->getArgOperand(0));return CallFlow::EndBlock;
+      }
+      rows.push_back("trap"); return CallFlow::EndBlock;
+    }
+    if (n == "llvm.trap") { rows.push_back("trap"); return CallFlow::EndBlock; }
+    if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
+      auto w = integer(a.get(c->getArgOperand(1)), c);
+      auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
+      if (files.count(c)) {
+        // No site is executed twice in this acyclic entry-local file.
+        // Distinct nonzero identities are stable across stores and loads;
+        // free retires the live tag before any later use can match it.
+        auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
+        rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
+        names[c] = tag;
+        rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
+      } else names[c] = q;
+      allocateRegister(*c, q, w);
+    } else if (n == "__bennett_qfree")
+      withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
+    else if (n == "__bennett_oracle")
+      descriptor(*c);
+    else if (n == "__bennett_inplace")
+      inplace(*c);
+    else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
+    else if (n == "__bennett_gate" || n == "__bennett_measure")
+      gate(*c);
+    else if(n=="__bennett_nz_alloc") {
+      auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
+    } else if(n=="__bennett_nz_free") {
+      auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
+      auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
+    } else if (ccNames && ccNames->count(g)) {
+      usesCCCalls=true;
+      // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
+      // ISA calls bind typed operands, keep a callee environment and
+      // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
+      auto args=callArguments(*c);
+      auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
+      if(c->getType()->isVoidTy())rows.push_back(call);
+      else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
+      releaseCallArguments(args);propagateExit();
+    } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
+              !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
+      // A reached missing import is F(8). Continue naming the source
+      // tail in an unreachable block so successor uses remain valid.
+      if(!c->getType()->isVoidTy()) {
+        auto ns=destinations(c);auto fs=fields(c->getType());
+        for(unsigned k=0;k<ns.size();++k) {
+          if(fs[k].type->isPointerTy())rows.push_back(ns[k]+" = inttoptr "+number(0));
+          else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
+        }
+      }
+      unresolvedCall(n);
+      rows.push_back("^missing" + std::to_string(dispatchBlock++) + "tail():");
+      return CallFlow::Continue;
+    } else
+      unimplemented("§17.4 CC marker/call lowering", 1, c);
+    return CallFlow::Continue;
+  }
+  void lower() {
+    prepareLowering();
     auto edge = [&](BasicBlock *to, BasicBlock *from) {
       std::vector<std::string> values;
       for (PHINode &p : to->phis()) {auto vs=operands(p.getIncomingValueForBlock(from));values.insert(values.end(),vs.begin(),vs.end());}
@@ -1385,115 +1545,7 @@ struct Entry {
           if(!target || (!target->getName().starts_with("llvm.dbg.") && !target->getName().starts_with("llvm.lifetime.") && !target->getName().starts_with("__bennett_nz_rstep")))countRStep();
         }
         if (auto *c = dyn_cast<CallBase>(&i)) {
-          auto *g = resolve(c->getCalledOperand());
-          if(!g && ccNames && !c->isInlineAsm()) {
-            auto pointer=operand(c->getCalledOperand());auto pw=m.getDataLayout().getPointerSizeInBits();
-            auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
-            std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
-            for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
-              if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
-                candidates[functionAddress(candidate)]=candidate;
-            for(auto &candidate:candidates)keys.push_back(candidate.first);
-            auto args=callArguments(*c);
-            auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
-            auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
-            compareTree(value,pw,keys,[&](uint64_t key) {
-              if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
-              auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
-              std::vector<std::string> values;
-              if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
-              rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
-              rows.push_back("br ^"+done+"("+join(values)+")");
-            },bad);
-            rows.push_back("^"+bad+"():");rows.push_back("trap");
-            std::vector<std::string> bindings;
-            if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
-            rows.push_back("^"+done+"("+join(bindings)+"):");releaseCallArguments(args);propagateExit();usesCCCalls=true;continue;
-          }
-          if (!g)
-            unimplemented("§17.4 indirect CC call", 1, c);
-          auto n = g->getName();
-          if (n.starts_with("llvm.lifetime.") ||
-              (!memoryDescriptors && n.starts_with("llvm.memset.") &&
-               descriptorObjects.count(
-                   getUnderlyingObject(c->getArgOperand(0)))))
-            continue;
-          if(rTier && n.starts_with("__bennett_effect_")) {
-            auto suffix=n.drop_front(StringRef("__bennett_effect_").size());auto parts=suffix.split('_');
-            effectModels.insert(parts.first.str());std::vector<std::string> args;
-            for(auto &v:c->args())args.push_back(operand(v));
-            rows.push_back("effect "+parts.first.str()+"."+parts.second.str()+" "+join(args," "));continue;
-          }
-          if (n == "__bennett_nz_fault") {
-            if(auto *asmMD=c->getMetadata("bennett.asm")) {
-              std::string block;unsigned ordinal=0;
-              for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
-              asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
-                {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
-            }
-            // Newly materialised allocator closures report the explicit code
-            // through §11.5 before trapping. The payload is private storage,
-            // not an extra logical heap allocation on a failing path.
-            if (!rTier && f.hasFnAttribute("bennett.cc.allocator")) {
-              reportedFault(c->getArgOperand(0));break;
-            }
-            rows.push_back("trap"); break;
-          }
-          if (n == "llvm.trap") { rows.push_back("trap"); break; }
-          if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
-            auto cls = integer(a.get(c->getArgOperand(0)), c),
-                 w = integer(a.get(c->getArgOperand(1)), c);
-            if (cls)
-              unimplemented("§3.4 configured register class", 1, c);
-            auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
-            if (files.count(c)) {
-              // No site is executed twice in this acyclic entry-local file.
-              // Distinct nonzero identities are stable across stores and loads;
-              // free retires the live tag before any later use can match it.
-              auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
-              rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
-              names[c] = tag;
-              rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
-            } else names[c] = q;
-            rows.push_back(q + " = qreg.new any " + std::to_string(w));
-          } else if (n == "__bennett_qfree")
-            withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
-          else if (n == "__bennett_oracle")
-            descriptor(*c);
-          else if (n == "__bennett_inplace")
-            inplace(*c);
-          else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
-          else if (n == "__bennett_gate" || n == "__bennett_measure")
-            gate(*c);
-          else if(n=="__bennett_nz_alloc") {
-            auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
-          } else if(n=="__bennett_nz_free") {
-            auto p=operand(c->getArgOperand(0));auto bits=emit("i64","ptrtoint.i64 "+p);auto zero=number(0);auto isNull=emit("i1","icmp.eq "+bits+" "+zero);
-            auto id=std::to_string(dispatchBlock++),live="free"+id,done=live+"done";rows.push_back("br "+isNull+" ^"+done+"() ^"+live+"()");rows.push_back("^"+live+"():");rows.push_back("free "+p);recordFree(p);rows.push_back("br ^"+done+"()");rows.push_back("^"+done+"():");
-          } else if (ccNames && ccNames->count(g)) {
-            usesCCCalls=true;
-            // §14.1: LLVM fastcc/tail are source ABI/optimisation details.
-            // ISA calls bind typed operands, keep a callee environment and
-            // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
-            auto args=callArguments(*c);
-            auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
-            if(c->getType()->isVoidTy())rows.push_back(call);
-            else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
-            releaseCallArguments(args);propagateExit();
-          } else if(g->isDeclaration() && !g->isIntrinsic() && !markers().count(n.str()) &&
-                    !n.starts_with("__bennett_sf_") && !n.starts_with("__bennett_rt_")) {
-            // A reached missing import is F(8). Give unreachable successor
-            // blocks names for the unused result without executing source work.
-            if(!c->getType()->isVoidTy()) {
-              auto ns=destinations(c);auto fs=fields(c->getType());
-              for(unsigned k=0;k<ns.size();++k) {
-                if(fs[k].type->isPointerTy())rows.push_back(ns[k]+" = inttoptr "+number(0));
-                else rows.push_back(ns[k]+" = const.i"+std::to_string(width(fs[k].type))+" 0");
-              }
-            }
-            unresolvedCall(n);break;
-          } else
-            unimplemented("§17.4 CC marker/call lowering", 1, c);
+          if (lowerCall(c) == CallFlow::EndBlock) break;
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
           auto vs=operands(insert->getAggregateOperand()),part=operands(insert->getInsertedValueOperand());
           auto fs=fields(insert->getType());unsigned k=0;
@@ -1769,6 +1821,10 @@ std::string linkReferences(Entry &e) {
   std::map<const GlobalVariable *,uint64_t> sourceBases;
   for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
   json::Object globals,interfaces;
+  // Function identities occupy their own address range before the standalone
+  // heap. Include even unreferenced source data used to place those identities.
+  if (!hasComparisonLayout() && !e.functionAddresses.empty())
+    base = std::max(base, *e.functionAddresses.rbegin() + 1);
   uint64_t heap=comparisonHeapBase().value_or(alignTo(base,uint64_t(4096))),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
   for(auto &ref:e.references) {
@@ -1777,6 +1833,10 @@ std::string linkReferences(Entry &e) {
     stack=std::max(stack,uint64_t(*layout.getAsObject()->getInteger("S_cells")));
   }
   heapLimit=std::max(heapLimit,e.ccHeapBytes);
+  if (parsed.empty()) heapLimit = std::max(heapLimit, e.table.capacities[1]);
+  for (auto address : e.functionAddresses)
+    if (address >= heap && address - heap < heapLimit)
+      fail("BD-E-COMPARISON-LAYOUT", "function address overlaps the heap", &e.f);
   if(parsed.empty())while((uint64_t(1)<<stack)<std::max(uint64_t(e.stack),e.table.capacities[2]))++stack;
   uint64_t endAddress=heap+heapLimit,memCount=0;
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
@@ -1910,8 +1970,8 @@ std::string launchObject(Entry &e, json::Object &record,
       if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty() || mapped) unified=true;
     }
   }
-  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty()) && !e.references.empty();
-  if(unified || (e.references.empty() && !e.ccGlobals.empty())) {
+  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty() || !e.functionAddresses.empty()) && !e.references.empty();
+  if(unified || (e.references.empty() && (!e.ccGlobals.empty() || !e.functionAddresses.empty()))) {
     ref=linkReferences(e);
     if(e.references.empty()) ref="bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 coverage=0.8 target=0.8 ptr_width="+
         std::to_string(e.m.getDataLayout().getPointerSizeInBits())+ref;
@@ -2216,9 +2276,33 @@ json::Object completeCoverage(StringRef object,
   }
   return json::Object{{"entries", std::move(entries)}};
 }
+// Discover source state while every reachable entry still has its original body.
+void appendStateDependencies(const Value *value, Analysis &analysis,
+                             SmallVectorImpl<const Value *> &pending) {
+  if (auto *function = dyn_cast<Function>(value))
+    for (const auto &instruction : instructions(function)) pending.push_back(&instruction);
+  // §14.2: the device closure includes every indirect-call candidate too.
+  if (auto *call = dyn_cast<CallBase>(value))
+    for (auto *candidate : analysis.candidates(call->getCalledOperand(), call->getFunctionType()))
+      pending.push_back(candidate);
+  if (auto *user = dyn_cast<User>(value))
+    for (const auto &operand : user->operands()) pending.push_back(operand);
+}
+bool sharesGlobalState(Function &f, Analysis &analysis) {
+  std::set<const Value *> visited;
+  SmallVector<const Value *> pending{&f};
+  while (!pending.empty()) {
+    const auto *value = pending.pop_back_val();
+    if (!visited.insert(value).second) continue;
+    if (auto *global = dyn_cast<GlobalVariable>(value))
+      if (!global->isConstant()) return true;
+    appendStateDependencies(value, analysis, pending);
+  }
+  return false;
+}
 // The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
 // the target JSON at runtime; it is copied by bennett_load before launch.
-void hostStub(Function &f, StringRef object, const json::Object &record) {
+void hostStub(Function &f, StringRef object, const json::Object &record, bool sharedState) {
   Module &m = *f.getParent();
   auto &ctx = m.getContext();
   auto *ptr = PointerType::get(ctx, 0);
@@ -2239,6 +2323,19 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
        *bad = BasicBlock::Create(ctx, "launch.failed", &f);
   IRBuilder<> b(entry);
   IRBuilder<> err(bad);
+  if (sharedState) {
+    // Maintainer-approved interim until the native-sharing contract publishes.
+    auto message = "bennett: shared global state is promised and pending the native-sharing contract "
+                   "(bp-acm; b-dialect-spec-6u6) for " + f.getName().str() + "\n";
+    auto *text = b.CreateGlobalString(message);
+    auto write = m.getOrInsertFunction("write", size, i32, ptr, size);
+    b.CreateCall(write, {b.getInt32(2), text, ConstantInt::get(size, message.size())});
+    auto exit = m.getOrInsertFunction("_Exit", b.getVoidTy(), i32);
+    b.CreateCall(exit, {b.getInt32(125)});
+    b.CreateUnreachable();
+    err.CreateUnreachable();
+    return;
+  }
   auto intrinsic = [&](Intrinsic::ID id,
                        ArrayRef<Type *> types = ArrayRef<Type *>()) {
 #if LLVM_VERSION_MAJOR >= 23
@@ -2367,7 +2464,7 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
                       {p, id, result, request}));
   if(record.getString("mode")=="reversible") {
     // §19.2's one launch request. Entries needing argv/envp byte storage
-    // remain an explicit bp-ivy mechanic, rather than passing host pointers.
+    // require explicit byte marshalling, rather than passing host pointers.
     auto *req=b.CreateLoad(ptr,request);require(b.CreateIsNotNull(req));
     auto *service=b.CreateCall(api("bennett_request_service",ptr,{ptr}),{req});
     auto *same=b.CreateCall(api("strcmp",i32,{ptr,ptr}),{service,string("bennett.argv")});require(b.CreateICmpEQ(same,b.getInt32(0)));
@@ -2424,9 +2521,17 @@ void hostStub(Function &f, StringRef object, const json::Object &record) {
 }
 
 } // namespace
+// Freeze all dependencies before the first host body is replaced.
+void replaceHostEntries(ArrayRef<Function *> entries, Analysis &analysis, StringRef out) {
+  std::map<Function *, bool> sharedState;
+  for (auto *entry : entries) sharedState.emplace(entry, sharesGlobalState(*entry, analysis));
+  for(auto *entry:entries) {
+    auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
+    hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject(),sharedState.at(entry));
+  }
+}
 #include "Reversible.inc"
-void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
-                     StringRef budgetDefault, StringRef budgetFile) {
+bool specialiseRegisterWidths(Module &m, Analysis &a) {
   // Finite source widths become distinct static roots before register-file
   // construction. Unbounded widths retain the explicit BLK-1 obligation.
   std::vector<std::pair<CallInst *,std::vector<uint64_t>>> allocations;
@@ -2434,7 +2539,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     if(auto *c=dyn_cast<CallInst>(&i);c && c->getCalledFunction() &&
        (c->getCalledFunction()->getName()=="__bennett_qalloc" || c->getCalledFunction()->getName()=="__bennett_qborrow") && !isa<ConstantInt>(c->getArgOperand(1))) {
       auto v=a.get(c->getArgOperand(1));std::vector<uint64_t> widths;
-      if(v.top)unimplemented("§25.1 BLK-1 dynamic widths (blocked: bp-2tw)",3,c);
+      if(v.top)unimplemented("§25.1 BLK-1 dynamic widths",3,c);
       for(auto &x:v.atoms)if(x.kind==Atom::Int)widths.push_back(x.integer.getLimitedValue());
       std::sort(widths.begin(),widths.end());widths.erase(std::unique(widths.begin(),widths.end()),widths.end());allocations.push_back({c,widths});
     }
@@ -2461,9 +2566,12 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
         rb.CreateCondBr(rb.CreateICmpULT(c->getArgOperand(1),key),left,right);tree(left,lo,mid);tree(right,mid+1,hi);
       };tree(head,0,site.second.size());c->replaceAllUsesWith(phi);c->eraseFromParent();
     }
-    Analysis specialised(m);specialised.run();lowerProduction(m,specialised,out,stack,budgetDefault,budgetFile);return;
+    return true;
   }
 
+  return false;
+}
+BudgetTable productionBudget(Module &m, Analysis &a, StringRef budgetDefault, StringRef budgetFile) {
   SmallVector<StringRef> components;
   budgetDefault.split(components, ',');
   std::vector<uint64_t> defaults;
@@ -2489,6 +2597,15 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
               table.capacities[j] = std::max(table.capacities[j], atom.integer.getLimitedValue());
         }
   }
+  return table;
+}
+void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
+                     StringRef budgetDefault, StringRef budgetFile) {
+  if (specialiseRegisterWidths(m, a)) {
+    Analysis specialised(m);specialised.run();
+    lowerProduction(m,specialised,out,stack,budgetDefault,budgetFile);return;
+  }
+  auto table = productionBudget(m, a, budgetDefault, budgetFile);
   // CC arithmetic uses the same linked definitions as L and native comparison.
   // Keep recursive numerical closures as §14.1 CC calls; acyclic closures
   // retain their established inlining and object identities.
@@ -2663,6 +2780,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
       e.budgets=std::move(callee.budgets);
       e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
+      e.functionAddresses.insert(callee.functionAddresses.begin(),callee.functionAddresses.end());
       e.trappedCalls.insert(callee.trappedCalls.begin(),callee.trappedCalls.end());
       for(auto &proof:callee.controlledIdentities)e.controlledIdentities.push_back(std::move(proof));
       e.usesSourceMemory|=callee.usesSourceMemory;
@@ -2727,10 +2845,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   // Snapshot analysis of every entry sees the linked source memory, before
   // native stubs add embedded objects and launch-API string globals.
   a.releaseTransferGraphs();
-  for(auto *entry:entries) {
-    auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
-    hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject());
-  }
+  replaceHostEntries(entries, a, out);
   normaliseWideABI(*device);
   for (Function &f : *device)
     if (!f.isDeclaration() && a.tiers[m.getFunction(f.getName())].count("L"))

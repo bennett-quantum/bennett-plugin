@@ -8,61 +8,30 @@ script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 root="$(cd "$script_dir/.." && pwd)"
 unset DISPLAY WAYLAND_DISPLAY DBUS_SESSION_BUS_ADDRESS BROWSER
 export TMPDIR="${TMPDIR:-$root/.tmp}"
-export BENNETT_SIBLINGS="${BENNETT_SIBLINGS:-$(dirname "$root")}"
 mkdir -p "$TMPDIR"
-# A relocated immutable publication is allowed; its digest remains the contract pin.
-python3 - "$root" <<'PYTHON'
+# Resolve arithmetic before any plugin subprocess inherits its implicit input.
+BENNETT_ARITH_PINNED_ROOT="$(python3 - "$root" <<'PYTHON'
 import sys
 sys.path.insert(0, sys.argv[1]+'/tests')
 from contracts import arith_path
-for major in (18,23): print(f'arith LLVM {major}: {arith_path(major)}', flush=True)
+for major in (18,23): print(f'arith LLVM {major}: {arith_path(major)}', file=sys.stderr, flush=True)
+print(arith_path(18).parent.parent)
 PYTHON
-"$root/scripts/build"
-python3 "$root/tests/smoke.py"
-python3 "$root/tests/gate_policy.py"
-python3 "$root/tests/contract_policy.py"
+)"
+export BENNETT_ARITH_PINNED_ROOT
+/usr/bin/time -f 'gate build: %e s' "$root/scripts/build"
+"$root/scripts/test"
+# Every bounded driver is in scripts/test; retain the measured slow checks here.
 for major in 18 23; do
-  python3 "$root/tests/recognition.py" --major "$major"
-  python3 "$root/tests/analysis_edges.py" --major "$major"
-  python3 "$root/tests/analysis_performance.py" --major "$major"
-  python3 "$root/tests/reference_images.py" --major "$major"
-  python3 "$root/tests/materialisation.py" --major "$major"
-  python3 "$root/tests/aggregate_rows.py" --major "$major"
-  python3 "$root/tests/allocator_closure.py" --major "$major"
-  python3 "$root/tests/native_comparison.py" --major "$major"
-  python3 "$root/tests/native_layout.py" --major "$major"
-  python3 "$root/tests/native_fixtures.py" --major "$major"
-  python3 "$root/tests/native_hello.py" --major "$major"
-  python3 "$root/tests/native_checked.py" --major "$major"
-  python3 "$root/tests/cc_calls.py" --major "$major"
-  python3 "$root/tests/cc_switch.py" --major "$major"
-  python3 "$root/tests/reversible.py" --major "$major"
-  python3 "$root/tests/softfloat.py" --major "$major"
-  python3 "$root/tests/wide.py" --major "$major"
-  python3 "$root/tests/integer_intrinsics.py" --major "$major"
-  python3 "$root/tests/memory_runtime.py" --major "$major"
-  python3 "$root/tests/region_keys.py" --major "$major"
-  python3 "$root/tests/key_audit.py" --major "$major"
-  python3 "$root/tests/validation.py" --major "$major"
-  python3 "$root/tests/scalars.py" --major "$major"
-  python3 "$root/tests/descriptors.py" --major "$major"
-  python3 "$root/tests/production.py" --major "$major"
-  python3 "$root/tests/production_environments.py" --major "$major" --case memory-handle --case retired-handle --case combined-devices --case multiple-outputs --case heterogeneous-layouts --case pointer-layouts --case return-console --case inplace-inout --case inplace-not-inverse --case inplace-small-budget --case inplace-second-small-budget --case memory-layouts --case wide-output --case unnamed-layouts
-  python3 "$root/tests/production_dispatch.py" --major "$major"
-  python3 "$root/tests/production_shapes.py" --major "$major"
-  python3 "$root/tests/production_budgets.py" --major "$major"
-  python3 "$root/tests/budget_stage.py" --major "$major"
-  python3 "$root/tests/production_records.py" --major "$major"
-  python3 "$root/tests/shadow_stack.py" --major "$major"
-  python3 "$root/tests/production_lifts.py" --major "$major" --case entry-replay-byte --case rung4-mini --case rung8-mini --case listsum --case shadow-n24
+  /usr/bin/time -f "gate mixed-native LLVM $major: %e s" python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
 done
 # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
-python3 "$root/tests/entry_snapshot.py" --major 18 &
+/usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
 snapshot18=$!
-python3 "$root/tests/entry_snapshot.py" --major 23 &
+/usr/bin/time -f "gate entry-snapshot LLVM 23: %e s" python3 "$root/tests/entry_snapshot.py" --major 23 &
 snapshot23=$!
 wait "$snapshot18"
 wait "$snapshot23"
-python3 "$root/tests/production_cross_major.py"
-python3 "$root/tests/prior_objects.py"
-python3 "$root/tests/corpus_gate.py"
+/usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
+/usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
+/usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"

@@ -26,7 +26,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   auto device=CloneModule(source);auto &m=*device;
   auto entryName=sourceEntry.getName().str();auto *root=m.getFunction(entryName);
   for(auto &arg:root->args())if(arg.getArgNo()>0 && !arg.use_empty())
-    unimplemented("§19.2 argv/envp byte storage in R launch (bp-ivy)",4,&arg);
+    unimplemented("§19.2 argv/envp byte storage in R launch",4,&arg);
   SmallVector<StringRef> components;budgetDefault.split(components,',');
   std::vector<uint64_t> defaults;
   for(auto c:components) {uint64_t n;if(c.getAsInteger(10,n))fail("input","§9.2 budget default");defaults.push_back(n);}
@@ -143,7 +143,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   launch->eraseFromParent();root->setName(entryName);
   checkComparisonMaterialisation(m);
   raw_fd_ostream bc(out.str()+"/device.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(m,bc);bc.close();
-  auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject());
+  auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject(),sharesGlobalState(sourceEntry, sourceAnalysis));
   raw_fd_ostream host(out.str()+"/host.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(source,host);host.close();
   write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict","blocked:BD-B-ISA7"}}}))+"\n");
   json::Object artifacts;

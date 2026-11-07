@@ -1,0 +1,4389 @@
+{
+  "schema": 1,
+  "code_head": "3867a8a0c2e1ccd2c2b074ada48d98e690707dac",
+  "dialect_commit": "1c29c8d731228b67902c3fa72e410e1bb71d16b4",
+  "dialect_sha256": "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda15",
+  "decision": "Intentional changes from reviewed fixes, permitted by plugin-defined standalone CC/R lowering (\u00a717.4). No resolved comparison-link layout is changed: hasComparisonLayout/comparisonHeapBase retain its supplied addresses. \u00a74.4 requires unique function identity; the reservation applies only when that external link map is absent. \u00a719.5 requires maximum budget-table heap capacity, retained by 6091986. No published L reference object or golden changes.",
+  "review": "docs/reviews/2026-11-06-quality-plugin-r2.md (CLEAR, with critical-batch council review still required); subsequent council blockers and gate fixes remain on the branch.",
+  "audit": {
+    "prior_objects": 312,
+    "missing": 0,
+    "changed": 16,
+    "unchanged": 296,
+    "extra_current_objects": 1,
+    "majors": [
+      18,
+      23
+    ]
+  },
+  "bisect": {
+    "18": {
+      "first_changed": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "parent": "253e5dd90e842f6b39e38111a7d9c19430c352ab",
+      "probes": [
+        {
+          "sha": "0ac61808d6cb24406489c95824220170875b93a5",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/0ac6180/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "3867a8a0c2e1ccd2c2b074ada48d98e690707dac",
+          "major": 18,
+          "sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/3867a8a/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+          "major": 18,
+          "sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/6231c2d/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "9bbf852cb300329272cbb49ba58a276e816241b7",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/9bbf852/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "6d4e5d00f84ad7b6633b13be351d324d400c5739",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/6d4e5d0/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "afe2682044ecd4c76e7b871638d50fe4bda67f2b",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/afe2682/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "b719592eb14bc02cf5aacc1b26d82b9e9cc9e3cb",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/b719592/binding18/top/launch.bennett"
+        },
+        {
+          "sha": "253e5dd90e842f6b39e38111a7d9c19430c352ab",
+          "major": 18,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/253e5dd/binding18/top/launch.bennett"
+        }
+      ]
+    },
+    "23": {
+      "first_changed": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "parent": "253e5dd90e842f6b39e38111a7d9c19430c352ab",
+      "probes": [
+        {
+          "sha": "0ac61808d6cb24406489c95824220170875b93a5",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/0ac6180/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "3867a8a0c2e1ccd2c2b074ada48d98e690707dac",
+          "major": 23,
+          "sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/3867a8a/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+          "major": 23,
+          "sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/6231c2d/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "9bbf852cb300329272cbb49ba58a276e816241b7",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/9bbf852/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "6d4e5d00f84ad7b6633b13be351d324d400c5739",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/6d4e5d0/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "afe2682044ecd4c76e7b871638d50fe4bda67f2b",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/afe2682/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "b719592eb14bc02cf5aacc1b26d82b9e9cc9e3cb",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/b719592/binding23/top/launch.bennett"
+        },
+        {
+          "sha": "253e5dd90e842f6b39e38111a7d9c19430c352ab",
+          "major": 23,
+          "sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+          "object": "/home/tobias/Projects/bennett-workspace/bennett-plugin-job-quality/.tmp/quality-plugin/bisect/253e5dd/binding23/top/launch.bennett"
+        }
+      ]
+    }
+  },
+  "oracle": {
+    "pin": "ecaaac060c44e317d1181345fa6b8e38c096c099",
+    "sha256": "b7d135ba9fca68aa37b5a9a08fd9bae52af863c6457e4e8365a30e289eca1f81"
+  },
+  "objects": [
+    {
+      "object": "production-dispatch/binding-block-byte/out/top/launch.bennett",
+      "previous_sha256": "18cf74e4a22ab18f25218e1a3c0effb18a75bd0fad0224adb850690a16c22725",
+      "sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 5,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 32
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 18
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 5,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 32
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-block-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 18
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-clock-read/out/top/launch.bennett",
+      "previous_sha256": "2e082fab4f48a55026809463b77f3c75794cd607adcb50c8183ac0f72a5fc6ba",
+      "sha256": "84d854a55ec40926e4f7e9ba1ebe4004b1261cef2fe9a409a3060e4e31223226",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-clock-read/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-console-byte/out/top/launch.bennett",
+      "previous_sha256": "d24a83ab304fa7713f3e845ea2903815c6b7394f269a9d3b7d7de29d79f818ba",
+      "sha256": "958cfdc34c695817f6abd7f1b7efd5a43e4f7368e260f150d77d027420ac7ef2",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-console-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-out-byte/out/top/launch.bennett",
+      "previous_sha256": "77403cff04bfc0cf18e834c8f2371739d6c7c66abf56d3eb8c7a36a68e9c33b3",
+      "sha256": "301cee83e3006a8cf0121a535f980c9b126e2028fca4d68f16716e98ee3394b4",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/binding-out-byte/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,1,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-memory/out/top/launch.bennett",
+      "previous_sha256": "5d6689eeb1a973a420664c59088b57285cf135033f8b680da7ae0809bfc19df3",
+      "sha256": "5b4d2fda5315679642e64cb8797e5a36ff427a8ee8b18f1e7eb8bd6670552a56",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 4,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 37
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 47
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 4,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 37
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-memory/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,8,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 47
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-no-match/out/top/launch.bennett",
+      "previous_sha256": "2c2cca667cf3ceddc8d3914a87ae2b777bffffbe4bbacabcbe8951770e004c21",
+      "sha256": "2e106060e1632c63d592e63dffae455b95ecea9d8b29ae044452f2714de6ae65",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 17
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-no-match/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-select/out/top/launch.bennett",
+      "previous_sha256": "6e9b62ec4cd5aad75cebbbe4de68eb334d0624f11a551183439281f8e89474b0",
+      "sha256": "4eddf85164518c8a482d6928c25cbbe7fede7acc188031c4c3f8daadedbca01d",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 4,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/production-dispatch/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/18/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 40
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "0",
+                "reg": 4,
+                "value": 0
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 30
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/production-dispatch/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/production-dispatch/23/candidate-select/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1,1000,1000,1000,1000",
+              "--budget",
+              "1000000,0,128,8"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i1",
+                "value": "1"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [
+              {
+                "bits": "1",
+                "reg": 4,
+                "value": 1
+              }
+            ],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 40
+          }
+        }
+      ]
+    },
+    {
+      "object": "cc-calls/cc-self-call/out/top/launch.bennett",
+      "previous_sha256": "06a2ff062de75bd9bb396b302516cd47529324dbeda1173934bf80c2f5e934f0",
+      "sha256": "5d2bb5265aa087cb1bf7ed25e8b07d5eec1bcef646b0728b7dce9a4405ecfeec",
+      "cause_commit": "60919867b435d6be3babbce494a96a4b66c58631",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 function identities; \u00a719.5 resolved heap capacity",
+      "reason": "Standalone no-reference layout now retains resolved default heap capacity (128 bytes), including allocator/shadow-stack availability. The emitted instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "17"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 9
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "18"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 22
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "3",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "3",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "23"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 48
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,2"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,2"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,1,32"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/18/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,1,32"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "17"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 9
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "1",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "18"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 22
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "3",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "3",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "23"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 48
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,2"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,4096,2"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-calls/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,1,32"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-calls/23/cc-self-call/out/top/launch.bennett",
+              "top",
+              "--args",
+              "7",
+              "--budget",
+              "100000,0,1,32"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "45"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 100
+          }
+        }
+      ]
+    },
+    {
+      "object": "cc-switch/loaded/out/top/launch.bennett",
+      "previous_sha256": "8228cfc0e3071a8ed10d279a6c1397990090d405d753bf7160225d58bf0e31ee",
+      "sha256": "46ab4ce3d0be05924df7f2028ac3c478f3bc02f28ca8c1aa062321580c9e3d2e",
+      "cause_commit": "60919867b435d6be3babbce494a96a4b66c58631",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 function identities; \u00a719.5 resolved heap capacity",
+      "reason": "Standalone no-reference layout now retains resolved default heap capacity (128 bytes), including allocator/shadow-stack availability. The emitted instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/18/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "42",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/18/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "42",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "42"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "18446744073709551615",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/18/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "18446744073709551615",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "18446744073709551615"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775808",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/18/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775808",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "9223372036854775808"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775809",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/18/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775809",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "123"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 18
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/23/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "0",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "42",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/23/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "42",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "42"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "18446744073709551615",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/23/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "18446744073709551615",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "18446744073709551615"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775808",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/23/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775808",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "9223372036854775808"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 12
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/cc-switch/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775809",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/cc-switch/23/loaded/out/top/launch.bennett",
+              "top",
+              "--args",
+              "9223372036854775809",
+              "--budget",
+              "100000,0,4096,32",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i64",
+                "value": "123"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 18
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-0/out/main/launch.bennett",
+      "previous_sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+      "sha256": "18e42af3826c659b6e2c594509dd9487d9888175acf75f4a7bc3008c0d75a485",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/budget-0/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/budget-0/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 44
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/budget-0/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/budget-0/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 44
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-1/out/main/launch.bennett",
+      "previous_sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+      "sha256": "cb808914f6c9d9740a5eadccd8cf58d14c5e75a29d9e9da9cd0542a08f03a2a7",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/budget-1/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/budget-1/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 57
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/budget-1/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/budget-1/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 57
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-2/out/main/launch.bennett",
+      "previous_sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+      "sha256": "859bf50fbd8f3c5dd9be04f87a970309ae712ee5739094af15bbeb2823ed1ac7",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/budget-2/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/budget-2/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/budget-2/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/budget-2/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-asm/out/main/launch.bennett",
+      "previous_sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+      "sha256": "6892b6d531171b282ab8480110efb4a73b03269108211afac3d44cfc3753365d",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 96
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 96
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/bad-replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/bad-replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0100000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 81
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 96
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 96
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/bad-replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-asm/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/bad-replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "FAILED",
+            "fault": 4,
+            "faults": [
+              {
+                "code": 4,
+                "name": "FAULT_UB_TRAP"
+              }
+            ],
+            "results": [],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0100000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [],
+            "steps": 81
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-callback/out/main/launch.bennett",
+      "previous_sha256": "9adae426b5b490d489a897afd935cd387ce216f287711710db3d80bb51868026",
+      "sha256": "c2eba0b084bd1b54279d491621f47dc1a33f2db21365273c3db9b579b8da6106",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 100
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 100
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "78",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 100
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-callback/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  1
+                ],
+                "bytes": "78",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 100
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-console/out/main/launch.bennett",
+      "previous_sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+      "sha256": "4eea7e615519a29ffed68b7d1f1dfc67cf5d5fc1615db246639d68336d532267",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "68690a",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  3
+                ],
+                "bytes": "68690a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  3
+                ],
+                "bytes": "68690a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "68690a",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  3
+                ],
+                "bytes": "68690a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-console/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "0"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4144,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  3
+                ],
+                "bytes": "68690a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 62
+          }
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-start-exit/out/main/launch.bennett",
+      "previous_sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+      "sha256": "6fef58e391bfcf0b4a71d7f51817567f2984faa8f6b64efd45cff13aa11dfc34",
+      "cause_commit": "6231c2d64b6da9be78c12cd2fccf1db63ed44843",
+      "spec_clause": "\u00a717.4 plugin-defined CC/R lowering; \u00a74.4 unique function identities; \u00a719.5 comparison-link addresses preserved",
+      "reason": "Standalone function-pointer identities now trigger unified layout and reserve addresses before the heap/interface ranges. Function bodies, results and fault behavior are unchanged; symbol/function order and derived hashes may change.",
+      "majors": [
+        18,
+        23
+      ],
+      "runs": [
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "3"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "780a",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  2
+                ],
+                "bytes": "780a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 151
+          }
+        },
+        {
+          "major": 18,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted18/reversible/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/18/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-18.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "3"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  2
+                ],
+                "bytes": "780a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 151
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "COMPLETED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "3"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": false,
+            "equals_entry": false,
+            "memory_equals_entry": false,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "780a",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  2
+                ],
+                "bytes": "780a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 151
+          }
+        },
+        {
+          "major": 23,
+          "commands": [
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/quality-plugin/bisect/0d42b13/receipted23/reversible/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ],
+            [
+              ".tmp/gate/cache/bennett-isa-spec@ecaaac060c44/bennett-isa-spec/reference-interpreter/target/release/bennett-isa-ref",
+              "run-program",
+              ".tmp/reversible/23/r-start-exit/out/main/launch.bennett",
+              "main",
+              "--budget",
+              "1000000,131072,4096,32",
+              "--replies",
+              ".tmp/quality-plugin/prior-object/replies-23.json",
+              "--reverse"
+            ]
+          ],
+          "identical": true,
+          "observation": {
+            "status": "REVERSED",
+            "fault": null,
+            "faults": [],
+            "results": [
+              {
+                "type": "i32",
+                "value": "3"
+              }
+            ],
+            "run_state": "CLOSED",
+            "reversed": true,
+            "equals_entry": true,
+            "memory_equals_entry": true,
+            "host_requests": [
+              {
+                "address": 4160,
+                "capacity": 20,
+                "payload": "0000000000000000000000000000000000000000",
+                "reply": "0000000000000000000000000000000000000000",
+                "service": "bennett.argv"
+              }
+            ],
+            "measurements": [],
+            "console_hex": "",
+            "clock": 0,
+            "tape": [
+              {
+                "args": [
+                  4096,
+                  2
+                ],
+                "bytes": "780a",
+                "dev": "console",
+                "op": "write"
+              }
+            ],
+            "steps": 151
+          }
+        }
+      ]
+    }
+  ]
+}

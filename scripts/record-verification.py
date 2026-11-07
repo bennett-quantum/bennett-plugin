@@ -8,15 +8,20 @@ Evidence comes from a completed gate run: <root>/.tmp/*.json written by tests/*.
 <root>/build/*.so. Run the gate first (scripts/gate in the tree), then for example:
 
   scripts/record-verification.py --pass ninth --date 2026-11-01 --commits abc1234,def5678 --gate-exit 0
+
+For an intentional, contract-backed object change, --refresh-objects REPORT revises
+only exact old/new pairs supported by the report and current dual-major artifacts.
+It retains every prior object and the last gate pass without claiming a new pass;
+the unchanged prior_objects check must then pass in the full gate.
 """
 import argparse, datetime, hashlib, json, os, re, subprocess, sys
 from pathlib import Path
 R = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(R / 'tests'))
-from contracts import PIN, SIBLINGS, dialect_text, drift
+from contracts import PIN, sibling, dialect_text, drift
 
 MAJORS = (18, 23)
-ISA_REF = SIBLINGS / 'bennett-isa-spec/reference-interpreter/target/debug/bennett-isa-ref'
+ISA_REF = sibling('bennett-isa-spec') / 'reference-interpreter/target/debug/bennett-isa-ref'
 SUMMARY_KEYS = ('cases_run', 'cases_agree', 'cases_deferred', 'cases_blocked', 'cases_diverge')
 
 
@@ -43,10 +48,8 @@ def check_rows(rows):
 
 def object_paths(tmp, major, scalars):
     """(name, path) of every emitted object whose cross-major equality is recorded."""
-    out = []
-    for o in scalars['objects']:
-        if o.get('lowered'):
-            out.append((f"scalar/{o['name']}", tmp / f"scalars/{major}/{o['name']}/ref.bennett"))
+    out = [(f"scalar/{o['name']}", tmp / f"scalars/{major}/{o['name']}/ref.bennett")
+           for o in scalars['objects'] if o.get('lowered')]
     out.append(('scalar/c-O3-inc8', tmp / f'scalars/{major}/c-inc8/ref.bennett'))
     out.append(('descriptor-reference/inc8', tmp / f'descriptors/{major}/oracle-0/ref.bennett'))
     for rel in ('top/launch.bennett', 'top/oracle-0/ref.bennett'):
@@ -61,6 +64,106 @@ def object_paths(tmp, major, scalars):
             if family=='reversible' and 'r-hello' in p.relative_to(base).parts: continue
             out.append((f'{family}/{p.relative_to(base)}', p))
     return out
+
+
+def softfloat_evidence(check, report):
+    check['known_remainders']=[r for r in report['results'] if r.get('expected_unimplemented')]
+    check['native_wide']=[r for r in report['results'] if r['name'].startswith('published-native-wide-')]
+    check['recursive_closure']=[r for r in report['results'] if r['name'].startswith('CC-recursive-')]
+    check['closure_contract'] = {
+        'rewrite': '§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links.',
+        'recursion': '§14.1: Direct calls lower to CC/R call; Recursion is unrestricted.',
+        'transport': '§17.4: LLVM integer and memory instructions map to ISA instructions; phis to block parameters; multi-result calls carry aggregates.',
+        'original_stop': '§13.1 recursive CC soft-float closure: active-set inlining guard at bennett_sf_eval',
+        'llvm23_recursive_instruction': 'call void @bennett_sf_eval(ptr %19, i32 %1, i32 3, ptr %18, i32 0, i32 %5)',
+        'cc_steps_note': 'run-program reports CC steps separately from the nested oracle; successful unchanged 64-wire launch uses two 1000000-step oracle tokens. L numerical rows record nested materialised steps.'}
+
+    check['published_production']=[r for r in report['results'] if r['name'].startswith('published-production')]
+
+
+def revised_rows(previous, current, changes):
+    old = {row['object']: row for row in previous}
+    approved = {row['object']: row for row in changes}
+    assert len(approved) == len(changes), 'duplicate object approvals'
+    assert old.keys() <= current.keys(), 'previous object missing'
+    changed = {name for name in old if old[name]['sha256'] != current[name]['sha256']}
+    assert changed == approved.keys(), 'unapproved change or unused approval'
+    assert all(old[n]['sha256'] == r['previous_sha256'] and current[n]['sha256'] == r['sha256'] for n, r in approved.items()), 'stale object approval'
+    return [dict(row, **current[row['object']]) for row in previous]
+
+
+def current_objects(tmp, major):
+    scalars = json.loads((tmp / f'scalars-{major}.json').read_text())
+    return {name: {'object': name, 'sha256': digest(path), 'bytes': path.stat().st_size}
+            for name, path in object_paths(tmp, major, scalars)}
+
+
+def refresh_receipt(report_path):
+    """Revise explicit object expectations without claiming another gate pass."""
+    report = json.loads(report_path.read_text())
+    path = R / 'docs/verification.json'
+    receipt = json.loads(path.read_text())
+    latest = receipt['latest_pass']
+    current = current_objects(R / '.tmp', 18)
+    assert current == current_objects(R / '.tmp', 23), 'cross-major objects differ'
+    assert report['code_head'] == subprocess.check_output(['git', '-C', str(R), 'rev-parse', 'HEAD'], text=True).strip(), 'code changed after evidence'
+    assert report['dialect_commit'] == PIN and not drift(), 'contract drift'
+    assert report['oracle']['sha256'] == digest(ISA_REF.parent.parent / 'release/bennett-isa-ref'), 'oracle changed'
+    assert report['oracle']['pin'] == subprocess.check_output(['git', '-C', str(sibling('bennett-isa-spec')), 'rev-parse', 'HEAD'], text=True).strip(), 'oracle pin changed'
+    assert all(all((r['cause_commit'], r['spec_clause'], r['runs'], r['majors'] == list(MAJORS))) for r in report['objects']), 'incomplete revision evidence'
+    assert all(v['identical'] and v['major'] in MAJORS for r in report['objects'] for v in r['runs']), 'oracle mismatch'
+    rows = revised_rows(latest['object_pairs']['rows'], current, report['objects'])
+    latest['object_pairs']['rows'] = rows
+    latest.setdefault('object_pair_revisions', []).append({
+        'evidence': str(report_path.relative_to(R)), 'evidence_sha256': digest(report_path),
+        'code_head': report['code_head'], 'changed_objects': len(report['objects']),
+        'retained_objects': len(rows), 'gate_pass_claimed': False,
+        'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')})
+    path.write_text(json.dumps(receipt, indent=2) + '\n')
+    print(f"revised {len(report['objects'])} objects; retained all {len(rows)} prior names; gate pass unchanged")
+
+
+def major_checks(read, m):
+    c = {}
+    for name in ('recognition', 'analysis-edges', 'analysis-performance', 'reference-images', 'materialisation', 'aggregate-rows', 'allocator-closure', 'cc-calls', 'cc-switch', 'reversible', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
+        j = read(f'{name}-{m}.json')
+        assert j['passed'] == j['cases'], (name, m)
+        c[name] = {'cases': j['cases'], 'passed': j['passed']}
+        if name in ('aggregate-rows','allocator-closure','cc-calls', 'cc-switch', 'reversible'):c[name]['evidence']=j['results']
+        if name=='analysis-performance':
+            c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
+        if name=='softfloat':
+            softfloat_evidence(c[name], j)
+    audit = read(f'key-audit-{m}.json')
+    assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
+    c['full-key-audit'] = {k: audit[k] for k in ('cases', 'matched', 'unmatched', 'accounted', 'unaccounted')}
+    d = read(f'descriptors-{m}.json')
+    assert d['descriptor_inc8_equal'] and d['production_complete'] and d['production_exit'] == 0
+    c['descriptors'] = {'descriptor_inc8_equal': True, 'production_complete': True}
+    p = read(f'production-{m}.json')
+    assert p['passed'] == 3 and p['published_oracle_inc8']['ok'] and p['native_abi']['ok']
+    c['production'] = check_rows(p['cases'])
+    for fam in ('dispatch', 'environments', 'shapes', 'budgets', 'records', 'lifts'):
+        c[f'production-{fam}'] = check_rows(read(f'production-{fam}-{m}.json')['cases'])
+        assert c[f'production-{fam}']['cases'] == c[f'production-{fam}']['ok'], (fam, m)
+    snapshot = read(f'entry-snapshot-{m}.json')
+    assert snapshot['cases'] and all(r.get('ok') and r.get('check') for r in snapshot['cases'])
+    c['entry-snapshot'] = check_rows(snapshot['cases'])
+    c['entry-snapshot']['isa_ref'] = snapshot['isa_ref']
+    c['entry-snapshot']['isa_ref_sha256'] = snapshot['isa_ref_sha256']
+    ss = read(f'shadow-stack-{m}.json')
+    assert all(r.get('check') and r.get('ok') for r in ss['cases'])
+    c['shadow-stack'] = check_rows(ss['cases'])
+    stage = read(f'budget-stage-{m}.json')
+    assert all(r.get('ok') and r.get('check') for r in stage['cases'])
+    assert all(r['ok'] for r in stage['proof_cases'])
+    final = next(r for r in stage['cases'] if r['name'] == 'identity-once')
+    assert final['reference_exact'] and final['prefix_vectors'] == 316 and final['prefixes_ok'] and final['tokens_final']
+    shape = final['build']['budget_table']['shapes'][0]
+    c['budget-stage'] = dict(check_rows(stage['cases']), proof_cases=len(stage['proof_cases']),
+                            prefix_vectors=316, reference_exact=True, tokens_final=True,
+                            selection_identity=shape['selection_identity'], identity=shape['identity'])
+    return c
 
 
 def main():
@@ -86,57 +189,7 @@ def main():
 
     checks, scalars = {}, {}
     for m in MAJORS:
-        c = {}
-        for name in ('recognition', 'analysis-edges', 'analysis-performance', 'reference-images', 'materialisation', 'aggregate-rows', 'allocator-closure', 'cc-calls', 'cc-switch', 'reversible', 'softfloat', 'wide', 'integer-intrinsics', 'memory-runtime', 'region-keys', 'validation'):
-            j = read(f'{name}-{m}.json')
-            assert j['passed'] == j['cases'], (name, m)
-            c[name] = {'cases': j['cases'], 'passed': j['passed']}
-            if name in ('aggregate-rows','allocator-closure','cc-calls', 'cc-switch', 'reversible'):c[name]['evidence']=j['results']
-            if name=='analysis-performance':
-                c[name].update(seconds=j['seconds'],rounds=j['rounds'],budget_diagnostic=j['budget_diagnostic'])
-            if name=='softfloat':
-                c[name]['known_remainders']=[r for r in j['results'] if r.get('expected_unimplemented')]
-                c[name]['native_wide']=[r for r in j['results'] if r['name'].startswith('published-native-wide-')]
-                c[name]['recursive_closure']=[r for r in j['results'] if r['name'].startswith('CC-recursive-')]
-                c[name]['closure_contract'] = {
-                    'rewrite': '§13.1: The entry points are defined by bennett-arith and are part of its bitcode the driver links.',
-                    'recursion': '§14.1: Direct calls lower to CC/R call; Recursion is unrestricted.',
-                    'transport': '§17.4: LLVM integer and memory instructions map to ISA instructions; phis to block parameters; multi-result calls carry aggregates.',
-                    'original_stop': '§13.1 recursive CC soft-float closure: active-set inlining guard at bennett_sf_eval',
-                    'llvm23_recursive_instruction': 'call void @bennett_sf_eval(ptr %19, i32 %1, i32 3, ptr %18, i32 0, i32 %5)',
-                    'cc_steps_note': 'run-program reports CC steps separately from the nested oracle; successful unchanged 64-wire launch uses two 1000000-step oracle tokens. L numerical rows record nested materialised steps.'}
-
-                c[name]['published_production']=[r for r in j['results'] if r['name'].startswith('published-production')]
-        audit = read(f'key-audit-{m}.json')
-        assert not audit['unaccounted'] and audit['accounted'] == audit['unmatched']
-        c['full-key-audit'] = {k: audit[k] for k in ('cases', 'matched', 'unmatched', 'accounted', 'unaccounted')}
-        d = read(f'descriptors-{m}.json')
-        assert d['descriptor_inc8_equal'] and d['production_complete'] and d['production_exit'] == 0
-        c['descriptors'] = {'descriptor_inc8_equal': True, 'production_complete': True}
-        p = read(f'production-{m}.json')
-        assert p['passed'] == 3 and p['published_oracle_inc8']['ok'] and p['native_abi']['ok']
-        c['production'] = check_rows(p['cases'])
-        for fam in ('dispatch', 'environments', 'shapes', 'budgets', 'records', 'lifts'):
-            c[f'production-{fam}'] = check_rows(read(f'production-{fam}-{m}.json')['cases'])
-            assert c[f'production-{fam}']['cases'] == c[f'production-{fam}']['ok'], (fam, m)
-        snapshot = read(f'entry-snapshot-{m}.json')
-        assert snapshot['cases'] and all(r.get('ok') and r.get('check') for r in snapshot['cases'])
-        c['entry-snapshot'] = check_rows(snapshot['cases'])
-        c['entry-snapshot']['isa_ref'] = snapshot['isa_ref']
-        c['entry-snapshot']['isa_ref_sha256'] = snapshot['isa_ref_sha256']
-        ss = read(f'shadow-stack-{m}.json')
-        assert all(r.get('check') and r.get('ok') for r in ss['cases'])
-        c['shadow-stack'] = check_rows(ss['cases'])
-        stage = read(f'budget-stage-{m}.json')
-        assert all(r.get('ok') and r.get('check') for r in stage['cases'])
-        assert all(r['ok'] for r in stage['proof_cases'])
-        final = next(r for r in stage['cases'] if r['name'] == 'identity-once')
-        assert final['reference_exact'] and final['prefix_vectors'] == 316 and final['prefixes_ok'] and final['tokens_final']
-        shape = final['build']['budget_table']['shapes'][0]
-        c['budget-stage'] = dict(check_rows(stage['cases']), proof_cases=len(stage['proof_cases']),
-                                prefix_vectors=316, reference_exact=True, tokens_final=True,
-                                selection_identity=shape['selection_identity'], identity=shape['identity'])
-        checks[str(m)] = c
+        checks[str(m)] = major_checks(read, m)
         sc = read(f'scalars-{m}.json')
         assert sc['c_inc8_equal'] and sc['passed'] == 21
         lowered = [o for o in sc['objects'] if o.get('lowered')]
@@ -177,7 +230,7 @@ def main():
         'dialect': '0.2.13', 'dialect_commit': PIN, 'isa': '0.8',
         'arith': __import__('tomllib').loads((R/'SPEC_VERSIONS.toml').read_text())['arith'],
         'arith_gate_paths': {str(m):str(__import__('contracts').arith_path(m)) for m in MAJORS},
-        'allocator_gate_root': os.environ.get('BENNETT_ALLOCATOR_PINNED_ROOT'),
+        'allocator_gate_root': str(sibling('bennett-runtimes') / 'dist'),
         'plugin_sha256': gate['plugin_sha256'],
         'gate': {'command': 'scripts/gate', 'exit': a.gate_exit, 'accepted_contract_drift': False,
                  'contract_head_drift': gate['contract_head_drift'], 'contract_worktree_drift': gate['contract_worktree_drift'],
@@ -216,4 +269,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == '--refresh-objects':
+        refresh_receipt(Path(sys.argv[2]).resolve())
+    else:
+        main()

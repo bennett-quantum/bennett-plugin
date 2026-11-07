@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Summarise GCC executable-line coverage for plugin sources, without a threshold."""
+
+import argparse
+import gzip
+import json
+from pathlib import Path
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--build-dir", type=Path, default=ROOT / "build/coverage18")
+    args = parser.parse_args()
+    notes = sorted(args.build_dir.rglob("*.gcno"))
+    if not notes:
+        raise SystemExit(f"no instrumented objects under {args.build_dir}")
+    destination = ROOT / ".tmp/coverage-report"
+    destination.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for note in notes:
+        result = subprocess.run(
+            ["gcov", "--json-format", str(note.resolve())],
+            cwd=destination,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode:
+            raise SystemExit(result.stderr)
+        report = destination / (note.stem + ".gcov.json.gz")
+        with gzip.open(report, "rt") as stream:
+            data = json.load(stream)
+        for source in data["files"]:
+            path = Path(source["file"]).resolve()
+            if not path.is_relative_to(ROOT / "src"):
+                continue
+            name = str(path.relative_to(ROOT))
+            lines = files.setdefault(name, {})
+            for line in source["lines"]:
+                number = line["line_number"]
+                lines[number] = lines.get(number, 0) + line["count"]
+    rows = {
+        name: {
+            "covered": sum(count > 0 for count in lines.values()),
+            "lines": len(lines),
+        }
+        for name, lines in sorted(files.items())
+    }
+    covered = sum(row["covered"] for row in rows.values())
+    total = sum(row["lines"] for row in rows.values())
+    if not total:
+        raise SystemExit("gcov reports contain no executable plugin source lines")
+    result = {
+        "covered": covered,
+        "lines": total,
+        "percent": round(100 * covered / total, 2),
+        "files": rows,
+    }
+    (destination / "summary.json").write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
