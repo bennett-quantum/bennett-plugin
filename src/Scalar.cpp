@@ -337,6 +337,11 @@ struct Scalar {
       tree(0,int(sorted.size())-1);
       for(unsigned k=0;k<sorted.size();++k) {
         lines.push_back(prefix+"c"+std::to_string(k)+"():");
+        // §14.2: a selected function without bitcode faults at run time.
+        if (sorted[k]->isDeclaration()) {
+          lines.push_back("fault 4");
+          continue;
+        }
         lines.push_back(result+" = lift.call @"+functions.at(sorted[k])+" ("+join(args)+")");
         lines.push_back("qjump "+prefix+"r");
       }

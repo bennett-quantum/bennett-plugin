@@ -117,6 +117,16 @@ limit and assertions remain intact. The pinned **release** interpreter separatel
 `step-check .tmp/scalars/<major>/add2/ref.bennett ref --exhaustive --max-bits 16 --budget 6,0,9,1`
 on both majors under `timeout 180` (two sequential subprocesses limited to 85 seconds each).
 
+The exact declaration-candidate witness aborted `opt` with `std::out_of_range` / `map::at`
+at `2ecdd90` on both majors. `collectScalarFunction` deliberately excludes declarations;
+scalar dispatch now retains their sorted leaves and emits `fault 4` there instead of
+looking up an absent lproc. After `timeout 240 cmake --build build/llvm<major> -j3`,
+`timeout 90 python3 -B tests/scalars.py --major <major> --case missing-callee --step-check`
+passes on **LLVM 18 and 23**, exit 0, with compilation and ISA check accepted and no
+compiler stack dump. With shape `IN(1,zext),IN(8,zext);tgt=8`, stack 256 and budget
+`100,0,256,8`, input `1,7` returns `(code,payload)=(0,8)`; input `0,7` returns `(4,0)`.
+Exhaustive inverse checks also pass all **512 inputs** per major (codex-S0-2, bp-cks).
+
 ## Function size and cognitive-complexity baseline
 
 Run `python3 -B scripts/quality.py` to reproduce the baseline below and

@@ -34,6 +34,8 @@ other:
             (1, 7, 0, 7 + count), (0, 7, 0, 7 + 2 * count),
             (1, 0, 0, 0), (0, 255, 0, 255), (1, 8, 0, 42),
         ]
+    missing = (R / "tests/probes/scalar-missing-callee.ll").read_text()
+    yield "missing-callee", missing, [(1, 7, 0, 8), (0, 7, 4, 0)]
 
 
 def check_indirect_execution(name, inputs, obj, row, step_check):
