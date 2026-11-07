@@ -1,15 +1,16 @@
 # Quality floor
 
-The default test command is `timeout 180 scripts/test`, after building LLVM 18 and 23.
-It passed 23 driver commands in **92.048 seconds** with LLVM 18 gcov and LLVM 23 release builds.
+The default test command is `timeout 900 scripts/test`, after building LLVM 18 and 23.
+The council blocker-fix run passed **23/23 commands in 38.344 seconds**, exit 0,
+with release builds for both LLVM majors. The driver retains its 180-second internal allowance.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
 
 ## Coverage
 
-Measured executable-line coverage: **66.86% (4646 / 6949 lines)**, GCC/gcov 13, LLVM 18.
-This refresh measures the default suite and the changed numerical/reversible drivers, with
+The preceding quality-floor coverage sample recorded **66.86% (4646 / 6949 lines)**, GCC/gcov 13, LLVM 18.
+That sample measures the default suite and the changed numerical/reversible drivers, with
 counters cleared before execution. The instrumented configuration and commands were:
 
 ```sh
@@ -126,6 +127,12 @@ passes on **LLVM 18 and 23**, exit 0, with compilation and ISA check accepted an
 compiler stack dump. With shape `IN(1,zext),IN(8,zext);tgt=8`, stack 256 and budget
 `100,0,256,8`, input `1,7` returns `(code,payload)=(0,8)`; input `0,7` returns `(4,0)`.
 Exhaustive inverse checks also pass all **512 inputs** per major (codex-S0-2, bp-cks).
+
+After all three fixes, `timeout 900 scripts/test` passed **23/23 commands in 38.344s**
+(exit 0), including both majors' scalar regressions and the generated shared-global family.
+`timeout 180 python3 -B tests/reversible.py --major 18` and the LLVM 23 equivalent
+also passed **8/8 each**, exit 0. `python3 -B scripts/quality.py --check` and
+`git diff --check` passed with the baseline JSON unchanged. No full push gate was run.
 
 ## Function size and cognitive-complexity baseline
 
