@@ -1,7 +1,7 @@
 # Quality floor
 
 The default test command is `timeout 900 scripts/test`, after building LLVM 18 and 23.
-The gate-fixture regression run passed **25/25 commands in 22.516 seconds**, exit 0,
+The gate-fixture regression run passed **25/25 commands in 21.370 seconds**, exit 0,
 with release builds for both LLVM majors. The driver retains its 180-second internal allowance.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
@@ -23,8 +23,10 @@ soft-float driver. After correction, both commands pass **11/11**, including exa
 two S2 records and all six published direct-CC numerical cases. Reversal, entry-state
 restoration, memory restoration, fault absence and exact result bits remain asserted.
 The quality baseline below is unchanged.
+The complete `timeout 300 python3 -B tests/softfloat.py --major 18` driver passes
+**112/112**, and its LLVM 23 counterpart passes **116/116**; both exit 0.
 
-The adjacent source snapshots and pin-isolation runs establish these transitions:
+The LLVM 18 adjacent source snapshots and pin-isolation runs establish these transitions:
 
 | Records | Last passing input | First failing input | Cause |
 | --- | --- | --- | --- |
@@ -48,7 +50,7 @@ retain their existing budgets. Production source, publication pins and expected 
 are unchanged.
 
 Exact opt/run-program commands, source snapshots, outputs and artifact hashes are retained
-in `.tmp/quality-plugin/bisect/`; the resume file records the remaining final pin verification.
+in `.tmp/quality-plugin/bisect/`; the resume file records final pin verification.
 The full gate remains the orchestrator's responsibility.
 
 ## Coverage
