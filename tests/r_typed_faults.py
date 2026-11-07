@@ -212,14 +212,15 @@ static char prefix[] = "x";
 
     # A recursive SCC must have fresh ISA 0.9 identities, and the terminal
     # record must preserve all open activations for FAILED reversal.
-    obj = produce("recursive-fault", '''int main(void) {
- __bennett_effect_console_write(prefix,1); return __bennett_rt_recurse(2);
+    obj = produce("recursive-fault", '''int main(int argc, char **argv) {
+ __bennett_effect_console_write(prefix,1); return __bennett_rt_recurse(argc);
 }''', runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
  if (!n) { __bennett_nz_fault(3); return 99; }
  return __bennett_rt_recurse(n-1)+1;
 }
 ''')
-    replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20, reply="00"*20)]))
+    # argc=2 takes precisely the three-open-activation trajectory 2,1,0.
+    replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20, reply="02000000"+"00"*16)]))
     execute(obj, 3)
 
     # Finite dynamic literal dispatch must retain 64 bits (§17.6).
