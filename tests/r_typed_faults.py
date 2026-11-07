@@ -107,7 +107,7 @@ static char prefix[] = "x";
 }
 """
 
-    def produce(name, body, steps=10000, runtime="", code=0, analysis_ms=None):
+    def produce(name, body, steps=10000, runtime="", code=0, analysis_ms=None, shadow_stack=65536):
         directory = work / name
         directory.mkdir(exist_ok=True)
         shutil.rmtree(directory / "out", ignore_errors=True)
@@ -116,7 +116,7 @@ static char prefix[] = "x";
         bitcode = directory / "input.bc"
         run_checked([tool / "clang", "-O1", "-fno-builtin", "-fno-optimize-sibling-calls", "-emit-llvm", "-c", source, "-o", bitcode])
         command = [*base, *profile, "--bennett-tier=reversible", "--bennett-entry=main",
-                   f"-bennett-budget-default={steps},131072,4096,32,65536",
+                   f"-bennett-budget-default={steps},131072,4096,32,{shadow_stack}",
                    f"-bennett-out={directory / 'out'}", "-disable-output", bitcode]
         if analysis_ms is not None:
             command.append(f"-bennett-analysis-budget-ms={analysis_ms}")
@@ -235,9 +235,14 @@ static char prefix[] = "x";
 
     # A recursive SCC must have fresh ISA 0.9 identities, and the terminal
     # record must preserve all open activations for FAILED reversal.
+    # Use 512 shadow-stack bytes for this isolated three-activation case; the
+    # separate shadow-stack exhaustion case keeps the full 65536-byte limit.
+    # Keep the default 30000ms per-analysis allowance and exact 2,1,0 path.
+    # Measured total compiler CPU across phases: LLVM18 33.564s, LLVM23
+    # 33.951s; both fit the default allowance (60s subprocess wall bound).
     obj = produce("recursive-fault", '''int main(int argc, char **argv) {
  __bennett_effect_console_write(prefix,1); return __bennett_rt_recurse(argc);
-}''', analysis_ms=args.recursive_analysis_ms, runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
+}''', analysis_ms=args.recursive_analysis_ms, shadow_stack=512, runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
  if (!n) { __bennett_nz_fault(3); return 99; }
  return __bennett_rt_recurse(n-1)+1;
 }
