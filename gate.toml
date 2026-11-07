@@ -18,8 +18,8 @@ name = "plugin gate"
 argv = ["scripts/gate"]
 
 [siblings."bennett-isa-spec"]
-sha = "ecaaac060c44e317d1181345fa6b8e38c096c099"
-note = "ISA main as gated by the 2026-11-02 push wave"
+sha = "3b1090790d82a00ac95d30b8da6b42d1d7a9f5d1"
+note = "Pushed ISA main with the reference-interpreter quality floor; plugin remains on ISA 0.8"
 
 [[siblings."bennett-isa-spec".build]]
 name = "reference interpreter (debug)"
