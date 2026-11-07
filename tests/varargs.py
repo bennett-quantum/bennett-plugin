@@ -2,11 +2,13 @@
 """N23: native/normalised bytes and admitted, executable R objects on both majors."""
 
 import argparse
+import ctypes as c
 import json
+import os
 import re
 
 from contracts import (
-    ROOT, dialect_text, plugin_command, run, run_checked,
+    ROOT, dialect_text, plugin_command, run, run_checked, sibling,
 )
 from production import REF
 
@@ -78,6 +80,82 @@ def mixed(major, directory, production):
             assert execution["console_hex"] == "", execution
         else:
             assert bytes.fromhex(execution["console_hex"]) == expected.encode(), execution
+    execute_vm(obj, expected.encode())
+
+
+def execute_vm(obj, expected):
+    """Exercise the gate-pinned VM through its published launch/snapshot ABI."""
+    os.environ["BENNETT_VM_ENGINE"] = "interpreter"
+    vm = c.CDLL(str(sibling("bennett-vm") / "target/release/libbennett_vm.so"))
+    pointer = c.c_void_p
+    output_pointer = c.POINTER(pointer)
+    u64 = c.c_uint64
+    api = {
+        "load": ([pointer, c.c_size_t, pointer, c.c_size_t, output_pointer], c.c_int),
+        "args_new": ([c.c_size_t, output_pointer], c.c_int),
+        "args_free": ([pointer], None),
+        "run": ([pointer, c.c_char_p, pointer, pointer, c.c_size_t, c.POINTER(u64)], c.c_int),
+        "wait": ([pointer, u64, output_pointer, output_pointer], c.c_int),
+        "request_service": ([pointer], c.c_char_p),
+        "request_free": ([pointer], None),
+        "reply": ([pointer, u64, pointer, c.c_size_t], c.c_int),
+        "result_nfaults": ([pointer], c.c_size_t),
+        "result_nvalues": ([pointer], c.c_size_t),
+        "result_get": ([pointer, c.c_size_t, c.POINTER(c.c_int), c.POINTER(c.c_uint32), pointer, c.c_size_t], c.c_int),
+        "result_free": ([pointer], None),
+        "run_snapshot": ([pointer, u64, output_pointer], c.c_int),
+        "snapshot_jcs": ([pointer, c.POINTER(c.c_size_t)], pointer),
+        "snapshot_free": ([pointer], None),
+        "reverse": ([pointer, u64], c.c_int),
+        "run_close": ([pointer, u64], c.c_int),
+        "unload": ([pointer], c.c_int),
+        "last_error": ([], c.c_char_p),
+    }
+    for name, (arguments, result) in api.items():
+        function = getattr(vm, "bennett_" + name)
+        function.argtypes, function.restype = arguments, result
+
+    def checked(name, *args):
+        status = getattr(vm, "bennett_" + name)(*args)
+        assert status == 0, (name, status, vm.bennett_last_error())
+
+    def snapshot():
+        value, length = pointer(), c.c_size_t()
+        checked("run_snapshot", program, run_id, c.byref(value))
+        data = json.loads(c.string_at(vm.bennett_snapshot_jcs(value, c.byref(length)), length.value))
+        vm.bennett_snapshot_free(value)
+        return data
+
+    target = (sibling("bennett-targets") / "targets/ideal-all-to-all.json").read_bytes()
+    data = obj.read_bytes()
+    program, arguments, run_id = pointer(), pointer(), u64()
+    checked("load", data, len(data), target, len(target), c.byref(program))
+    checked("args_new", 0, c.byref(arguments))
+    checked("run", program, b"main", arguments, None, 0, c.byref(run_id))
+    vm.bennett_args_free(arguments)
+    entry = snapshot()
+    result, request = pointer(), pointer()
+    checked("wait", program, run_id, c.byref(result), c.byref(request))
+    assert request and not result and vm.bennett_request_service(request) == b"bennett.argv"
+    vm.bennett_request_free(request)
+    checked("reply", program, run_id, bytes(20), 20)
+    checked("wait", program, run_id, c.byref(result), c.byref(request))
+    assert result and not request and vm.bennett_result_nfaults(result) == 0, snapshot()
+    assert vm.bennett_result_nvalues(result) == 1
+    kind, width, status = c.c_int(), c.c_uint32(), c.create_string_buffer(4)
+    checked("result_get", result, 0, c.byref(kind), c.byref(width), status, 4)
+    assert kind.value == 0 and width.value == 32 and status.raw == bytes(4)
+    vm.bennett_result_free(result)
+    forward = snapshot()
+    checked("reverse", program, run_id)
+    reverse = snapshot()
+    (obj.parent / "vm-snapshots.json").write_text(json.dumps(dict(forward=forward, reverse=reverse), indent=2) + "\n")
+    assert forward["console_hex"] == expected.hex(), forward
+    assert reverse["console_hex"] == "", reverse
+    assert reverse["memory_digest"] == entry["memory_digest"], (entry, reverse)
+    assert reverse["tape"] == [], reverse
+    checked("run_close", program, run_id)
+    checked("unload", program)
 
 
 def witness(major, directory):

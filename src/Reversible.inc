@@ -40,6 +40,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
       GlobalValue::ExternalLinkage,entryName,m);
   IRBuilder<> builder(BasicBlock::Create(m.getContext(),"launch",launch));builder.CreateRet(builder.getInt32(0));
   // The published runtime supplies logical frames; no native allocator is used.
+  root=normaliseWideABI(m,root);
   prepareStack(m,*root,table.capacities[4]);
   materialiseStackRuntime(m,table.capacities[4]);
   auto *init=m.getFunction("__bennett_rt_ss_init");

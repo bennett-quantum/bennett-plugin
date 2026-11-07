@@ -86,9 +86,13 @@ void validateResidual(Module &m, bool classical, const std::set<Function *> *var
       if(isa<AllocaInst>(i))reject("V11",&i);
       if(call && !classical)if(auto *g=resolve(call->getCalledOperand());g && g->isDeclaration() && !g->isIntrinsic() && g->getName()!="__bennett_nz_fault" && g->getName()!="__bennett_nz_alloc" && g->getName()!="__bennett_nz_free")reject("V12",&i);
       checkType(i.getType(),&i);for(Value *v:i.operands())checkType(v->getType(),&i);
-      bool eh=isa<VAArgInst>(i)||isa<InvokeInst>(i)||isa<LandingPadInst>(i)||isa<ResumeInst>(i)||isa<FuncletPadInst>(i)||isa<CatchSwitchInst>(i)||isa<CleanupReturnInst>(i)||isa<CatchReturnInst>(i);
+      bool va=isa<VAArgInst>(i);
+      if(auto *intr=dyn_cast<IntrinsicInst>(&i))
+        va|=intr->getIntrinsicID()==Intrinsic::vastart || intr->getIntrinsicID()==Intrinsic::vaend || intr->getIntrinsicID()==Intrinsic::vacopy;
+      if(va)reject("V15 §14.3 N23 surviving va operation",&i);
+      bool eh=isa<InvokeInst>(i)||isa<LandingPadInst>(i)||isa<ResumeInst>(i)||isa<FuncletPadInst>(i)||isa<CatchSwitchInst>(i)||isa<CleanupReturnInst>(i)||isa<CatchReturnInst>(i);
       if(call)if(auto *g=call->getCalledFunction()) {
-        auto n=g->getName();eh|=n=="setjmp"||n=="_setjmp"||n=="sigsetjmp"||n=="__sigsetjmp"||n.starts_with("llvm.va_start")||n.starts_with("llvm.va_end")||n.starts_with("llvm.va_copy");
+        auto n=g->getName();eh|=n=="setjmp"||n=="_setjmp"||n=="sigsetjmp"||n=="__sigsetjmp";
       }
       if(eh)reject("V15",&i);
       if(call && call->isInlineAsm())reject("V16",&i);

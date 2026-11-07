@@ -65,6 +65,7 @@ __attribute__((noinline)) static void through(printer fn) {
 __attribute__((noinline)) static void empty(int n, ...) {
   va_list ap;
   va_start(ap, n);
+  __bennett_effect_console_write("empty", n);
   va_end(ap);
 }
 
