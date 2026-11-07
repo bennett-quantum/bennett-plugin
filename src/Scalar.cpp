@@ -718,37 +718,50 @@ uint64_t scalarModuleFlag(Module &m, StringRef name, uint64_t fallback) {
   if (!integer) fail("BD-E-ENTRY-RUNTIME", ("integer module flag required: " + name).str());
   return integer->getZExtValue();
 }
-bool prepareScalarModule(Module &m, Function &f, uint64_t &sstack, unsigned autoSnapshot) {
-  // This module is the private device clone. Retain symbols/addresses for
-  // native-only definitions but do not send their bodies through N0.
-  {
-    Analysis selection(m,&f);selection.run();
-    selection.releaseTransferGraphs();
-    std::set<const Function *> deviceClosure;
-    std::function<void(Function *)> retain = [&](Function *function) {
-      if (!deviceClosure.insert(function).second || function->isDeclaration()) return;
-      for (auto &instruction : instructions(function))
-        if (auto *call = dyn_cast<CallBase>(&instruction)) {
-          if (auto *callee = call->getCalledFunction()) retain(callee);
-          else for (auto *callee : selection.candidates(call->getCalledOperand(), call->getFunctionType())) retain(callee);
-        }
-    };
-    retain(&f);
-    // The generated wrapper calls the linked initializer after N24 preparation.
-    // Keep its closure even when source IR has no explicit initialization call.
-    if (auto *init = m.getFunction("__bennett_rt_ss_init"); init && !init->isDeclaration())
-      retain(init);
-    for (auto entry : {std::make_pair("bennett.entry.snapshot", "__bennett_rt_entry_replay"),
-                       std::make_pair("bennett.ss.init", "__bennett_rt_ss_init")}) {
-      if (!scalarModuleFlag(m, entry.first, 0)) continue;
-      auto *function = m.getFunction(entry.second);
-      if (!function || function->isDeclaration())
-        fail("BD-E-ENTRY-RUNTIME", std::string("missing linked definition for ") + entry.second, &f);
-      retain(function);
-    }
-    for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g].empty())g.deleteBody();
-    for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g]==std::set<std::string>{"H"})g.deleteBody();
+std::set<const Function *> scalarDeviceClosure(Module &m, Function &root, Analysis &selection) {
+  std::set<const Function *> closure, stackRuntime;
+  std::function<void(Function *)> retain = [&](Function *function) {
+    if (!closure.insert(function).second || function->isDeclaration()) return;
+    for (auto &instruction : instructions(function))
+      if (auto *call = dyn_cast<CallBase>(&instruction)) {
+        if (auto *callee = call->getCalledFunction()) retain(callee);
+        else for (auto *callee : selection.candidates(call->getCalledOperand(), call->getFunctionType())) retain(callee);
+      }
+  };
+  retain(&root);
+  // N24 and the generated wrapper introduce calls absent from the source graph.
+  for (auto &function : m) if (function.getName().starts_with("__bennett_rt_ss_")) {
+    stackRuntime.insert(&function);
+    retain(&function);
   }
+  // The single-frame proof checks exclusive runtime ownership of its globals.
+  // Pruning another user's body would erase evidence that must refuse the proof.
+  for (auto &global : m.globals()) {
+    bool runtimeState = llvm::any_of(global.users(), [&](User *user) {
+      auto *instruction = dyn_cast<Instruction>(user);
+      return instruction && stackRuntime.count(instruction->getFunction());
+    });
+    if (!runtimeState) continue;
+    for (auto *user : global.users())
+      if (auto *instruction = dyn_cast<Instruction>(user)) retain(instruction->getFunction());
+  }
+  for (auto entry : {std::make_pair("bennett.entry.snapshot", "__bennett_rt_entry_replay"),
+                     std::make_pair("bennett.ss.init", "__bennett_rt_ss_init")}) {
+    if (!scalarModuleFlag(m, entry.first, 0)) continue;
+    auto *function = m.getFunction(entry.second);
+    if (!function || function->isDeclaration())
+      fail("BD-E-ENTRY-RUNTIME", std::string("missing linked definition for ") + entry.second, &root);
+    retain(function);
+  }
+  return closure;
+}
+bool prepareScalarModule(Module &m, Function &f, uint64_t &sstack, unsigned autoSnapshot) {
+  // Retain native symbols/addresses while keeping their bodies out of N0.
+  Analysis selection(m,&f);selection.run();
+  selection.releaseTransferGraphs();
+  auto deviceClosure = scalarDeviceClosure(m, f, selection);
+  for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g].empty())g.deleteBody();
+  for(auto &g:m)if(!g.isDeclaration() && !deviceClosure.count(&g) && selection.tiers[&g]==std::set<std::string>{"H"})g.deleteBody();
   if(auto *md=m.getModuleFlag("bennett.sstack"))sstack=cast<ConstantInt>(cast<ConstantAsMetadata>(md)->getValue())->getZExtValue();
   if(autoSnapshot && m.getGlobalVariable("__bennett_ss_base",true))m.addModuleFlag(Module::Error,"bennett.entry.stack",uint32_t(1));
   for(auto &g:m)if(!g.isDeclaration())normaliseFP(g);
