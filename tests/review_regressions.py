@@ -10,6 +10,9 @@ import subprocess
 from contracts import ROOT, sibling
 
 REF = sibling("bennett-isa-spec") / "reference-interpreter/target/debug/bennett-isa-ref"
+# Full soft-float analysis has a 120 s CPU budget; wall time includes contention
+# and lowering. See docs/quality.md for the measured worst case and margin.
+DEVICE_FP_LOWERING_TIMEOUT = 480
 
 
 from contracts import run_checked as run
@@ -468,10 +471,10 @@ define double @device_fp(double %x) {
                     "-bennett-scalar-heap=65536",
                     "-bennett-out=" + str(directory),
                     source,
-                ]
+                ],
+                timeout=DEVICE_FP_LOWERING_TIMEOUT,
             )
             obj = directory / "ref.bennett"
-            run([REF, "check", obj])
             # The published add closure has over 114k location cells. Its
             # exercised call chain exceeds 65,536 cells; retain that boundary
             # and give the successful numerical witness a sufficient stack.
@@ -479,6 +482,7 @@ define double @device_fp(double %x) {
                 sibling("bennett-isa-spec")
                 / "reference-interpreter/target/release/bennett-isa-ref"
             )
+            run([numerical_ref, "check", obj])
             boundary = json.loads(
                 run(
                     [

@@ -50,12 +50,74 @@ The remaining gate-only commands are exhaustive:
 | `prior_objects.py` | 0.215 s to first mismatch | Requires the complete object set, including snapshots |
 | `corpus_gate.py` | >60 s | Full contract corpus and optimization matrix |
 
-The bounded artifact audit refuses the intentionally incomplete snapshot sets. It also
-identifies an existing prior-object mismatch (`bp-trh`): the old binding-block-byte launch
-hash reproduces with the archived parent compiler; current output reserves function-address
-space and orders symbols differently. The prior receipt and its exact hash expectation
-remain unchanged. Focused timeouts are runtime measurements, not full-gate acceptance;
-the exact-head gate record and final timings are recorded in the job's resume evidence.
+The bounded artifact audit refuses intentionally incomplete snapshot sets. The deliberate
+standalone layout changes and their prior-object receipt revision are documented in
+`docs/verification-layout-revision.json`; all 312 prior names remain checked on both majors.
+Focused timeouts are runtime measurements, not full-gate acceptance.
+
+## Mixed-native command bounds
+
+The large device-FP object is checked with the gate-pinned release interpreter, which
+already executes both numerical vectors. The small native shapes retain debug checks.
+No case, stack boundary, numerical input, expected fault or exact result bit changes.
+The interpreter pin and build declarations are unchanged.
+
+The device-FP lowering command alone has a 480-second wall timeout; other subprocesses
+retain the shared 120-second limit. A 120-second wall limit cannot enclose S2's unchanged
+120-second CPU allowance plus repeated analysis and scalar lowering under contention.
+A five-second profile of the optimized plugin places 24.19% of samples in malloc
+consolidation and 18.96% in abstract-value tree copying through Analysis::bind/step.
+The object contains the complete published add closure (52/51 functions on LLVM 18/23). This is CPU work,
+not a missing interpreter build or cache. Analysis.cpp is unchanged.
+
+Measurements use `/usr/bin/time` around every command in the complete
+`python3 -B tests/review_regressions.py --major MAJOR --case mixed-native` driver,
+while a separate RelWithDebInfo CMake plugin build runs continuously with `-j4`.
+The primary plugin uses the normal `scripts/build` (`-j3`) configuration.
+The baseline measurement alone permits 300 seconds per command to finish measuring
+the operation that exceeded the original 120-second limit. All semantic assertions
+still run.
+
+
+| Command | Baseline LLVM 18 (s) | Fixed LLVM 18 (s) | Fixed LLVM 23 (s) |
+| --- | ---: | ---: | ---: |
+| native review: lower | 0.033 | 0.012 | 0.022 |
+| native review: verify host.bc | 0.016 | 0.011 | 0.018 |
+| native review: compile harness | 0.129 | 0.078 | 0.103 |
+| native review: execute harness | 0.004 | 0.002 | 0.003 |
+| native review: check object | 0.007 | 0.003 | 0.005 |
+| native review: reverse program | 0.008 | 0.003 | 0.006 |
+| host FP: lower | 0.035 | 0.014 | 0.023 |
+| host FP: verify host.bc | 0.026 | 0.014 | 0.020 |
+| host FP: compile harness | 0.132 | 0.085 | 0.116 |
+| host FP: execute harness | 0.004 | 0.002 | 0.003 |
+| host FP: check object | 0.007 | 0.004 | 0.006 |
+| host FP: reverse program | 0.007 | 0.004 | 0.006 |
+| device FP: lower full closure | 204.504 | 119.357 | 144.132 |
+| device FP: check object | 125.286 | 41.516 | 36.887 |
+| device FP: 65,536-cell stack fault | 32.157 | 18.156 | 32.349 |
+| device FP: 262,144-cell stack result | 20.223 | 51.902 | 40.083 |
+| Sum of command wall times | 382.578 | 231.161 | 253.784 |
+
+The measured lowering maximum is **204.504 seconds**; the **480-second** limit
+provides **2.35x** that observed maximum (275.496 seconds of margin).
+The original debug checker took **125.286 seconds**, exceeding 120 seconds;
+release checks took **41.516/36.887 seconds**.
+Observed one-minute load at command boundaries ranged from 4.33 to 8.80;
+the four-job build was active throughout every measured command.
+
+All three runs pass all three cases. All 16 stdout/exit-status pairs agree exactly
+between baseline and fixed LLVM 18, including complete debug/release checker
+object/symbol hashes. Both majors retain native reversal, fault 3 at the smaller
+stack, and exact 3.0 result bits (4613937818241073152) at the larger stack. LLVM 23
+has a 51-function add closure versus LLVM 18's 52; its hashes and step counts differ,
+while both numerical result/fault expectations agree. The lowering implementation
+is unchanged; the wall allowance accommodates its observed host/build sensitivity.
+Per-command argv, CPU/RSS, load and outputs are retained locally in
+`.tmp/quality-plugin/gatefix4-baseline-18-commands.json` and
+`.tmp/quality-plugin/gatefix4-fixed-{18,23}-commands.json`.
+The focused measurements use the same pins as the gate, including interpreter
+`ecaaac060c44e317d1181345fa6b8e38c096c099`.
 
 ## Soft-float gate regressions
 
