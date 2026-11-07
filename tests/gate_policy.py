@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """An allowlisted unavailable check cannot hide a new property failure."""
 
+import runpy
+import unittest
+from contracts import ROOT
 from corpus_gate import classify, summarize
 
 
@@ -60,3 +63,25 @@ assert classify(row("ordinary", {"L5": False})) == "diverge"
 s = summarize([b, row("ordinary", {"L1": True})])
 assert s["cases_blocked"] == 1 and s["cases_agree"] == 1 and s["cases_diverge"] == 0
 print("gate policy: 9 assertions passed")
+
+# Explicit receipt revisions bind both byte versions and retain every prior name.
+revise = runpy.run_path(str(ROOT / "scripts/record-verification.py"))["revised_rows"]
+previous = [{"object": "launch", "sha256": "old"}]
+current = {"launch": {"object": "launch", "sha256": "new"}}
+changes = [{"object": "launch", "previous_sha256": "old", "sha256": "new"}]
+assert revise(previous, current, changes) == [current["launch"]]
+assert revise(previous, {"launch": previous[0]}, []) == previous
+check = unittest.TestCase()
+with check.assertRaises(AssertionError):
+    revise(previous, current, [])
+with check.assertRaises(AssertionError):
+    revise(previous, {}, changes)
+with check.assertRaises(AssertionError):
+    revise(previous, current, [dict(changes[0], previous_sha256="stale")])
+with check.assertRaises(AssertionError):
+    revise(previous, current, [dict(changes[0], sha256="wrong")])
+with check.assertRaises(AssertionError):
+    revise(previous, current, changes * 2)
+with check.assertRaises(AssertionError):
+    revise(previous, {"launch": previous[0]}, changes)
+print("receipt revisions: exact hashes, complete retention, stale/unused approvals refused")
