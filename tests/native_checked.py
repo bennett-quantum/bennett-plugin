@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import resource
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,6 +15,36 @@ from allocator_closure import RUNTIME_SHA
 from contracts import ROOT as R, sibling, arith_path
 from native_comparison import sha
 from native_link import build, resolved_layout, run, update_object
+
+
+def verify_provenance_rejections(t, plugin, d, out, prepared, native):
+    missing_provenance = d / "missing-provenance.ll"
+    source = run([t + "llvm-dis", prepared, "-o", "-"]).stdout
+    changed, count = re.subn(
+        r' "bennett.native.materialised.sha256"="[0-9a-f]{64}"', ' "bennett.test.provenance.removed"', source
+    )
+    assert count > 0, "prepared definitions must carry source provenance"
+    missing_provenance.write_text(changed)
+    for label, artifact in (
+        ("missing-provenance", missing_provenance),
+        ("unprepared", out / "device.bc"),
+        ("already-finalised", native),
+    ):
+        z = subprocess.run(
+            [
+                t + "opt",
+                "-load-pass-plugin=" + str(plugin),
+                "-passes=bennett-native-comparison-finalise",
+                "-bennett-native-report=" + str(d / "rejected.json"),
+                str(artifact),
+                "-disable-output",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert z.returncode != 0 and "BD-E-NATIVE-INPUT" in z.stderr, (label, z)
+        assert not (d / "rejected.json").exists(), label
 
 
 def main():
@@ -104,28 +135,8 @@ def main():
     )
     meta = json.loads(report.read_text())
     assert meta["phase"] == "finalised"
-    for label, artifact in (
-        ("unprepared", out / "device.bc"),
-        ("already-finalised", native),
-    ):
-        z = subprocess.run(
-            [
-                t + "opt",
-                "-load-pass-plugin=" + str(plugin),
-                "-passes=bennett-native-comparison-finalise",
-                "-bennett-native-report=" + str(d / "rejected.json"),
-                str(artifact),
-                "-disable-output",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        assert z.returncode != 0 and "BD-E-NATIVE-INPUT" in z.stderr, (label, z)
-        assert not (d / "rejected.json").exists(), label
+    verify_provenance_rejections(t, plugin, d, out, prepared, native)
     disassembly = run([t + "llvm-dis", native, "-o", "-"]).stdout
-    import re
-
     for f in re.finditer(
         r"^define [^\n]*@(__bennett_native_[^(]+)\([^\n]*\{.*?^}",
         disassembly,

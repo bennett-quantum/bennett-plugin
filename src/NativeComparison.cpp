@@ -380,7 +380,7 @@ struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
       auto *alias=name?dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)):nullptr;
       if(!alias)fail("BD-E-NATIVE-INPUT","prepared source symbol correspondence was lost");
       if(row->getString("kind")=="function") {
-        auto *f=resolve(alias);
+        auto *f=dyn_cast_or_null<Function>(alias->getAliaseeObject());
         if(!f || f->isDeclaration() || !f->hasFnAttribute("bennett.native.materialised.sha256") ||
             f->getFnAttribute("bennett.native.materialised.sha256").getValueAsString()!=identity)
           fail("BD-E-NATIVE-INPUT","prepared source function provenance was lost",alias);
