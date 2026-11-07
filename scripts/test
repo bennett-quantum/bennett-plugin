@@ -36,6 +36,7 @@ DRIVERS = {
     "cc_switch": (),
     "reversible": (),
     "r_typed_faults": (),
+    "r_envelopes": (),
     "softfloat": (),
     "wide": (),
     "varargs": (),
