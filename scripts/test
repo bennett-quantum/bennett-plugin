@@ -37,6 +37,7 @@ DRIVERS = {
     "reversible": (),
     "softfloat": (),
     "wide": (),
+    "varargs": (),
     "integer_intrinsics": (),
     "memory_runtime": (),
     "region_keys": (),
