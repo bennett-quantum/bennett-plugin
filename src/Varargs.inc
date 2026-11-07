@@ -1,6 +1,12 @@
 // N23 (§14.3). A variadic definition takes a va block in place of its variadic arguments, every call
 // of it spills them into one, and va_start builds the target's va_list so that the front end's
 // inline va_arg takes its memory path. External variadics remain host/trap calls (§11.4/§4.5).
+bool isVaOperation(const Instruction &i) {
+  if(isa<VAArgInst>(i))return true;
+  auto *intr=dyn_cast<IntrinsicInst>(&i);
+  return intr && (intr->getIntrinsicID()==Intrinsic::vastart ||
+                  intr->getIntrinsicID()==Intrinsic::vaend || intr->getIntrinsicID()==Intrinsic::vacopy);
+}
 namespace {
 enum class VaTarget {X86_64,AArch64,RISCV64};
 VaTarget vaTarget(Module &m,const Value *at) {
@@ -40,7 +46,7 @@ void lowerVaOperations(Function &f,Value *block) {
   for(Instruction &i:instructions(f)) {
     if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
       auto id=c->getIntrinsicID();
-      if(id==Intrinsic::vastart || id==Intrinsic::vaend || id==Intrinsic::vacopy)intrinsics.push_back(c);
+      if(isVaOperation(i))intrinsics.push_back(c);
       if(id==Intrinsic::ptrmask && c->getType()->isPointerTy())masks.push_back(c);
     }
     if(auto *v=dyn_cast<VAArgInst>(&i))reads.push_back(v);
@@ -182,4 +188,15 @@ void normaliseVarargs(Module &m,Function *&root) {
   SmallVector<Function *> unused;
   for(Function &f:m)if(f.use_empty() && (f.getIntrinsicID()==Intrinsic::vastart || f.getIntrinsicID()==Intrinsic::vaend || f.getIntrinsicID()==Intrinsic::vacopy || f.getIntrinsicID()==Intrinsic::ptrmask))unused.push_back(&f);
   for(auto *f:unused)f->eraseFromParent();
+}
+
+Function *normaliseWideABI(Module &m,Function *root) {
+  // N23 spills the original promoted types before N22 changes their ABI.
+  normaliseVarargs(m,root);
+  return normaliseWideIntegerABI(m,root);
+}
+
+void prepareVarargsStack(Module &m,Function *&root,uint64_t capacity) {
+  root=normaliseWideABI(m,root);
+  prepareStack(m,*root,capacity);
 }
