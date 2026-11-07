@@ -63,6 +63,30 @@ namespace bennett {
   fail("unimplemented", (sec + " (milestone " + Twine(n) + ")").str(), v);
 }
 bool auditLegality() { return LegalityAudit; }
+// §19.9: keep the selected compatibility track separate from the map version.
+struct ProducerContract {
+  const char *dialect, *isa, *mapping, *identity;
+};
+static const ProducerContract LegacyContract{
+    "0.2.13", "0.8", "0.2.9", "dialect-0.2.13;isa-0.8"};
+static const ProducerContract &producerContract() {
+  static const ProducerContract rContract{
+      "0.3-r1", "0.9", "0.3", "dialect-0.3-r1;isa-0.9"};
+  if (Dialect == rContract.dialect && ISA == rContract.isa)
+    return rContract;
+  if (Dialect == LegacyContract.dialect && ISA == LegacyContract.isa)
+    return LegacyContract;
+  fail("BD-E-VERSION", "§19.9 expected dialect 0.2.13 / ISA 0.8 or 0.3-r1 / ISA 0.9");
+}
+bool rContractProfile() { return &producerContract() != &LegacyContract; }
+std::string producerDialect() { return producerContract().dialect; }
+std::string producerISA() { return producerContract().isa; }
+std::string producerMapping() { return producerContract().mapping; }
+static const char *producerIdentity() {
+  // LLVM may query this before parsing plugin options. A driver querying a
+  // selected track parses its explicit options before checking the identity.
+  return Dialect.empty() ? LegacyContract.identity : producerContract().identity;
+}
 const std::map<std::string, std::string> &markers() {
   // Compact types: v=void, p=ptr AS0, b=i1, w=i32, n=i64, d=double.
   static std::map<std::string, std::string> names = {
@@ -264,11 +288,10 @@ static void recognise(Module &m) {
   // Effect lies use the full S2 call graph later, including region edges.
 }
 static void checkVersion(Module &m) {
-  if (Dialect != "0.2.13" || ISA != "0.8")
-    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.13 / ISA 0.8");
+  const auto &contract = producerContract();
   if (auto *md = m.getModuleFlag("bennett.dialect")) {
     auto *s = dyn_cast<MDString>(md);
-    if (!s || s->getString() != "0.2.13")
+    if (!s || s->getString() != contract.dialect)
       fail("BD-E-VERSION", "§19.9 module flag");
   }
 }
@@ -311,6 +334,8 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
+    if (rContractProfile() && !m.getModuleFlag("bennett.dialect"))
+      m.addModuleFlag(Module::Error, "bennett.dialect", producerDialect());
     initialiseComparisonLayout(m);
     if (ValidateOnly) {
       validateResidual(m,ValidateClassical);
@@ -341,7 +366,9 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       raw_fd_ostream o(Report, ec);
       if (ec)
         fail("output", ec.message());
-      o << formatv("{0:2}\n", json::Value(a.report()));
+      auto report = a.report();
+      report["dialect"] = producerDialect();
+      o << formatv("{0:2}\n", json::Value(std::move(report)));
     }
     if (AnalysisOnly) {
       errs()
@@ -351,6 +378,8 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     checkOperands(m);
     if (Output.empty())
       fail("output", "§19.9 -bennett-out is required");
+    if (rContractProfile() && (!Oracle.empty() || DescriptorReference))
+      unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3);
     if (!Oracle.empty()) {
       auto *f = m.getFunction(Oracle);
       if (!f || f->isDeclaration())
@@ -422,6 +451,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     }
     if(rEntry) {
       lowerReversible(m,a,*rEntry,Output,StackCells,BudgetDefault,BudgetTableFile,Disk);
+      if (rContractProfile()) return PreservedAnalyses::none();
       errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7\n";
       std::exit(3);
     }
@@ -445,7 +475,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
 };
 } // namespace bennett
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "bennett", "dialect-0.2.13;isa-0.8",
+  return {LLVM_PLUGIN_API_VERSION, "bennett", bennett::producerIdentity(),
           [](PassBuilder &pb) {
             pb.registerPipelineParsingCallback(
                 [](StringRef n, ModulePassManager &pm,

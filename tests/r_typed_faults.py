@@ -6,7 +6,6 @@ r-contract corpus as a contract, not an executor-generated golden file.
 """
 
 import argparse
-import ctypes
 import hashlib
 import json
 from pathlib import Path
@@ -85,26 +84,36 @@ extern void __bennett_effect_entropy_read(void *, unsigned long);
 extern void __bennett_nz_fault(unsigned long);
 extern void *__bennett_nz_alloc(unsigned long);
 extern void __bennett_nz_free(void *);
+extern void *__bennett_rt_ss_push(unsigned long, unsigned long);
 __attribute__((noinline)) void __bennett_rt_fail(unsigned long code) {
   __bennett_nz_fault(code);
+}
+__attribute__((noinline)) void *__bennett_rt_allocate(unsigned long size) {
+  return __bennett_nz_alloc(size);
 }
 static char prefix[] = "x";
 '''
 
-    def produce(name, body, steps=10000, runtime=""):
+    def produce(name, body, steps=10000, runtime="", code=0):
         directory = work / name
         directory.mkdir(exist_ok=True)
         source = directory / "input.c"
         source.write_text(declarations + runtime + body)
         bitcode = directory / "input.bc"
-        run_checked([tool / "clang", "-O1", "-fno-builtin", "-emit-llvm", "-c", source, "-o", bitcode])
+        run_checked([tool / "clang", "-O1", "-fno-builtin", "-fno-optimize-sibling-calls", "-emit-llvm", "-c", source, "-o", bitcode])
         result = run_checked([*base, *profile, "--bennett-tier=reversible", "--bennett-entry=main",
                              f"-bennett-budget-default={steps},131072,4096,32,65536",
-                             f"-bennett-out={directory / 'out'}", "-disable-output", bitcode])
+                             f"-bennett-out={directory / 'out'}", "-disable-output", bitcode], code=code)
+        if code:
+            assert "unimplemented" in result.stderr and "§17.6" in result.stderr, result.stderr
+            assert not (directory / "out/main/launch.bennett").exists()
+            return
         assert "BD-B-ISA7" not in result.stderr, result.stderr
         out = directory / "out"
         for file in ("device.bc", "host.bc"):
             run_checked([tool / "opt", "-passes=verify", out / file, "-disable-output"])
+            text = run_checked([tool / "llvm-dis", out / file, "-o", "-"]).stdout
+            assert '!"bennett.dialect", !"0.3-r1"' in text, text
         selected = out / "main"
         obj = selected / "launch.bennett"
         run_checked([ref, "check", obj])
@@ -156,6 +165,36 @@ static char prefix[] = "x";
         obj = produce(f"steps-{steps}", 'int main(void) { __bennett_effect_console_write(prefix,1); return 0; }', steps)
         execute(obj, expected, prefix)
 
+    # Real source operations exercise the ISA's implicit fault rules, as
+    # distinct from the materialised runtime's explicit fault primitive.
+    for name, code, argc, operation in [
+        ("div0", 5, 0, "return 10 / argc;"),
+        ("signed-overflow", 6, -1, "return (-2147483647 - 1) / argc;"),
+        ("invalid-memory", 7, 0, "return *(int *)(unsigned long)argc;"),
+        ("unmodelled", 8, 0, "missing_service(); return 99;"),
+        ("entropy", 10, 0, "__bennett_effect_entropy_read(entropy,1); return 99;"),
+        ("heap", 2, 0, "__bennett_rt_allocate(131073); return 99;"),
+        ("shadow-stack", 2, 0, "__bennett_rt_ss_push(65537,8); return 99;"),
+    ]:
+        obj = produce(name, 'int main(int argc, char **argv) { '
+                      + '__bennett_effect_console_write(prefix,1); ' + operation + ' }',
+                      runtime='extern void missing_service(void); static char entropy[1];\n')
+        replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20,
+                                           reply=argc.to_bytes(4,"little",signed=True).hex()+"00"*16)]))
+        execute(obj, code)
+
+    # A recursive SCC must have fresh ISA 0.9 identities, and the terminal
+    # record must preserve all open activations for FAILED reversal.
+    obj = produce("recursive-fault", '''int main(void) {
+ __bennett_effect_console_write(prefix,1); return __bennett_rt_recurse(2);
+}''', runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
+ if (!n) { __bennett_nz_fault(3); return 99; }
+ return __bennett_rt_recurse(n-1)+1;
+}
+''')
+    replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20, reply="00"*20)]))
+    execute(obj, 3)
+
     # Finite dynamic literal dispatch must retain 64 bits (§17.6).
     for argc, code in [(0, 0), (1, 2), (2, 2**64-1)]:
         obj = produce(f"dynamic-{argc}", '''int main(int argc, char **argv) {
@@ -166,6 +205,7 @@ static char prefix[] = "x";
         replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20,
                                            reply=argc.to_bytes(4,"little").hex()+"00"*16)]))
         execute(obj, code or 4)
+    produce("unbounded", 'int main(int argc, char **argv) { __bennett_rt_fail((unsigned long)argc); return 0; }', code=1)
     print(f"LLVM {args.major}: exact typed faults, source-step boundaries, identities and FAILED reversal passed")
 
 

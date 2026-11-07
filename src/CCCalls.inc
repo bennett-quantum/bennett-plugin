@@ -68,7 +68,7 @@ void linkCCCalls(Entry &e, const std::map<std::string,std::string> &sections,
         for(auto &device:used)for(auto category:{"models","services"})
           if(auto *entries=document.getAsObject()->getObject(category))if(auto *value=entries->get(device))devices+="device "+device+" "+jcs(*value)+"\n";
       }
-      envelopes+="isa=0.8\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+fn.first+"\n"+canonical+"\n"+memory+devices+refs;
+      envelopes+="isa="+producerISA()+"\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+fn.first+"\n"+canonical+"\n"+memory+devices+refs;
     }
     auto digest=hash(envelopes);
     for(unsigned i=0;i<group.size();++i)hashes[group[i]]=cyclic?hash(digest+":"+std::to_string(i)):digest;

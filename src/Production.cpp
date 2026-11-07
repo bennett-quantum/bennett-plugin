@@ -23,7 +23,21 @@
 #include <regex>
 using namespace llvm;
 namespace bennett {
+bool rContractProfile();
+std::string producerDialect();
+std::string producerISA();
+std::string producerMapping();
 namespace {
+std::string coverageSource(StringRef rule) {
+  return "dialect-" + producerDialect() + ":" + rule.str();
+}
+std::string isaHeader(unsigned pointerWidth) {
+  auto version = producerISA();
+  return "bennett-object isa=" + version + " object=" + version +
+      " launch=" + version + " sched=" + version + " cert=" + version +
+      " coverage=" + version + " target=" + version +
+      " ptr_width=" + std::to_string(pointerWidth);
+}
 std::string hash(StringRef s) {
   return toHex(SHA256::hash(arrayRefFromStringRef(s)), true);
 }
@@ -229,7 +243,7 @@ struct Entry {
     auto exhausted=emit("i1","icmp.eq "+left+" "+zero);
     auto id=std::to_string(dispatchBlock++);
     rows.push_back("br "+exhausted+" ^budget"+id+"() ^step"+id+"()");
-    rows.push_back("^budget"+id+"():");rows.push_back("trap");
+    rows.push_back("^budget"+id+"():");rows.push_back(rContractProfile()?"fault 1":"trap");
     rows.push_back("^step"+id+"():");auto one=number(1),remaining=emit("i64","sub "+left+" "+one);
     rows.push_back("store.i64 "+p+" "+remaining);
   }
@@ -433,6 +447,7 @@ struct Entry {
     rows.push_back("store.i"+std::to_string(bits)+" "+pointer+" "+value);
   }
   void reportedFault(Value *code) {
+    if (rContractProfile()) { typedFault(code); return; }
     if(!rTier) {
       allocatorFaultService=true;
       auto *payload=m.getGlobalVariable("__bennett_cc_fault_payload",true);
@@ -443,6 +458,33 @@ struct Entry {
       emit("i"+std::to_string(m.getDataLayout().getPointerSizeInBits()),"hostcall bennett.fault "+pointer+" "+number(8));
     }
     rows.push_back("trap");
+  }
+  void typedFault(Value *code) {
+    // ISA §4.9 has a literal operand, including all 64 bits. Dispatch the
+    // finite §5.3 value set; an unfinished unbounded case must fail at compile
+    // time, never change a runtime cause to trap or FAULT_CALLEE.
+    if (!code->getType()->isIntegerTy(64))
+      fail("input", "§17.6 fault argument must be i64", code);
+    if (auto *literal = dyn_cast<ConstantInt>(code)) {
+      rows.push_back("fault " + std::to_string(literal->isZero() ? 4 : literal->getZExtValue()));
+      return;
+    }
+    auto values = a.get(code);
+    if (values.top || values.atoms.empty())
+      unimplemented("§17.6 unbounded dynamic fault-code dispatch", 3, code);
+    std::vector<uint64_t> keys;
+    for (auto &value : values.atoms) {
+      if (value.kind != Atom::Int || value.integer.getBitWidth() != 64)
+        unimplemented("§17.6 noninteger dynamic fault-code dispatch", 3, code);
+      keys.push_back(value.integer.getZExtValue());
+    }
+    llvm::sort(keys);
+    auto bad = "faultCode" + std::to_string(dispatchBlock++);
+    compareTree(operand(code), 64, keys, [&](uint64_t value) {
+      rows.push_back("fault " + std::to_string(value ? value : 4));
+    }, bad);
+    // No value outside the proven set can reach this validation guard.
+    rows.push_back("^" + bad + "():");rows.push_back("trap");
   }
   void unresolvedCall(StringRef callee) {
     std::string block;
@@ -1112,7 +1154,7 @@ struct Entry {
   std::string action(std::string mut, std::string in, std::string widths,
                      std::string inWidths, std::string ops) {
     auto n = "M" + std::to_string(actions.size());
-    std::string sig = "{\"abi\":\"0.8\",\"args\":[],\"bounds\":[],\"in\":[" +
+    std::string sig = "{\"abi\":\"" + producerISA() + "\",\"args\":[],\"bounds\":[],\"in\":[" +
                       inWidths + "],\"kind\":\"action\",\"mem\":[],\"mut\":[" +
                       widths + "],\"tier\":\"q\"}";
     actions[n] = {sig, "action @" + n + " (" + mut + ") (" + in +
@@ -1429,6 +1471,9 @@ struct Entry {
         for(auto &row:rows)if(StringRef(row).starts_with("^")) {block=StringRef(row).drop_front().split('(').first.str();ordinal=0;}else ++ordinal;
         asmPoints.push_back(json::Object{{"symbol",ccNames->at(&f)},{"block",block},{"ordinal",ordinal},
           {"reason",cast<MDString>(asmMD->getOperand(0))->getString()}});
+      }
+      if (rContractProfile()) {
+        typedFault(c->getArgOperand(0));return CallFlow::EndBlock;
       }
       // Newly materialised allocator closures report the explicit code
       // through §11.5 before trapping. The payload is private storage,
@@ -1762,7 +1807,7 @@ std::map<std::string,std::string> objectSections(StringRef object) {
 // images/layout/hash for independent published-object comparisons.
 std::string linkReferences(Entry &e) {
   auto &dl=e.m.getDataLayout(); auto pw=dl.getPointerSizeInBits();
-  std::string prefix="isa=0.8\nptr_width="+std::to_string(pw)+"\n";
+  std::string prefix="isa=" + producerISA() + "\nptr_width="+std::to_string(pw)+"\n";
   struct Symbol { std::string name,kind,body; json::Value sig; };
   std::vector<Symbol> functions;
   std::map<std::string,std::string> globalSymbols, data, dataSignatures;
@@ -1841,7 +1886,7 @@ std::string linkReferences(Entry &e) {
   uint64_t endAddress=heap+heapLimit,memCount=0;
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
     auto name=globalSymbols.at(scalarGlobalKey(g)),image=scalarGlobalImage(g,sourceBases);
-    data[name]=image;dataSignatures[name]="{\"abi\":\"0.8\",\"kind\":\"data\",\"size\":"+std::to_string(sizes.at(name))+",\"tier\":\"-\"}";
+    data[name]=image;dataSignatures[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"data\",\"size\":"+std::to_string(sizes.at(name))+",\"tier\":\"-\"}";
     globals[name]=json::Object{{"base",int64_t(bases.at(name))},{"size",int64_t(sizes.at(name))},{"image",name}};
     auto marker="CCADDRESS"+std::to_string(std::distance(e.m.global_begin(),g.getIterator()));
     for(auto &row:e.rows)row=std::regex_replace(row,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
@@ -1959,6 +2004,8 @@ std::string linkReferences(Entry &e) {
 #include "CCCalls.inc"
 std::string launchObject(Entry &e, json::Object &record,
                          json::Object &certificate) {
+  if (rContractProfile() && !e.references.empty())
+    unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3, &e.f);
   std::map<std::string, std::string> sections;
   std::string ref = e.reference;
   bool unified = false;
@@ -1973,15 +2020,12 @@ std::string launchObject(Entry &e, json::Object &record,
   unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty() || !e.functionAddresses.empty()) && !e.references.empty();
   if(unified || (e.references.empty() && (!e.ccGlobals.empty() || !e.functionAddresses.empty()))) {
     ref=linkReferences(e);
-    if(e.references.empty()) ref="bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 coverage=0.8 target=0.8 ptr_width="+
-        std::to_string(e.m.getDataLayout().getPointerSizeInBits())+ref;
+    if(e.references.empty()) ref=isaHeader(e.m.getDataLayout().getPointerSizeInBits())+ref;
   }
   size_t pos = ref.find("\n\nsection ");
   std::string header =
       pos == std::string::npos
-          ? "bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 "
-            "coverage=0.8 target=0.8 ptr_width=" +
-                std::to_string(e.m.getDataLayout().getPointerSizeInBits())
+          ? isaHeader(e.m.getDataLayout().getPointerSizeInBits())
           : ref.substr(0, pos);
   while (pos != std::string::npos) {
     auto start = pos + 10, end = ref.find('\n', start),
@@ -2011,8 +2055,8 @@ std::string launchObject(Entry &e, json::Object &record,
     if(e.argvService)(*services)["bennett.argv"]=json::Object{{"version","0.2.10"}};
     if(e.argvService) {
       auto *models=devices.getAsObject()->getObject("models");
-      for(auto &model:e.effectModels)(*models)[model]=json::Object{{"version","0.8"}};
-      if(!e.diskDataKey.empty())(*models)["block"]=json::Object{{"version","0.8"}};
+      for(auto &model:e.effectModels)(*models)[model]=json::Object{{"version",producerISA()}};
+      if(!e.diskDataKey.empty())(*models)["block"]=json::Object{{"version",producerISA()}};
     }
     sections["devices"]=jcs(devices);
   }
@@ -2061,7 +2105,7 @@ std::string launchObject(Entry &e, json::Object &record,
       auto body = extra["functions"].substr(begin, end == std::string::npos ? end : end - begin);
       // For memory-free lprocs only signatures/body/references enter; oracle
       // envelopes include all scalar layout leaves, as in lowerScalar.
-      std::string env = "isa=0.8\nptr_width=" + std::to_string(e.m.getDataLayout().getPointerSizeInBits()) + "\n" + jcs(*sym->get("signature")) + "\n";
+      std::string env = "isa=" + producerISA() + "\nptr_width=" + std::to_string(e.m.getDataLayout().getPointerSizeInBits()) + "\n" + jcs(*sym->get("signature")) + "\n";
       std::string refs;
       for (auto &x : changed) {
         if (body.find("@" + x.first) != std::string::npos) refs += x.second + "\n";
@@ -2092,7 +2136,7 @@ std::string launchObject(Entry &e, json::Object &record,
     pt.push_back(x);
   for (auto &x : e.resultTypes)
     rt.push_back(x);
-  json::Object sig{{"abi", "0.8"},
+  json::Object sig{{"abi", producerISA()},
                    {"kind", "cc"},
                    {"params", std::move(pt)},
                    {"results", std::move(rt)},
@@ -2104,7 +2148,7 @@ std::string launchObject(Entry &e, json::Object &record,
   hashes = referenceHashes;
   std::string actionBodies;
   for (auto &x : e.actions) {
-    auto ah = hash("isa=0.8\nptr_width=" +
+    auto ah = hash("isa=" + producerISA() + "\nptr_width=" +
                    std::to_string(e.m.getDataLayout().getPointerSizeInBits()) +
                    "\n" + x.second.first + "\n" + x.second.second + "\n");
     hashes[x.first] = ah;
@@ -2133,7 +2177,7 @@ std::string launchObject(Entry &e, json::Object &record,
       }
       for(auto &leaf:leaves)memoryEnvelope+="layout "+leaf.first+" "+leaf.second+"\n";
     }
-    hashes[name]=hash("isa=0.8\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+item.first+"\n"+canonical+"\n"+memoryEnvelope+refs);
+    hashes[name]=hash("isa=" + producerISA() + "\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+item.first+"\n"+canonical+"\n"+memoryEnvelope+refs);
     (*so)[std::to_string(so->size())]=json::Object{{"name",name},{"kind",name=="xor128"?"oracle":"cc"},{"signature",parse(item.first)},{"interface_hash",hashes.at(name)}};
     actionBodies+="\n"+text;
   };
@@ -2170,7 +2214,7 @@ std::string launchObject(Entry &e, json::Object &record,
     }
   }
   std::string envelope =
-      "isa=0.8\nptr_width=" +
+      "isa=" + producerISA() + "\nptr_width=" +
       std::to_string(e.m.getDataLayout().getPointerSizeInBits()) + "\n" +
       jcs(json::Value(std::move(sig))) + "\n" + canonical + "\n";
   auto signature = parse(StringRef(envelope)
@@ -2198,10 +2242,10 @@ std::string launchObject(Entry &e, json::Object &record,
       continue;
     }
     auto trapped=e.trappedCalls.find({e.f.getName().str(),block});
-    bool missing=line=="trap" && trapped!=e.trappedCalls.end();
+    bool missing=(line=="trap" || line=="fault 8") && trapped!=e.trappedCalls.end();
     e.coverage.push_back(
         json::Object{{"point", json::Array{ih, block, ordinal++}},
-                     {"source", missing?"dialect-0.2.13:4.5":"dialect-0.2.13:17.4"},
+                     {"source", coverageSource(missing?"4.5":"17.4")},
                      {"classification", missing?"trapped":"lowered"},
                      {"reason", missing?trapped->second:"CC scalar/marker lowering"}});
   }
@@ -2225,6 +2269,11 @@ std::string launchObject(Entry &e, json::Object &record,
     b["identity"] = hashes.at(name);
     budgets.push_back(std::move(b));
   }
+  if (rContractProfile()) {
+    record["dialect_version"] = producerDialect();
+    record["isa_version"] = producerISA();
+    record["replay_profile"] = "saved-tape-v1";
+  }
   record["budgets"] = std::move(budgets);
   record["budget_table_sha256"] = record.get("budget_table") ? hash(jcs(*record.get("budget_table"))) : hash(jcs(*record.get("budgets")));
   record["layout"] = sections.count("layout") ? parse(sections["layout"])
@@ -2244,7 +2293,7 @@ std::string launchObject(Entry &e, json::Object &record,
                                          {"interface_hash", ih},
                                          {"closure_hash", ih},
                                          {"reference_program_hash", oracleHash},
-                                         {"dialect_mapping_version", "0.2.9"}};
+                                         {"dialect_mapping_version", producerMapping()}};
   return object;
 }
 // Supplementary coverage preserves the existing CC coverage sidecar's bytes.
@@ -2268,9 +2317,9 @@ json::Object completeCoverage(StringRef object,
     } else if (line.starts_with("^")) {
       block = line.drop_front().split('(').first.str(); ordinal = 0;
     } else if (!line.empty() && !line.starts_with("regs ")) {
-      auto missing=trapped.find({symbol,block});bool fault=line=="trap" && missing!=trapped.end();
+      auto missing=trapped.find({symbol,block});bool fault=(line=="trap" || line=="fault 8") && missing!=trapped.end();
       entries.push_back(json::Object{{"point", json::Array{hashes.at(symbol), block, ordinal++}},
-        {"source", "dialect-0.2.13:" + (fault?std::string("4.5"):rule)}, {"classification", fault?"trapped":"lowered"},
+        {"source", coverageSource(fault?std::string("4.5"):rule)}, {"classification", fault?"trapped":"lowered"},
         {"reason", fault?missing->second:"materialised scalar production instruction"}});
     }
   }
@@ -2787,14 +2836,14 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);e.allocatedBytes+=callee.allocatedBytes;
       e.allocatorFaultService|=callee.allocatorFaultService;
       json::Array pt,rt;for(auto &t:callee.paramTypes)pt.push_back(t);for(auto &t:callee.resultTypes)rt.push_back(t);
-      auto sig=jcs(json::Value(json::Object{{"abi","0.8"},{"kind","cc"},{"params",std::move(pt)},{"results",std::move(rt)},{"tier","cc"}}));
+      auto sig=jcs(json::Value(json::Object{{"abi",producerISA()},{"kind","cc"},{"params",std::move(pt)},{"results",std::move(rt)},{"tier","cc"}}));
       auto name=ccNames.at(closure[k]);
       e.ccFunctions[name]={sig,"fn cc @"+name+" ("+join(callee.params)+") ("+join(callee.results)+") () () ()\n"+join(callee.rows,"\n")};
     }
     if(e.automaticSnapshot)e.ccHeapBytes=e.table.capacities[1];
     else if(e.memoryDescriptors || e.generalUsed)e.ccHeapBytes=e.allocatedBytes;
-    json::Object record{{"dialect", "0.2.13"},
-                        {"isa", "0.8"},
+    json::Object record{{"dialect", producerDialect()},
+                        {"isa", producerISA()},
                         {"llvm_version", LLVM_VERSION_STRING},
                         {"pipeline", "bennett"},
                         {"shape", e.shape}};
@@ -2808,7 +2857,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       record["budget_table"] = parse(resolvedText);
     }
     json::Object cert{
-        {"versions", json::Object{{"isa", "0.8"}, {"cert", "0.8"}}},
+        {"versions", json::Object{{"isa", producerISA()}, {"cert", producerISA()}}},
         {"regions", json::Object{}},
         {"composition",
          json::Object{{"multiplicities", json::Object{}},
@@ -2828,7 +2877,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
     write(dir + "/build.json", build + "\n");
     cert["producer"] = json::Object{
         {"name", "bennett-plugin"},
-        {"version", "0.2.13+build." + hash(build)},
+        {"version", producerDialect() + "+build." + hash(build)},
         {"materialisation", json::Object{{"llvm_version", LLVM_VERSION_STRING},
                                          {"pipeline", "bennett"},
                                          {"normaliser_version", "0.2.8"}}}};
