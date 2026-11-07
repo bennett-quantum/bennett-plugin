@@ -45,6 +45,11 @@ def main():
         run_checked([tool + "opt", "-passes=verify", output, "-disable-output"])
         no_va_ops(output.read_text())
         report["no_va_operations"] = True
+        residual = run([
+            *plugin_command(args.major), "-bennett-validate-only",
+            "-bennett-validate-classical", output, "-disable-output",
+        ])
+        report.update(residual_exit=residual.returncode, residual_diagnostic=residual.stderr)
     (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     assert result.returncode == 0, report

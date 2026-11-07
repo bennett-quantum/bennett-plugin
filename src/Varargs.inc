@@ -35,10 +35,23 @@ void writeVaList(IRBuilder<> &b,Value *ap,Value *block,VaTarget target,const std
 // va_copy/va_arg/va_end as well as the operations in variadic definitions.
 void lowerVaOperations(Function &f,Value *block) {
   SmallVector<IntrinsicInst *> intrinsics;
+  SmallVector<IntrinsicInst *> masks;
   SmallVector<VAArgInst *> reads;
   for(Instruction &i:instructions(f)) {
-    if(auto *c=dyn_cast<IntrinsicInst>(&i)) {auto id=c->getIntrinsicID();if(id==Intrinsic::vastart || id==Intrinsic::vaend || id==Intrinsic::vacopy)intrinsics.push_back(c);}
+    if(auto *c=dyn_cast<IntrinsicInst>(&i)) {
+      auto id=c->getIntrinsicID();
+      if(id==Intrinsic::vastart || id==Intrinsic::vaend || id==Intrinsic::vacopy)intrinsics.push_back(c);
+      if(id==Intrinsic::ptrmask && c->getType()->isPointerTy())masks.push_back(c);
+    }
     if(auto *v=dyn_cast<VAArgInst>(&i))reads.push_back(v);
+  }
+  // Clang's inline va_arg aligns long-double cursors with ptrmask. Apply the
+  // ordinary §12.8 row before R emission, including in nonvariadic consumers.
+  for(auto *c:masks) {
+    IRBuilder<> b(c);auto *mask=c->getArgOperand(1);
+    auto *bits=b.CreatePtrToInt(c->getArgOperand(0),mask->getType());
+    auto *value=b.CreateIntToPtr(b.CreateAnd(bits,mask),c->getType());
+    value->takeName(c);c->replaceAllUsesWith(value);c->eraseFromParent();
   }
   if(intrinsics.empty() && reads.empty())return;
   auto &m=*f.getParent();auto &dl=m.getDataLayout();
@@ -167,6 +180,6 @@ void normaliseVarargs(Module &m,Function *&root) {
     lowerVaOperations(f,blocks.count(&f)?blocks.at(&f):nullptr);
   // N23 removes these calls, so their declarations are no longer part of the module.
   SmallVector<Function *> unused;
-  for(Function &f:m)if(f.use_empty() && (f.getIntrinsicID()==Intrinsic::vastart || f.getIntrinsicID()==Intrinsic::vaend || f.getIntrinsicID()==Intrinsic::vacopy))unused.push_back(&f);
+  for(Function &f:m)if(f.use_empty() && (f.getIntrinsicID()==Intrinsic::vastart || f.getIntrinsicID()==Intrinsic::vaend || f.getIntrinsicID()==Intrinsic::vacopy || f.getIntrinsicID()==Intrinsic::ptrmask))unused.push_back(&f);
   for(auto *f:unused)f->eraseFromParent();
 }

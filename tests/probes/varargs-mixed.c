@@ -27,10 +27,13 @@ __attribute__((noinline)) static void consume(va_list ap) {
     union { double f; uint64_t bits; } d;
     d.f = va_arg(cursor, double);
     out[5] = d.bits == UINT64_C(0x400a000000000000) ? 'd' : '!'; /* 3.25 */
-    union { long double f; unsigned char bytes[16]; } ld;
+    union {
+      long double f;
+      struct { uint64_t significand; uint16_t exponent; } bits;
+    } ld;
     ld.f = va_arg(cursor, long double);
     /* x86 extended 1.5 = significand c000000000000000, exponent 3fff. */
-    out[6] = ld.bytes[7] == 0xc0 && ld.bytes[8] == 0xff && ld.bytes[9] == 0x3f
+    out[6] = ld.bits.significand == UINT64_C(0xc000000000000000) && ld.bits.exponent == 0x3fff
                  ? 'e' : '!';
     out[7] = va_arg(cursor, int) == 91 ? 'z' : '!';
     out[8] = '\n';

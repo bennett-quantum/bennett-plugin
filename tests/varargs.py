@@ -6,6 +6,7 @@ import ctypes as c
 import json
 import os
 import re
+import shutil
 
 from contracts import (
     ROOT, dialect_text, plugin_command, run, run_checked, sibling,
@@ -26,7 +27,7 @@ def normalise(major, source, output):
     return body
 
 
-def mixed(major, directory, production):
+def mixed(major, directory, production, vm):
     tool = f"/usr/lib/llvm-{major}/bin/"
     source = ROOT / "tests/probes/varargs-mixed.c"
     native = directory / "native"
@@ -37,7 +38,8 @@ def mixed(major, directory, production):
     run_checked([tool + "clang", "-O1", "-fno-inline", "-S", "-emit-llvm", source, "-o", raw])
     output = directory / "mixed-out.ll"
     body = normalise(major, raw, output)
-    for name in ("mixed", "other"):
+    assert "@llvm.ptrmask" not in body, "N23 long-double cursor alignment survived"
+    for name in ("mixed", "other", "empty"):
         signature = re.search(r"define [^\n]*@" + name + r"\(([^)]*)\)", body)
         assert signature and "..." not in signature[1] and "nz.va" in signature[1], signature
     # Only the console transport is supplied by the host, outside the transformed module.
@@ -49,18 +51,26 @@ def mixed(major, directory, production):
     if not production:
         return
     out = directory / "production"
+    shutil.rmtree(out, ignore_errors=True)
     result = run_checked([
         *plugin_command(major), "-bennett-tier=reversible", "-bennett-entry=main",
-        "-bennett-budget-default=1000000,262144,8192,64,131072",
+        # Peak live frames: main 80 + through 80 + mixed 32 + consume 80,
+        # plus saved frame headers/alignment. A 512-byte arena covers them.
+        "-bennett-budget-default=1000000,65536,8192,64,512",
         "-bennett-out=" + str(out), raw, "-disable-output",
     ], code=3, timeout=180)
     # The current producer explicitly reports ISA-7 even for executable successful paths.
+    assert (out / "main/blockers.json").is_file(), result.stderr
     blockers = json.loads((out / "main/blockers.json").read_text())
     assert [b["code"] for b in blockers] == ["BD-B-ISA7"], (result.stderr, blockers)
     for name in ("host", "device"):
         run_checked([tool + "opt", "-passes=verify", out / f"{name}.bc", "-disable-output"])
     device = run_checked([tool + "llvm-dis", out / "device.bc", "-o", "-"]).stdout
     no_va_ops(device)
+    for caller in ("main", "through"):
+        frame = re.search(r"define [^\n]*@" + caller + r"\(.*?^}", device, re.S | re.M)[0]
+        assert "nz.vb" in frame and "alloca" not in frame, frame
+        assert "@__bennett_rt_ss_push" in frame and "@__bennett_rt_ss_pop" in frame, frame
     obj = out / "main/launch.bennett"
     run_checked([REF, "check", obj])
     replies = directory / "argv.json"
@@ -68,10 +78,10 @@ def mixed(major, directory, production):
     oracle = REF.parent.parent / "release/bennett-isa-ref"
     for reverse in (False, True):
         execution = json.loads(run_checked([
-            oracle, "run-program", obj, "main", "--budget", "5000000,262144,8192,64",
+            oracle, "run-program", obj, "main", "--budget", "5000000,65536,8192,64",
             "--replies", replies, *(["--reverse"] if reverse else []),
         ], timeout=180).stdout)
-        assert execution["status"] == "COMPLETED" and not execution["faults"], execution
+        assert execution["status"] == ("REVERSED" if reverse else "COMPLETED") and not execution["faults"], execution
         assert execution["results"] == [dict(type="i32", value="0")], execution
         tape = b"".join(bytes.fromhex(e["bytes"]) for e in execution["tape"])
         assert tape == expected.encode(), execution
@@ -80,7 +90,8 @@ def mixed(major, directory, production):
             assert execution["console_hex"] == "", execution
         else:
             assert bytes.fromhex(execution["console_hex"]) == expected.encode(), execution
-    execute_vm(obj, expected.encode())
+    if vm:
+        execute_vm(obj, expected.encode())
 
 
 def execute_vm(obj, expected):
@@ -129,6 +140,7 @@ def execute_vm(obj, expected):
     target = (sibling("bennett-targets") / "targets/ideal-all-to-all.json").read_bytes()
     data = obj.read_bytes()
     program, arguments, run_id = pointer(), pointer(), u64()
+    print("varargs VM: admit", flush=True)
     checked("load", data, len(data), target, len(target), c.byref(program))
     checked("args_new", 0, c.byref(arguments))
     checked("run", program, b"main", arguments, None, 0, c.byref(run_id))
@@ -139,6 +151,7 @@ def execute_vm(obj, expected):
     assert request and not result and vm.bennett_request_service(request) == b"bennett.argv"
     vm.bennett_request_free(request)
     checked("reply", program, run_id, bytes(20), 20)
+    print("varargs VM: execute", flush=True)
     checked("wait", program, run_id, c.byref(result), c.byref(request))
     assert result and not request and vm.bennett_result_nfaults(result) == 0, snapshot()
     assert vm.bennett_result_nvalues(result) == 1
@@ -146,6 +159,7 @@ def execute_vm(obj, expected):
     checked("result_get", result, 0, c.byref(kind), c.byref(width), status, 4)
     assert kind.value == 0 and width.value == 32 and status.raw == bytes(4)
     vm.bennett_result_free(result)
+    print("varargs VM: snapshot and reverse", flush=True)
     forward = snapshot()
     checked("reverse", program, run_id)
     reverse = snapshot()
@@ -181,7 +195,7 @@ def cursor_rows(major, directory):
                            ("riscv64-unknown-linux-gnu", 8)):
         raw = directory / f"{triple}.ll"
         raw.write_text(f'''target triple = "{triple}"
-target datalayout = "e-p:64:64-i64:64-i128:128-f80:128"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
 declare void @llvm.va_start(ptr)
 declare void @llvm.va_copy(ptr, ptr)
 declare void @llvm.va_end(ptr)
@@ -209,8 +223,12 @@ define i32 @main() {{
 }}
 ''')
         output = raw.with_suffix(".out.ll")
-        normalise(major, raw, output)
-        run_checked([f"/usr/lib/llvm-{major}/bin/lli", "-mtriple=x86_64-unknown-linux-gnu", output])
+        body = normalise(major, raw, output)
+        # The lowered records use only ordinary memory/SSA operations. Execute
+        # those operations on the host after independently checking each row.
+        host = raw.with_suffix(".host.ll")
+        host.write_text(body.replace(triple, "x86_64-unknown-linux-gnu"))
+        run_checked([f"/usr/lib/llvm-{major}/bin/lli", host])
     # An isolated indirect call still needs the ABI even without a local variadic definition.
     raw = directory / "indirect-only.ll"
     raw.write_text('define i32 @f(ptr %callee) {\n %r = call i32 (i32, ...) %callee(i32 0, i32 7)\n ret i32 %r\n}\n')
@@ -226,7 +244,7 @@ def residual(major, directory):
         ("end", "declare void @llvm.va_end(ptr)", "call void @llvm.va_end(ptr %ap)"),
     ):
         raw = directory / f"residual-{name}.ll"
-        raw.write_text(declaration + "\ndefine void @f(ptr %ap) {\n " + instruction + "\n ret void\n}\n")
+        raw.write_text(declaration + "\ndefine void @f(ptr %ap, ...) {\n " + instruction + "\n ret void\n}\n")
         result = run([*plugin_command(major), "-bennett-validate-only", raw, "-disable-output"])
         assert result.returncode != 0 and "§14.3 N23" in result.stderr, result.stderr
 
@@ -235,14 +253,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--major", type=int, choices=(18, 23), required=True)
     parser.add_argument("--normalise-only", action="store_true")
+    parser.add_argument("--vm", action="store_true", help="Also run the slower gate-pinned VM launch/snapshot check")
     args = parser.parse_args()
-    directory = ROOT / f".tmp/varargs/{args.major}"
+    directory = ROOT / f".tmp/varargs/{args.major}{'-vm' if args.vm else ''}"
     directory.mkdir(parents=True, exist_ok=True)
-    mixed(args.major, directory, not args.normalise_only)
+    mixed(args.major, directory, not args.normalise_only, args.vm)
     witness(args.major, directory)
     cursor_rows(args.major, directory)
     residual(args.major, directory)
-    print(f"varargs LLVM {args.major}: native/normalised bytes agree" + ("; R admitted, executed and reversed" if not args.normalise_only else ""))
+    print(f"varargs LLVM {args.major}: native/normalised bytes agree" + ("; R admitted, reference executed and reversed" if not args.normalise_only else "") + ("; VM executed and reversed" if args.vm else ""))
 
 
 if __name__ == "__main__":
