@@ -20,6 +20,9 @@ DRIVERS = {
     "register_classes": (),
     "entry_runtime": (),
     "normalisation_scope": (),
+    "production": (),
+    "budget_stage": (),
+    "shadow_stack": (),
     "softfloat": ("--case", "analysis-closure", "--case", "published-cc"),
 }
 

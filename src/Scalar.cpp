@@ -734,6 +734,10 @@ bool prepareScalarModule(Module &m, Function &f, uint64_t &sstack, unsigned auto
         }
     };
     retain(&f);
+    // The generated wrapper calls the linked initializer after N24 preparation.
+    // Keep its closure even when source IR has no explicit initialization call.
+    if (auto *init = m.getFunction("__bennett_rt_ss_init"); init && !init->isDeclaration())
+      retain(init);
     for (auto entry : {std::make_pair("bennett.entry.snapshot", "__bennett_rt_entry_replay"),
                        std::make_pair("bennett.ss.init", "__bennett_rt_ss_init")}) {
       if (!scalarModuleFlag(m, entry.first, 0)) continue;
