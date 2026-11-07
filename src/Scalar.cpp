@@ -274,7 +274,9 @@ struct Scalar {
     }
     return false;
   }
-  bool lowerCall(CallBase *call, BasicBlock &bb, const std::function<std::string(BasicBlock *)> &blockName) {
+  bool lowerCall(CallBase *call, BasicBlock &bb,
+                 const std::function<std::string(BasicBlock *)> &blockName,
+                 unsigned &compareSerial) {
     if (auto *g = call->getCalledFunction();
         g && g->getName() == "__bennett_nz_fault") {
       auto *c = dyn_cast<ConstantInt>(call->getArgOperand(0));
@@ -314,14 +316,13 @@ struct Scalar {
       auto callee=value(call->getCalledOperand());
       unsigned ordinal=1;for (Instruction &prev:bb) {if (&prev==call) break;if(auto *c=dyn_cast<CallBase>(&prev)) if(!resolve(c->getCalledOperand())) ++ordinal;}
       auto prefix=blockName(&bb)+".q"+std::to_string(ordinal);
-      unsigned serial=0;
       std::function<void(int,int)> tree=[&](int lo,int hi) {
         if(hi<lo) {lines.push_back("qjump "+prefix+"d");return;}
         if(hi-lo+1<=3) {
           for(int k=lo;k<=hi;++k) {
             auto c=constant(APInt(width(call->getCalledOperand()->getType()),address(sorted[k])));
             auto t=temp(1,"lift.icmp.eq "+callee+" "+c);
-            auto next=k<hi?blockName(&bb)+".s"+std::to_string(++serial):prefix+"d";
+            auto next=k<hi?blockName(&bb)+".s"+std::to_string(++compareSerial):prefix+"d";
             lines.push_back("qbranch "+t+" "+prefix+"c"+std::to_string(k)+" "+next);
             if(k<hi) lines.push_back(next+"():");
           }
@@ -329,7 +330,7 @@ struct Scalar {
           int mid=(lo+hi)/2;
           auto c=constant(APInt(width(call->getCalledOperand()->getType()),address(sorted[mid])));
           auto t=temp(1,"lift.icmp.ult "+callee+" "+c);
-          auto l=blockName(&bb)+".s"+std::to_string(++serial),r=blockName(&bb)+".s"+std::to_string(++serial);
+          auto l=blockName(&bb)+".s"+std::to_string(++compareSerial),r=blockName(&bb)+".s"+std::to_string(++compareSerial);
           lines.push_back("qbranch "+t+" "+l+" "+r);lines.push_back(l+"():");tree(lo,mid-1);lines.push_back(r+"():");tree(mid,hi);
         }
       };
@@ -369,6 +370,71 @@ struct Scalar {
       if (!i.getType()->isVoidTy())
         names[&i] = runtimeNames() && i.hasName() ? i.getName().str() : "v" + std::to_string(k++);
   }
+  void lowerSwitch(SwitchInst &sw, const std::string &block,
+                   const std::function<std::string(BasicBlock *)> &target,
+                   unsigned &compareSerial) {
+    std::string cond = value(sw.getCondition()),
+                fallback = target(sw.getDefaultDest());
+    std::vector<std::pair<APInt, std::string>> keys;
+    for (auto c : sw.cases())
+      keys.emplace_back(c.getCaseValue()->getValue(),
+                        target(c.getCaseSuccessor()));
+    std::sort(keys.begin(), keys.end(),
+              [](auto &a, auto &b) { return a.first.ult(b.first); });
+    // §16.3: allocate and emit compare blocks in creation order.
+    std::vector<std::string> ids = {block};
+    std::vector<std::vector<std::string>> chunks(1);
+    auto newBlock = [&]() {
+      unsigned n = ids.size();
+      ids.push_back(block + ".s" + std::to_string(++compareSerial));
+      chunks.emplace_back();
+      return n;
+    };
+    std::function<void(int, int, unsigned)> tree = [&](int lo, int hi,
+                                                       unsigned cur) {
+      size_t begin = lines.size();
+      if (hi < lo)
+        lines.push_back("qjump " + fallback);
+      else if (hi - lo + 1 <= 3) {
+        for (int j = lo; j <= hi; ++j) {
+          auto c = constant(keys[j].first);
+          auto t = temp(1, "lift.icmp.eq " + cond + " " + c);
+          unsigned next = j < hi ? newBlock() : 0;
+          lines.push_back("qbranch " + t + " " + keys[j].second + " " +
+                          (j < hi ? ids[next] : fallback));
+          chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
+                             lines.end());
+          lines.resize(begin);
+          cur = next;
+        }
+        return;
+      } else {
+        int mid = (lo + hi) / 2;
+        auto c = constant(keys[mid].first);
+        auto t = temp(1, "lift.icmp.ult " + cond + " " + c);
+        unsigned l = newBlock(), r = newBlock();
+        lines.push_back("qbranch " + t + " " + ids[l] + " " + ids[r]);
+        chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
+                           lines.end());
+        lines.resize(begin);
+        tree(lo, mid - 1, l);
+        tree(mid, hi, r);
+        return;
+      }
+      chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
+                         lines.end());
+      lines.resize(begin);
+    };
+    // Destinations must be numbered by output text order, not DFS
+    // recursion order. Build shape above, then remap constants/temps by
+    // first appearance below.
+    tree(0, (int)keys.size() - 1, 0);
+    for (unsigned n = 0; n < chunks.size(); ++n) {
+      if (n)
+        lines.push_back(ids[n] + "():");
+      lines.insert(lines.end(), chunks[n].begin(), chunks[n].end());
+    }
+  }
   std::string body() {
     prepareValueNames();
     std::map<BasicBlock *, unsigned> blockIndex;
@@ -389,6 +455,7 @@ struct Scalar {
                         ")");
     };
     for (BasicBlock &bb : f) {
+      unsigned compareSerial = 0; // §16.3 creation order across every compare tree in this block.
       lines.push_back(blockName(&bb) + "():");
       std::set<BasicBlock *> edgeBlocks;
       auto target = [&](BasicBlock *b) {
@@ -434,78 +501,17 @@ struct Scalar {
           // the <=3 leaf case of §14.2. Larger domains need its balanced tree.
           if(candidates.size()>3) unimplemented("§14.9 balanced indirectbr tree",2,br);
           for(unsigned k=0;k<candidates.size();++k) {
-            if(k) lines.push_back(blockName(&bb)+".s"+std::to_string(k)+"():");
             auto c=constant(APInt(width(br->getAddress()->getType()),candidates[k].first));
             auto t=temp(1,"lift.icmp.eq "+address+" "+c);
-            auto next=k+1<candidates.size()?blockName(&bb)+".s"+std::to_string(k+1):blockName(&bb)+".d";
+            auto next=k+1<candidates.size()?blockName(&bb)+".s"+std::to_string(++compareSerial):blockName(&bb)+".d";
             lines.push_back("qbranch "+t+" "+target(candidates[k].second)+" "+next);
+            if(k+1<candidates.size()) lines.push_back(next+"():");
           }
           lines.push_back(blockName(&bb)+".d():");lines.push_back("fault 4");
           continue;
         }
         if (auto *sw = dyn_cast<SwitchInst>(&i)) {
-          std::string cond = value(sw->getCondition()),
-                      fallback = target(sw->getDefaultDest());
-          std::vector<std::pair<APInt, std::string>> keys;
-          for (auto c : sw->cases())
-            keys.emplace_back(c.getCaseValue()->getValue(),
-                              target(c.getCaseSuccessor()));
-          std::sort(keys.begin(), keys.end(),
-                    [](auto &a, auto &b) { return a.first.ult(b.first); });
-          // Allocate compare blocks in creation order; emit rows in that same
-          // order.
-          std::vector<std::string> ids = {blockName(&bb)};
-          std::vector<std::vector<std::string>> chunks(1);
-          auto newBlock = [&]() {
-            unsigned n = ids.size();
-            ids.push_back(blockName(&bb) + ".s" + std::to_string(n));
-            chunks.emplace_back();
-            return n;
-          };
-          std::function<void(int, int, unsigned)> tree = [&](int lo, int hi,
-                                                             unsigned cur) {
-            size_t begin = lines.size();
-            if (hi < lo)
-              lines.push_back("qjump " + fallback);
-            else if (hi - lo + 1 <= 3) {
-              for (int j = lo; j <= hi; ++j) {
-                auto c = constant(keys[j].first);
-                auto t = temp(1, "lift.icmp.eq " + cond + " " + c);
-                unsigned next = j < hi ? newBlock() : 0;
-                lines.push_back("qbranch " + t + " " + keys[j].second + " " +
-                                (j < hi ? ids[next] : fallback));
-                chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
-                                   lines.end());
-                lines.resize(begin);
-                cur = next;
-              }
-              return;
-            } else {
-              int mid = (lo + hi) / 2;
-              auto c = constant(keys[mid].first);
-              auto t = temp(1, "lift.icmp.ult " + cond + " " + c);
-              unsigned l = newBlock(), r = newBlock();
-              lines.push_back("qbranch " + t + " " + ids[l] + " " + ids[r]);
-              chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
-                                 lines.end());
-              lines.resize(begin);
-              tree(lo, mid - 1, l);
-              tree(mid, hi, r);
-              return;
-            }
-            chunks[cur].insert(chunks[cur].end(), lines.begin() + begin,
-                               lines.end());
-            lines.resize(begin);
-          };
-          // Destinations must be numbered by output text order, not DFS
-          // recursion order. Build shape above, then remap constants/temps by
-          // first appearance below.
-          tree(0, (int)keys.size() - 1, 0);
-          for (unsigned n = 0; n < chunks.size(); ++n) {
-            if (n)
-              lines.push_back(ids[n] + "():");
-            lines.insert(lines.end(), chunks[n].begin(), chunks[n].end());
-          }
+          lowerSwitch(*sw, blockName(&bb), target, compareSerial);
           continue;
         }
         if (lowerAggregate(i)) continue;
@@ -522,7 +528,7 @@ struct Scalar {
           continue;
         }
         if (auto *call = dyn_cast<CallBase>(&i)) {
-          if (!lowerCall(call, bb, blockName)) break;
+          if (!lowerCall(call, bb, blockName, compareSerial)) break;
           continue;
         }
         if (auto *l = dyn_cast<LoadInst>(&i)) {

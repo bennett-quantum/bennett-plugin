@@ -92,6 +92,31 @@ the same command passed **13/13 on LLVM 18 and LLVM 23**, exit 0. The shared-sta
 require the approved exit-125 promised/pending diagnostic and empty stdout. This verifies
 the interim guard; shared host/device memory remains promised above (SOL-S0-1, bp-46p).
 
+At `2ecdd90`, on both majors, all four two/three-indirect-call variants (with and
+without a following switch) compiled but failed the pinned ISA checker with a duplicate
+block label. After sharing one compare-block counter per original LLVM block across calls,
+switch and indirectbr, both of these commands passed for **each major 18 and 23**:
+
+```sh
+timeout 180 python3 -B tests/scalars.py --major <major>
+timeout 180 python3 -B tests/scalars.py --major <major> --step-check --case inc8 --case switch5 --case two-calls --case three-calls --case two-calls-switch --case three-calls-switch
+```
+
+The default scalar driver preserves **21/21 byte-exact published objects**, their stated
+hashes and execution results, plus the C inc8 fixture. The four new objects pass ISA check
+and hand-derived result assertions: two calls add 2 or 4; three add 3 or 6, selected by the
+same i1 input. The switch tests also exercise zero, 255 and the fallback. Each new object
+passes exhaustive inverse checking over all **512 selector/byte inputs**. A mutation
+renaming the second call's `.s2` back to `.s1` is rejected specifically for a duplicate
+block label (codex-S0-1, bp-dzb). The switch emission and per-fixture test phases were
+extracted to retain the existing quality limits; no baseline was raised.
+
+An unrestricted `scalars.py --step-check` attempt hit the existing 60-second subprocess
+allowance in add2's 65536-case debug-interpreter check on both majors (bp-v7h). Its time
+limit and assertions remain intact. The pinned **release** interpreter separately passed
+`step-check .tmp/scalars/<major>/add2/ref.bennett ref --exhaustive --max-bits 16 --budget 6,0,9,1`
+on both majors under `timeout 180` (two sequential subprocesses limited to 85 seconds each).
+
 ## Function size and cognitive-complexity baseline
 
 Run `python3 -B scripts/quality.py` to reproduce the baseline below and
