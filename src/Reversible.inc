@@ -143,7 +143,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   launch->eraseFromParent();root->setName(entryName);
   checkComparisonMaterialisation(m);
   raw_fd_ostream bc(out.str()+"/device.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(m,bc);bc.close();
-  auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject(),sharesGlobalState(sourceEntry));
+  auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject(),sharesGlobalState(sourceEntry, sourceAnalysis));
   raw_fd_ostream host(out.str()+"/host.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(source,host);host.close();
   write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict","blocked:BD-B-ISA7"}}}))+"\n");
   json::Object artifacts;

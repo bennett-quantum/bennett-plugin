@@ -2277,26 +2277,28 @@ json::Object completeCoverage(StringRef object,
   return json::Object{{"entries", std::move(entries)}};
 }
 // Discover source state while every reachable entry still has its original body.
-bool sharesGlobalState(Function &f) {
+void appendStateDependencies(const Value *value, Analysis &analysis,
+                             SmallVectorImpl<const Value *> &pending) {
+  if (auto *function = dyn_cast<Function>(value))
+    for (const auto &instruction : instructions(function)) pending.push_back(&instruction);
+  // §14.2: the device closure includes every indirect-call candidate too.
+  if (auto *call = dyn_cast<CallBase>(value))
+    for (auto *candidate : analysis.candidates(call->getCalledOperand(), call->getFunctionType()))
+      pending.push_back(candidate);
+  if (auto *user = dyn_cast<User>(value))
+    for (const auto &operand : user->operands()) pending.push_back(operand);
+}
+bool sharesGlobalState(Function &f, Analysis &analysis) {
   std::set<const Value *> visited;
-  bool sharedState = false;
-  std::function<void(const Value *)> findState = [&](const Value *value) {
-    if (!visited.insert(value).second) return;
-    if (auto *function = dyn_cast<Function>(value)) {
-      if (!function->isDeclaration())
-        for (const auto &instruction : instructions(function)) findState(&instruction);
-      return;
-    }
-    if (auto *global = dyn_cast<GlobalVariable>(value)) {
-      sharedState |= !global->isConstant();
-      if (global->hasInitializer()) findState(global->getInitializer());
-      return;
-    }
-    if (auto *user = dyn_cast<User>(value))
-      for (const auto &operand : user->operands()) findState(operand);
-  };
-  findState(&f);
-  return sharedState;
+  SmallVector<const Value *> pending{&f};
+  while (!pending.empty()) {
+    const auto *value = pending.pop_back_val();
+    if (!visited.insert(value).second) continue;
+    if (auto *global = dyn_cast<GlobalVariable>(value))
+      if (!global->isConstant()) return true;
+    appendStateDependencies(value, analysis, pending);
+  }
+  return false;
 }
 // The host uses only the published launch 0.8 C ABI. BENNETT_TARGET supplies
 // the target JSON at runtime; it is copied by bennett_load before launch.
@@ -2520,9 +2522,9 @@ void hostStub(Function &f, StringRef object, const json::Object &record, bool sh
 
 } // namespace
 // Freeze all dependencies before the first host body is replaced.
-void replaceHostEntries(ArrayRef<Function *> entries, StringRef out) {
+void replaceHostEntries(ArrayRef<Function *> entries, Analysis &analysis, StringRef out) {
   std::map<Function *, bool> sharedState;
-  for (auto *entry : entries) sharedState.emplace(entry, sharesGlobalState(*entry));
+  for (auto *entry : entries) sharedState.emplace(entry, sharesGlobalState(*entry, analysis));
   for(auto *entry:entries) {
     auto dir=out.str()+"/"+entry->getName().str();auto build=parse(read(dir+"/build.json"));
     hostStub(*entry,read(dir+"/launch.bennett"),*build.getAsObject(),sharedState.at(entry));
@@ -2843,7 +2845,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
   // Snapshot analysis of every entry sees the linked source memory, before
   // native stubs add embedded objects and launch-API string globals.
   a.releaseTransferGraphs();
-  replaceHostEntries(entries, out);
+  replaceHostEntries(entries, a, out);
   normaliseWideABI(*device);
   for (Function &f : *device)
     if (!f.isDeclaration() && a.tiers[m.getFunction(f.getName())].count("L"))

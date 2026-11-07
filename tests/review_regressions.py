@@ -15,6 +15,80 @@ REF = sibling("bennett-isa-spec") / "reference-interpreter/target/debug/bennett-
 from contracts import run_checked as run
 
 
+def global_call_shapes():
+    prefix = (ROOT / "tests/probes/review-global-counter.ll").read_text().split("define i32 @top()", 1)[0]
+    marker = " %q = call ptr @__bennett_qalloc(i64 0, i64 1)\n call void @__bennett_qfree(ptr %q)\n"
+    helper = "define i32 @helper(i64 %fn, i64 %leaf) {\n" + marker + """ %v = load i32, ptr @g
+ %n = add i32 %v, 1
+ store i32 %n, ptr @g
+ ret i32 %n
+}
+"""
+    middle = """define i32 @middle(i64 %fn, i64 %leaf) {
+ %p = inttoptr i64 %leaf to ptr
+ %v = call i32 %p(i64 %leaf, i64 %leaf)
+ ret i32 %v
+}
+"""
+    calls = {
+        "direct": " %v = call i32 @helper(i64 %fn, i64 %leaf)\n",
+        "indirect": " %p = inttoptr i64 %fn to ptr\n %v = call i32 %p(i64 %leaf, i64 %leaf)\n",
+        "nested-indirect": " %p = inttoptr i64 %fn to ptr\n %v = call i32 %p(i64 %leaf, i64 %leaf)\n",
+        "mixed": " %v = call i32 @middle(i64 %fn, i64 %leaf)\n",
+    }
+    closures = {
+        "direct": ([helper], "helper"), "indirect": ([helper], "helper"),
+        "nested-indirect": ([helper, middle], "middle"), "mixed": ([helper, middle], "middle"),
+    }
+    for shape, call in calls.items():
+        functions, target = closures[shape]
+        top = "define i32 @top(i64 %fn, i64 %leaf) {\n" + marker + call + " ret i32 %v\n}\n"
+        keep = "@keep = constant ptr @helper\n"
+        # The middle must be address-taken for the nested indirect candidate set.
+        keep += {"helper": "", "middle": "@keep_middle = constant ptr @middle\n"}[target]
+        functions = [*functions, top]
+        orders = {"helper-first": functions, "top-first": reversed(functions)}
+        for order, ordered in orders.items():
+            body = prefix + keep + "".join(ordered)
+            actions = "unsigned a=top(address,leaf), b=top(address,leaf);"
+            yield f"{shape}-{order}", body, actions, "1 2 host_global=2\n", target
+
+
+def global_comparison(command, tool, directory, native, target):
+    names = {
+        fields[2]: int(fields[0], 16)
+        for line in run([tool + "llvm-nm", "--defined-only", native]).stdout.splitlines()
+        if len(fields := line.split()) == 3
+    }
+    provisional = directory / "provisional"
+    source = directory / "input.ll"
+    run([*command, "-bennett-out=" + str(provisional), source])
+    metadata_path = directory / "native.json"
+    run([
+        tool + "opt", command[1], "-passes=bennett-native-comparison",
+        "-bennett-native-prepare-only",
+        "-bennett-native-record=" + str(provisional / "top/launch-record.json"),
+        "-bennett-native-entry=top", "-bennett-native-report=" + str(metadata_path),
+        provisional / "device.bc", "-disable-output",
+    ])
+    metadata = json.loads(metadata_path.read_text())
+    layout = dict(
+        schema="bennett-comparison-layout-1", ptr_width=64,
+        materialised_structure_sha256=metadata["materialised_structure_sha256"],
+        data_end=names["_end"], heap_base=(names["_end"] + 4095) & -4096,
+        globals={}, functions={},
+    )
+    for symbol in metadata["symbols"]:
+        leaf = dict(address=names[symbol["llvm_name"]])
+        kind = symbol["kind"]
+        if kind == "global":
+            leaf.update(size=symbol["size"], alignment=symbol["alignment"])
+        layout[{"global": "globals", "function": "functions"}[kind]][symbol["source_key"]] = leaf
+    path = directory / "layout.json"
+    path.write_text(json.dumps(layout, indent=2) + "\n")
+    return ["-bennett-comparison-layout=" + str(path)], [str(names[target]), str(names["helper"])]
+
+
 def global_cases(case, command, tool, work):
     rows, failures = [], []
     original = (ROOT / "tests/probes/review-global-counter.ll").read_text()
@@ -30,7 +104,7 @@ def global_cases(case, command, tool, work):
  ret i32 %v
 }
 """
-    for name, body, actions, expected in [
+    fixtures = [
         (
             "repeat",
             original,
@@ -61,90 +135,93 @@ def global_cases(case, command, tool, work):
             "unsigned a=top(), b=top();",
             "1 2 host_global=2\n",
         ),
-    ]:
-        directory = work / case / name
-        directory.mkdir(parents=True, exist_ok=True)
-        source, harness = directory / "input.ll", directory / "main.c"
-        source.write_text(body)
-        harness.write_text(
-            "#include <stdio.h>\nextern unsigned top(void), other(void), g;\n"
-            "int main(void) {"
-            + actions
-            + 'printf("%u %u host_global=%u\\n",a,b,g); return 0;}\n'
-            + "void *__bennett_qalloc(unsigned long long c,unsigned long long n){return 0;}\n"
-            + "void __bennett_qfree(void *p){}\n"
-        )
-        native = directory / "source-native"
-        run([tool + "clang", source, harness, "-o", native])
-        baseline = run([native])
-        assert baseline.stdout == expected, (name, baseline.stdout, expected)
-        run([*command, "-bennett-out=" + str(directory), source])
-        run(
-            [
-                tool + "opt",
-                "-passes=verify",
-                "-disable-output",
-                directory / "host.bc",
-            ]
-        )
-        library = sibling("bennett-vm") / "target/debug"
-        executable = directory / "counter"
-        run(
-            [
-                tool + "clang",
-                directory / "host.bc",
-                harness,
-                "-L" + str(library),
-                "-Wl,-rpath," + str(library),
-                "-lbennett_vm",
-                "-o",
-                executable,
-            ]
-        )
-        environment = dict(
-            os.environ,
-            BENNETT_TARGET=(
-                ROOT / "tests/probes/review-launch-target.json"
-            ).read_text(),
-        )
-        actual = subprocess.run(
-            [str(executable)],
-            capture_output=True,
-            text=True,
-            env=environment,
-            timeout=120,
-        )
-        if case == "global-diagnostic":
-            ok = (
-                actual.returncode == 125
-                and not actual.stdout
-                and all(
-                    text in actual.stderr
-                    for text in (
-                        "bp-acm",
-                        "b-dialect-spec-6u6",
-                        "promised",
-                        "pending",
-                    )
-                )
-                and "unsupported" not in actual.stderr.lower()
-            )
-        else:
-            ok = actual.returncode == 0 and actual.stdout == expected
-        rows.append(
-            dict(
-                case=case,
-                name=name,
-                expected=expected,
-                actual=actual.stdout,
-                exit=actual.returncode,
-                stderr=actual.stderr,
-                ok=ok,
-            )
-        )
-        if not ok:
-            failures.append(rows[-1])
-    return rows, failures
+    ]
+    fixtures = [(*fixture, None) for fixture in fixtures] + list(global_call_shapes())
+    rows = [run_global_case(case, command, tool, work, fixture) for fixture in fixtures]
+    return rows, [row for row in rows if not row["ok"]]
+
+
+def global_result_matches(case, actual, expected):
+    if case != "global-diagnostic":
+        return actual.returncode == 0 and actual.stdout == expected
+    return (
+        actual.returncode == 125 and not actual.stdout
+        and all(text in actual.stderr for text in (
+            "bp-acm", "b-dialect-spec-6u6", "promised", "pending",
+        ))
+        and "unsupported" not in actual.stderr.lower()
+    )
+
+
+def run_global_case(case, command, tool, work, fixture):
+    name, body, actions, expected, target = fixture
+    directory = work / case / name
+    directory.mkdir(parents=True, exist_ok=True)
+    source, harness = directory / "input.ll", directory / "main.c"
+    source.write_text(body)
+    harness.write_text(
+        "#include <stdio.h>\n#include <stdlib.h>\n#include <stdint.h>\n"
+        "extern unsigned top(), other(void), g;\n"
+        "int main(int argc, char **argv) {"
+        "uint64_t address=argc>1?strtoull(argv[1],0,10):0;"
+        "uint64_t leaf=argc>2?strtoull(argv[2],0,10):0;"
+        + actions
+        + 'printf("%u %u host_global=%u\\n",a,b,g); return 0;}\n'
+        + "void *__bennett_qalloc(unsigned long long c,unsigned long long n){return 0;}\n"
+        + "void __bennett_qfree(void *p){}\n"
+    )
+    native = directory / "source-native"
+    run([tool + "clang", "-no-pie", source, harness, "-o", native])
+    options, arguments = global_comparison(command, tool, directory, native, target) if target else ([], [])
+    baseline = run([native, *arguments])
+    assert baseline.stdout == expected, (name, baseline.stdout, expected)
+    run([*command, *options, "-bennett-out=" + str(directory), source])
+    run(
+        [
+            tool + "opt",
+            "-passes=verify",
+            "-disable-output",
+            directory / "host.bc",
+        ]
+    )
+    library = sibling("bennett-vm") / "target/debug"
+    executable = directory / "counter"
+    run(
+        [
+            tool + "clang",
+            "-no-pie",
+            directory / "host.bc",
+            harness,
+            "-L" + str(library),
+            "-Wl,-rpath," + str(library),
+            "-lbennett_vm",
+            "-o",
+            executable,
+        ]
+    )
+    environment = dict(
+        os.environ,
+        BENNETT_TARGET=(
+            ROOT / "tests/probes/review-launch-target.json"
+        ).read_text(),
+    )
+    actual = subprocess.run(
+        [str(executable), *arguments],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=120,
+    )
+    ok = global_result_matches(case, actual, expected)
+    return dict(
+        case=case,
+        name=name,
+        expected=expected,
+        actual=actual.stdout,
+        exit=actual.returncode,
+        stderr=actual.stderr,
+        ok=ok,
+    )
 
 
 def main():

@@ -78,6 +78,20 @@ constant-shift checks execute the same generated function; pointer round trips c
 The helper/global-key check supplements its original comparisons with executions of the same
 linked bodies and globals. Remaining removed subprocess assertions live in the shared harness.
 
+## Council regression evidence
+
+At `2ecdd90`, both majors failed
+`timeout 180 python3 -B tests/review_regressions.py --major <18|23> --case global-diagnostic`
+with 7/13 passing. The six indirect, nested-indirect and mixed call-shape/order cases
+silently returned `1 1 host_global=0`; all native baselines returned `1 2 host_global=2`.
+The generated family also includes direct calls in both function orders. Each new case
+uses a resolved comparison layout built from the native executable's symbol addresses,
+passes the same helper addresses to both launches, and retains the default production budget.
+After the dependency scan followed analysis candidates before any host body replacement,
+the same command passed **13/13 on LLVM 18 and LLVM 23**, exit 0. The shared-state cases
+require the approved exit-125 promised/pending diagnostic and empty stdout. This verifies
+the interim guard; shared host/device memory remains promised above (SOL-S0-1, bp-46p).
+
 ## Function size and cognitive-complexity baseline
 
 Run `python3 -B scripts/quality.py` to reproduce the baseline below and
