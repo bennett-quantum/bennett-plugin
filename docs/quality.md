@@ -60,7 +60,7 @@ Focused timeouts are runtime measurements, not full-gate acceptance.
 The large device-FP object is checked with the gate-pinned release interpreter, which
 already executes both numerical vectors. The small native shapes retain debug checks.
 No case, stack boundary, numerical input, expected fault or exact result bit changes.
-The interpreter pin and build declarations are unchanged.
+These measurements retained the interpreter pin and build declarations.
 
 The device-FP lowering command alone has a 480-second wall timeout; other subprocesses
 retain the shared 120-second limit. A 120-second wall limit cannot enclose S2's unchanged
@@ -116,7 +116,7 @@ is unchanged; the wall allowance accommodates its observed host/build sensitivit
 Per-command argv, CPU/RSS, load and outputs are retained locally in
 `.tmp/quality-plugin/gatefix4-baseline-18-commands.json` and
 `.tmp/quality-plugin/gatefix4-fixed-{18,23}-commands.json`.
-The focused measurements use the same pins as the gate, including interpreter
+The focused measurements above used the gate's interpreter pin at measurement time,
 `ecaaac060c44e317d1181345fa6b8e38c096c099`.
 
 ## Soft-float gate regressions
