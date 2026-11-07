@@ -10,9 +10,60 @@ from contracts import ROOT as R
 from scalars import REF
 
 
+ARITH_LIBRARY = """define internal i1 @predicate(i64 %a, i64 %b, i32 %p) { %r = icmp eq i32 %p, 14
+ ret i1 %r }
+define i1 @__bennett_sf_cmp_f64(i64 %a, i64 %b, i32 %p) { %r = call i1 @predicate(i64 %a,i64 %b,i32 14)
+ ret i1 %r }
+define i64 @__bennett_sf_add_f64(i64 %a, i64 %b) { %r = xor i64 %a, %b
+ ret i64 %r }
+define i64 @__bennett_sf_sitofp_f64(i128 %a) { %r = trunc i128 %a to i64
+ ret i64 %r }
+"""
+COMPARISON_BODY = """define internal i1 @cmp(double %a, double %b) { %r = fcmp une double %a, %b
+ ret i1 %r }
+define i1 @top() { %v = call i1 @cmp(double 0.0,double 1.0)
+ ret i1 %v }
+"""
+
+ATOMIC_BODY = """@g = internal global double 0.0
+define i64 @top() { %old = atomicrmw fmax ptr @g, double 1.0 seq_cst
+ %v = load double, ptr @g
+ %bits = bitcast double %v to i64
+ ret i64 %bits }
+"""
+
+
+def has_atoms(data, value, atoms):
+    values = data.get("values", [])
+    return any(
+        v["function"] == "top" and v["value"] == value
+        and set(v["atoms"]) == atoms and not v["top"]
+        for v in values
+    )
+
+
+def save_results(major, rows):
+    result = dict(
+        major=major, cases=len(rows), passed=sum(r["ok"] for r in rows), results=rows
+    )
+    (R / f".tmp/softfloat-{major}.json").write_text(
+        json.dumps(result, indent=2) + "\n"
+    )
+    print(json.dumps(result, indent=2))
+    return result["passed"] != result["cases"]
+
+
+def device_entry(body, returned):
+    markers = "\ndeclare ptr @__bennett_qalloc(i64, i64)\ndeclare void @__bennett_qfree(ptr)\n"
+    allocation = " @top() {\n %q = call ptr @__bennett_qalloc(i64 0, i64 1)\n"
+    release = "call void @__bennett_qfree(ptr %q)\n " + returned
+    return body.replace(" @top() {", allocation).replace(returned, release) + markers
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--major", type=int, required=True)
+    p.add_argument("--case", action="append", choices=("analysis-closure", "published-cc"))
     a = p.parse_args()
     d = R / f".tmp/softfloat/{a.major}"
     shutil.rmtree(d, ignore_errors=True)
@@ -90,7 +141,7 @@ def main():
     numerical_ref = d / "isa-ref-release"
     shutil.copy2(release_ref, numerical_ref)
 
-    def measured_program(obj, args, reverse=False):
+    def measured_program(obj, args, reverse=False, budget="1000000,65536,65536,128"):
         argv = [
             numerical_ref,
             "run-program",
@@ -99,7 +150,7 @@ def main():
             "--args",
             args,
             "--budget",
-            "1000000,65536,65536,128",
+            budget,
         ] + (["--reverse"] if reverse else [])
         # Shared-host wall time is separate from the unchanged ISA step budgets.
         # The orchestrator authorised this allowance after a load-induced timeout.
@@ -110,6 +161,133 @@ def main():
         )
         save_measurements()
         return z, data, measurement
+
+    # Bind every predicate, integer extension and introduced helper in the S2 fixpoint.
+    lib = d / "arith.ll"
+    lib.write_text(ARITH_LIBRARY)
+    bc = d / "arith.bc"
+    z = run([tool + "llvm-as", lib, "-o", bc])
+    assert z.returncode == 0, z.stderr
+    # A linked FP atomic must transport helper effects, not perform integer arithmetic on bits.
+    atomiclib = d / "atomic.ll"
+    atomiclib.write_text(
+        "define i64 @__bennett_sf_maxnum_f64(i64 %a,i64 %b) { ret i64 42 }"
+    )
+
+    def analysis_closure():
+        # Dialect §§4.2, 12.1: marker roots and their closures are device
+        # variants; normalization leaves H variants untouched.
+        comparison = device_entry(COMPARISON_BODY, "ret i1 %v")
+        atomic = device_entry(ATOMIC_BODY, "ret i64 %bits")
+        rep = d / "analysis.json"
+        z, _ = opt(
+            comparison,
+            "analysis",
+            ["-bennett-analysis-only", "-bennett-report=" + str(rep), "-disable-output"],
+            bc,
+        )
+        data = json.loads(rep.read_text()) if z.returncode == 0 else {}
+        check(
+            "S2-comparison-closure",
+            z.returncode == 0 and has_atoms(data, "%v", {"INT(0)", "INT(1)"}),
+            z.stderr,
+        )
+        rep = d / "atomic-analysis.json"
+        z, _ = opt(
+            atomic,
+            "atomic-analysis",
+            ["-bennett-analysis-only", "-bennett-report=" + str(rep), "-disable-output"],
+            atomiclib,
+        )
+        data = json.loads(rep.read_text()) if z.returncode == 0 else {}
+        check(
+            "S2-FP-atomic",
+            z.returncode == 0
+            and has_atoms(data, "%bits", {"INT(0)", "INT(42)"}),
+            z.stderr,
+        )
+
+    def published_cc():
+        published = __import__("contracts").arith_path(a.major)
+        realenv = dict(os.environ)
+        realenv.pop("BENNETT_ARITH_BITCODE", None)
+        realout = R / f".tmp/softfloat-production-probe/{a.major}"
+        realout.mkdir(parents=True, exist_ok=True)
+        ccdir = realout / "direct-cc"
+        source = R / "tests/probes/cc-softfloat.ll"
+        recognised = realout / "direct-cc-recognised.json"
+        linkedenv = dict(realenv, BENNETT_ARITH_BITCODE=str(published))
+        base = [
+            tool + "opt",
+            "-load-pass-plugin=" + str(plugin),
+            "-passes=bennett",
+            "-bennett-dialect=0.2.13",
+            "-bennett-analysis-budget-ms=180000",
+            source,
+        ]
+        z, timing = measured_run(
+            [
+                *base,
+                "-bennett-analysis-only",
+                "-bennett-report=" + str(recognised),
+                "-disable-output",
+            ],
+            linkedenv,
+            timeout=600,
+        )
+        check("published-production-CC-recognition", z.returncode == 0, z.stderr)
+        rows[-1].update(timing)
+        z, timing = measured_run(
+            [
+                *base,
+                "-bennett-budget-default=1000000,65536,65536,128,4096",
+                "-bennett-out=" + str(ccdir),
+                "-disable-output",
+            ],
+            realenv,
+            timeout=600,
+        )
+        check("published-production-CC-link", z.returncode == 0, z.stderr)
+        rows[-1].update(timing)
+        if z.returncode == 0:
+            ev = evidence(ccdir, source, recognised)
+            obj = ccdir / "top/launch.bennett"
+            z = run([numerical_ref, "check", obj], timeout=600)
+            check(
+                "published-production-CC-check", z.returncode == 0, z.stdout + z.stderr
+            )
+            rows[-1].update(ev)
+            for value in [
+                0,
+                1,
+                0x8000000000000000,
+                0x3FF0000000000000,
+                0x7FF0000000000000,
+                0x7FF8000000000000,
+            ]:
+                # ISA 0.8 §§5.4, 7.2: memoryless objects require zero
+                # heap, stack and depth limits; only the step budget is nonzero.
+                z, data, measurement = measured_program(
+                    obj, str(value), True, "1000000,0,0,0"
+                )
+                expected = int(bool(value & 0x7FFFFFFFFFFFFFFF))
+                check(
+                    "published-production-CC-numerical-" + str(value),
+                    z.returncode == 0
+                    and data.get("status") == "REVERSED"
+                    and data.get("equals_entry")
+                    and data.get("memory_equals_entry")
+                    and not data.get("faults")
+                    and data.get("results") == [dict(type="i1", value=str(expected))],
+                    z.stdout + z.stderr,
+                )
+                rows[-1].update(measurement)
+
+    cases = {"analysis-closure": analysis_closure, "published-cc": published_cc}
+    if a.case:
+        for case in a.case:
+            cases[case]()
+        return save_results(a.major, rows)
 
     formats = [
         ("half", "f16", 16),
@@ -290,77 +468,8 @@ def main():
         z.returncode == 0 and "@g = internal global double undef" in z.stdout,
         z.stderr,
     )
-    # Bind every predicate, integer extension and introduced helper in the S2 fixpoint.
-    library = """define internal i1 @predicate(i64 %a, i64 %b, i32 %p) { %r = icmp eq i32 %p, 14
- ret i1 %r }
-define i1 @__bennett_sf_cmp_f64(i64 %a, i64 %b, i32 %p) { %r = call i1 @predicate(i64 %a,i64 %b,i32 14)
- ret i1 %r }
-define i64 @__bennett_sf_add_f64(i64 %a, i64 %b) { %r = xor i64 %a, %b
- ret i64 %r }
-define i64 @__bennett_sf_sitofp_f64(i128 %a) { %r = trunc i128 %a to i64
- ret i64 %r }
-"""
-    lib = d / "arith.ll"
-    lib.write_text(library)
-    bc = d / "arith.bc"
-    z = run([tool + "llvm-as", lib, "-o", bc])
-    assert z.returncode == 0, z.stderr
-    body = """define internal i1 @cmp(double %a, double %b) { %r = fcmp une double %a, %b
- ret i1 %r }
-define i1 @top() { %v = call i1 @cmp(double 0.0,double 1.0)
- ret i1 %v }
-"""
-    rep = d / "analysis.json"
-    z, _ = opt(
-        body,
-        "analysis",
-        ["-bennett-analysis-only", "-bennett-report=" + str(rep), "-disable-output"],
-        bc,
-    )
-    data = json.loads(rep.read_text()) if z.returncode == 0 else {}
-    values = data.get("values", [])
-    check(
-        "S2-comparison-closure",
-        z.returncode == 0
-        and any(
-            v["function"] == "top"
-            and v["value"] == "%v"
-            and set(v["atoms"]) == {"INT(0)", "INT(1)"}
-            and not v["top"]
-            for v in values
-        ),
-        z.stderr,
-    )
-    # A linked FP atomic must transport helper effects, not perform integer arithmetic on bits.
-    atomicbody = """@g = internal global double 0.0
-define i64 @top() { %old = atomicrmw fmax ptr @g, double 1.0 seq_cst
- %v = load double, ptr @g
- %bits = bitcast double %v to i64
- ret i64 %bits }
-"""
-    atomiclib = d / "atomic.ll"
-    atomiclib.write_text(
-        "define i64 @__bennett_sf_maxnum_f64(i64 %a,i64 %b) { ret i64 42 }"
-    )
-    rep = d / "atomic-analysis.json"
-    z, _ = opt(
-        atomicbody,
-        "atomic-analysis",
-        ["-bennett-analysis-only", "-bennett-report=" + str(rep), "-disable-output"],
-        atomiclib,
-    )
-    data = json.loads(rep.read_text()) if z.returncode == 0 else {}
-    check(
-        "S2-FP-atomic",
-        z.returncode == 0
-        and any(
-            v["value"] == "%bits"
-            and set(v["atoms"]) == {"INT(0)", "INT(42)"}
-            and not v["top"]
-            for v in data.get("values", [])
-        ),
-        z.stderr,
-    )
+    body = COMPARISON_BODY
+    analysis_closure()
     # Native comparison requires actual definitions (missing, corrupt and incomplete edges fail loudly).
     z, _ = opt(body, "missing", ["-bennett-comparison", "-disable-output"])
     check(
@@ -717,71 +826,7 @@ declare void @__bennett_qfree(ptr)
         rows[-1].update(
             measurement, object_sha256=sha(launch), oracle_steps_budget=1000000
         )
-        ccdir = realout / "direct-cc"
-        source = R / "tests/probes/cc-softfloat.ll"
-        recognised = realout / "direct-cc-recognised.json"
-        linkedenv = dict(realenv, BENNETT_ARITH_BITCODE=str(published))
-        base = [
-            tool + "opt",
-            "-load-pass-plugin=" + str(plugin),
-            "-passes=bennett",
-            "-bennett-dialect=0.2.13",
-            "-bennett-analysis-budget-ms=180000",
-            source,
-        ]
-        z, timing = measured_run(
-            [
-                *base,
-                "-bennett-analysis-only",
-                "-bennett-report=" + str(recognised),
-                "-disable-output",
-            ],
-            linkedenv,
-            timeout=600,
-        )
-        check("published-production-CC-recognition", z.returncode == 0, z.stderr)
-        rows[-1].update(timing)
-        z, timing = measured_run(
-            [
-                *base,
-                "-bennett-budget-default=1000000,65536,65536,128,4096",
-                "-bennett-out=" + str(ccdir),
-                "-disable-output",
-            ],
-            realenv,
-            timeout=600,
-        )
-        check("published-production-CC-link", z.returncode == 0, z.stderr)
-        rows[-1].update(timing)
-        if z.returncode == 0:
-            ev = evidence(ccdir, source, recognised)
-            obj = ccdir / "top/launch.bennett"
-            z = run([numerical_ref, "check", obj], timeout=600)
-            check(
-                "published-production-CC-check", z.returncode == 0, z.stdout + z.stderr
-            )
-            rows[-1].update(ev)
-            for value in [
-                0,
-                1,
-                0x8000000000000000,
-                0x3FF0000000000000,
-                0x7FF0000000000000,
-                0x7FF8000000000000,
-            ]:
-                z, data, measurement = measured_program(obj, str(value), True)
-                expected = int(bool(value & 0x7FFFFFFFFFFFFFFF))
-                check(
-                    "published-production-CC-numerical-" + str(value),
-                    z.returncode == 0
-                    and data.get("status") == "REVERSED"
-                    and data.get("equals_entry")
-                    and data.get("memory_equals_entry")
-                    and not data.get("faults")
-                    and data.get("results") == [dict(type="i1", value=str(expected))],
-                    z.stdout + z.stderr,
-                )
-                rows[-1].update(measurement)
+    published_cc()
     # Missing production helpers are unavailability, never an unknown host call or a trap object.
     z, _ = opt(
         production,
@@ -794,14 +839,7 @@ declare void @__bennett_qfree(ptr)
         and "§13.1 missing entry point __bennett_sf_cmp_f64" in z.stderr,
         z.stderr,
     )
-    result = dict(
-        major=a.major, cases=len(rows), passed=sum(r["ok"] for r in rows), results=rows
-    )
-    (R / f".tmp/softfloat-{a.major}.json").write_text(
-        json.dumps(result, indent=2) + "\n"
-    )
-    print(json.dumps(result, indent=2))
-    return result["passed"] != result["cases"]
+    return save_results(a.major, rows)
 
 
 if __name__ == "__main__":

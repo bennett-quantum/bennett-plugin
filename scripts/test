@@ -11,16 +11,18 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet")
-DRIVERS = (
-    "recognition",
-    "analysis_edges",
-    "validation",
-    "scalars",
-    "address_spaces",
-    "register_classes",
-    "entry_runtime",
-    "normalisation_scope",
-)
+DRIVERS = {
+    "recognition": (),
+    "analysis_edges": (),
+    "validation": (),
+    "scalars": (),
+    "address_spaces": (),
+    "register_classes": (),
+    "entry_runtime": (),
+    "normalisation_scope": (),
+    "softfloat": ("--case", "analysis-closure", "--case", "published-cc"),
+}
+
 REGRESSIONS = (
     "shuffle",
     "byval",
@@ -48,8 +50,8 @@ def main():
     commands = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
     for major in args.major or (18, 23):
         commands.extend(
-            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major)]
-            for name in DRIVERS
+            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
+            for name, options in DRIVERS.items()
         )
         commands.append(
             [

@@ -1,11 +1,55 @@
 # Quality floor
 
 The default test command is `timeout 900 scripts/test`, after building LLVM 18 and 23.
-The council blocker-fix run passed **23/23 commands in 38.344 seconds**, exit 0,
+The gate-fixture regression run passed **25/25 commands in 22.516 seconds**, exit 0,
 with release builds for both LLVM majors. The driver retains its 180-second internal allowance.
 The slow integration drivers remain in `scripts/gate`; this job does not run that full gate.
 Promised shared-global semantics remain visible through
 `tests/review_regressions.py --case global-counter --promised-bp-acm --major 18`.
+
+## Soft-float gate regressions
+
+The default suite now runs the same S2 and direct-CC record functions used by the
+soft-float gate, on both LLVM majors:
+
+```sh
+timeout 60 python3 -B tests/softfloat.py --major 18 --case analysis-closure --case published-cc
+timeout 60 python3 -B tests/softfloat.py --major 23 --case analysis-closure --case published-cc
+```
+
+Before the fixture corrections, both commands passed 3/11 records and failed the same
+eight gate records; `timeout 900 scripts/test --major 18` also failed at the newly included
+soft-float driver. After correction, both commands pass **11/11**, including exactly the
+two S2 records and all six published direct-CC numerical cases. Reversal, entry-state
+restoration, memory restoration, fault absence and exact result bits remain asserted.
+The quality baseline below is unchanged.
+
+The adjacent source snapshots and pin-isolation runs establish these transitions:
+
+| Records | Last passing input | First failing input | Cause |
+| --- | --- | --- | --- |
+| S2-comparison-closure, S2-FP-atomic | 0d42b13 (5d86488 parent) | 5d86488 | Arithmetic discovery now follows device tiers; these fixtures contained only host functions. |
+| Six published-production-CC-numerical records | 6231c2d (33e7edb parent), arithmetic 0dea42d001ff | 33e7edb selects arithmetic 5e9b4509f3ee; 5d3cc36 aligns its SPEC_VERSIONS/digests | The published comparison helper closure becomes memoryless, so the old nonzero memory budget is invalid. |
+
+The b71b053 compiler with only its explicit published arithmetic input changed back to
+0dea42d001ff passes all six numerical cases and emits a layout; with 5e9b4509f3ee it emits
+no layout and the unchanged commands fail with the pinned interpreter's §5.4 diagnostic.
+The two S2 failures persist with either arithmetic pin. These are stale fixtures, not an
+arithmetic implementation failure or a production-lowering regression.
+
+The normative basis is the pinned dialect 0.2.13 §§4.2 and 12.1: a function containing a
+marker call and its CC closure are device variants, and **“H variants are untouched.”**
+The two S2 fixtures now allocate/free one quantum register, placing the same comparison
+and atomic bodies in CC; their original exact atom expectations stay unchanged.
+Pinned ISA 0.8 §§5.4 and 7.2 require **“for a memoryless object (§7.2)
+`heap_limit = stack_limit = depth_limit = 0`.”** The six direct-CC runs therefore use
+`1000000,0,0,0`; the step allowance is unchanged. Other memory-using soft-float launches
+retain their existing budgets. Production source, publication pins and expected values
+are unchanged.
+
+Exact opt/run-program commands, source snapshots, outputs and artifact hashes are retained
+in `.tmp/quality-plugin/bisect/`; the resume file records the remaining final pin verification.
+The full gate remains the orchestrator's responsibility.
 
 ## Coverage
 
