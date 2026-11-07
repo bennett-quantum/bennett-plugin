@@ -65,20 +65,21 @@ namespace bennett {
 bool auditLegality() { return LegalityAudit; }
 // §19.9: keep the selected compatibility track separate from the map version.
 struct ProducerContract {
+  enum Profile { Legacy, RContract } profile;
   const char *dialect, *isa, *mapping, *identity;
 };
 static const ProducerContract LegacyContract{
-    "0.2.13", "0.8", "0.2.9", "dialect-0.2.13;isa-0.8"};
+    ProducerContract::Legacy, "0.2.13", "0.8", "0.2.9", "dialect-0.2.13;isa-0.8"};
 static const ProducerContract &producerContract() {
-  static const ProducerContract rContract{
-      "0.3-r1", "0.9", "0.3", "dialect-0.3-r1;isa-0.9"};
-  if (Dialect == rContract.dialect && ISA == rContract.isa)
-    return rContract;
-  if (Dialect == LegacyContract.dialect && ISA == LegacyContract.isa)
-    return LegacyContract;
-  fail("BD-E-VERSION", "§19.9 expected dialect 0.2.13 / ISA 0.8 or 0.3-r1 / ISA 0.9");
+  static const std::map<std::pair<std::string, std::string>, ProducerContract> contracts{
+      {{"0.2.13", "0.8"}, LegacyContract},
+      {{"0.3-r1", "0.9"}, {ProducerContract::RContract, "0.3-r1", "0.9", "0.3", "dialect-0.3-r1;isa-0.9"}}};
+  auto selected = contracts.find({Dialect.getValue(), ISA.getValue()});
+  if (selected == contracts.end())
+    fail("BD-E-VERSION", "§19.9 expected dialect 0.2.13 / ISA 0.8 or 0.3-r1 / ISA 0.9");
+  return selected->second;
 }
-bool rContractProfile() { return &producerContract() != &LegacyContract; }
+bool rContractProfile() { return producerContract().profile == ProducerContract::RContract; }
 std::string producerDialect() { return producerContract().dialect; }
 std::string producerISA() { return producerContract().isa; }
 std::string producerMapping() { return producerContract().mapping; }
@@ -289,18 +290,44 @@ static void recognise(Module &m) {
 }
 static void checkVersion(Module &m) {
   const auto &contract = producerContract();
-  if (auto *md = m.getModuleFlag("bennett.dialect")) {
-    auto *s = dyn_cast<MDString>(md);
-    if (!s || s->getString() != contract.dialect)
-      fail("BD-E-VERSION", "§19.9 module flag");
-    if (rContractProfile()) {
-      SmallVector<Module::ModuleFlagEntry> flags;
-      m.getModuleFlagsMetadata(flags);
-      for (const auto &flag : flags)
-        if (flag.Key->getString() == "bennett.dialect" && flag.Behavior != Module::Error)
-          fail("BD-E-VERSION", "§19.9 bennett.dialect flag requires Error behaviour");
-    }
+  SmallVector<Module::ModuleFlagEntry> flags;
+  m.getModuleFlagsMetadata(flags);
+  auto flag = llvm::find_if(flags, [](const Module::ModuleFlagEntry &entry) {
+    return entry.Key->getString() == "bennett.dialect";
+  });
+  // MDString values are uniqued in the module's context.
+  auto *expected = MDString::get(m.getContext(), contract.dialect);
+  bool compatible = flag == flags.end() || (flag->Val == expected &&
+      (contract.profile == ProducerContract::Legacy || flag->Behavior == Module::Error));
+  if (!compatible)
+    fail("BD-E-VERSION", "§19.9 module flag requires matching version and profile Error behaviour");
+  if (rContractProfile()) m.setModuleFlag(Module::Error, "bennett.dialect", expected);
+}
+static json::Object producerReport(Analysis &a) {
+  auto report = a.report();
+  report["dialect"] = producerDialect();
+  return report;
+}
+static void checkProductionOptions() {
+  if (Output.empty()) fail("output", "§19.9 -bennett-out is required");
+  if (rContractProfile() && (!Oracle.empty() || DescriptorReference))
+    unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3);
+}
+static void diagnoseLegacyReversible() {
+  if (rContractProfile()) return;
+  errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7\n";
+  std::exit(3);
+}
+static Function *programEntry(Module &m) {
+  if (Tier.empty()) {
+    if (!ProgramEntry.empty() || !Disk.empty())
+      fail("input", "§19.2 entry/disk require reversible tier");
+    return nullptr;
   }
+  if (Tier != "reversible") fail("input", "§19.2 expected tier reversible");
+  auto *entry = m.getFunction(ProgramEntry);
+  if (!entry || entry->isDeclaration()) fail("input", "§19.2 whole-program entry missing");
+  return entry;
 }
 static void checkOperands(Module &m) {
   unsigned classes = 0;
@@ -341,9 +368,6 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
-    if (rContractProfile() && !m.getModuleFlag("bennett.dialect"))
-      m.addModuleFlag(Module::Error, "bennett.dialect",
-                      MDString::get(m.getContext(), producerDialect()));
     initialiseComparisonLayout(m);
     if (ValidateOnly) {
       validateResidual(m,ValidateClassical);
@@ -361,10 +385,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     }
     if(!AnalysisOnly || std::getenv("BENNETT_ARITH_BITCODE"))
       linkArith(m,Tier.empty()?m.getFunction(Oracle):m.getFunction(ProgramEntry),!Tier.empty());
-    if(!Tier.empty() && Tier!="reversible")fail("input","§19.2 expected tier reversible");
-    if(Tier.empty() && (!ProgramEntry.empty() || !Disk.empty()))fail("input","§19.2 entry/disk require reversible tier");
-    auto *rEntry=Tier.empty()?nullptr:m.getFunction(ProgramEntry);
-    if(!Tier.empty() && (!rEntry || rEntry->isDeclaration()))fail("input","§19.2 whole-program entry missing");
+    auto *rEntry = programEntry(m);
     Analysis a(m,rEntry,!Tier.empty());
     a.run();
     a.checkHandles();
@@ -374,9 +395,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       raw_fd_ostream o(Report, ec);
       if (ec)
         fail("output", ec.message());
-      auto report = a.report();
-      report["dialect"] = producerDialect();
-      o << formatv("{0:2}\n", json::Value(std::move(report)));
+      o << formatv("{0:2}\n", json::Value(producerReport(a)));
     }
     if (AnalysisOnly) {
       errs()
@@ -384,10 +403,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
       return PreservedAnalyses::none();
     }
     checkOperands(m);
-    if (Output.empty())
-      fail("output", "§19.9 -bennett-out is required");
-    if (rContractProfile() && (!Oracle.empty() || DescriptorReference))
-      unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3);
+    checkProductionOptions();
     if (!Oracle.empty()) {
       auto *f = m.getFunction(Oracle);
       if (!f || f->isDeclaration())
@@ -459,9 +475,8 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     }
     if(rEntry) {
       lowerReversible(m,a,*rEntry,Output,StackCells,BudgetDefault,BudgetTableFile,Disk);
-      if (rContractProfile()) return PreservedAnalyses::none();
-      errs()<<"bennett: blocked:BD-B-ISA7 §11.5/§17.6 R entry; objects emitted; typed pre-instruction fault requires ISA-7\n";
-      std::exit(3);
+      diagnoseLegacyReversible();
+      return PreservedAnalyses::none();
     }
     for (Function &f : m)
       if (a.tiers[&f].count("R"))

@@ -117,7 +117,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   }
   e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
   json::Object record{{"dialect",producerDialect()},{"isa",producerISA()},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
-    {"mode","reversible"},{"verdict",rContractProfile()?"accept":"blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
+    {"mode","reversible"},{"verdict",reversibleVerdict()},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
   record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
   json::Object cert{{"versions",json::Object{{"isa",producerISA()},{"cert",producerISA()}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
@@ -138,15 +138,14 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     }
   }
   auto coverage=jcs(json::Value(std::move(report)))+"\n";write(dir+"/coverage.json",coverage);write(dir+"/all-coverage.json",coverage);
-  write(dir+"/blockers.json",rContractProfile()?"[]\n":jcs(json::Value(json::Array{json::Object{{"code","BD-B-ISA7"},{"entry",entryName},
-    {"section","11.5/17.6/25.1"},{"reason","R entry: mandatory pre-instruction typed fault 1 requires ISA-7; generic trap only on exhausted counter; no later source effect; prefix history retained"}}}))+"\n");
+  write(dir+"/blockers.json",reversibleBlockers(entryName));
   // Device bitcode retains materialised bodies; host main gets the launch ABI.
   launch->eraseFromParent();root->setName(entryName);
   checkComparisonMaterialisation(m);
   raw_fd_ostream bc(out.str()+"/device.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(m,bc);bc.close();
   auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject(),sharesGlobalState(sourceEntry, sourceAnalysis));
   raw_fd_ostream host(out.str()+"/host.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(source,host);host.close();
-  write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict",rContractProfile()?"accept":"blocked:BD-B-ISA7"}}}))+"\n");
+  write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict",reversibleVerdict()}}}))+"\n");
   json::Object artifacts;
   for(auto file:{"host.bc","device.bc","launches.json"}) {auto bytes=read(out.str()+"/"+file);artifacts[file]=json::Object{{"bytes",int64_t(bytes.size())},{"sha256",hash(bytes)}};}
   for(auto file:{"launch.bennett","build.json","certificate.json","coverage.json","all-coverage.json","blockers.json"}) {auto path=entryName+"/"+file;auto bytes=read(out.str()+"/"+path);artifacts[path]=json::Object{{"bytes",int64_t(bytes.size())},{"sha256",hash(bytes)}};}

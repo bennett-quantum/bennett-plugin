@@ -71,6 +71,16 @@ json::Value parse(StringRef text) {
     fail("output", toString(v.takeError()));
   return std::move(*v);
 }
+const char *reversibleVerdict() {
+  return rContractProfile() ? "accept" : "blocked:BD-B-ISA7";
+}
+std::string reversibleBlockers(StringRef entry) {
+  json::Array blockers;
+  if (!rContractProfile())
+    blockers.push_back(json::Object{{"code","BD-B-ISA7"},{"entry",entry},
+      {"section","11.5/17.6/25.1"},{"reason","R entry: mandatory pre-instruction typed fault 1 requires ISA-7; generic trap only on exhausted counter; no later source effect; prefix history retained"}});
+  return jcs(json::Value(std::move(blockers))) + "\n";
+}
 std::string read(StringRef path) {
   auto b = MemoryBuffer::getFile(path);
   if (!b)

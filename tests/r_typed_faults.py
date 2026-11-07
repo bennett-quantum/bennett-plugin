@@ -11,10 +11,13 @@ import json
 from pathlib import Path
 import re
 import shutil
+import resource
+import time
 import subprocess
 import sys
 
 from contracts import ROOT, run_checked, sibling
+from r_envelopes import identities, rewrite_claims
 
 
 def digest(data):
@@ -29,7 +32,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--major", type=int, required=True, choices=(18, 23))
     parser.add_argument("--plugin", type=Path)
-    parser.add_argument("--case", choices=("versions", "faults", "all"), default="all")
+    parser.add_argument("--case", choices=("versions", "faults", "recursive", "all"), default="all")
+    parser.add_argument("--recursive-analysis-ms", type=int, default=30000)
     args = parser.parse_args()
     tool = Path(f"/usr/lib/llvm-{args.major}/bin")
     plugin = args.plugin or ROOT / f"build/libbennett-plugin-{args.major}.so"
@@ -91,16 +95,19 @@ extern void __bennett_nz_fault(unsigned long);
 extern void *__bennett_nz_alloc(unsigned long);
 extern void __bennett_nz_free(void *);
 extern void *__bennett_rt_ss_push(unsigned long, unsigned long);
-__attribute__((noinline)) void __bennett_rt_fail(unsigned long code) {
-  __bennett_nz_fault(code);
-}
-__attribute__((noinline)) void *__bennett_rt_allocate(unsigned long size) {
-  return __bennett_nz_alloc(size);
-}
 static char prefix[] = "x";
 '''
 
-    def produce(name, body, steps=10000, runtime="", code=0):
+    fault_runtime = """__attribute__((noinline)) void __bennett_rt_fail(unsigned long code) {
+  __bennett_nz_fault(code);
+}
+"""
+    allocation_runtime = """__attribute__((noinline)) void *__bennett_rt_allocate(unsigned long size) {
+  return __bennett_nz_alloc(size);
+}
+"""
+
+    def produce(name, body, steps=10000, runtime="", code=0, analysis_ms=None):
         directory = work / name
         directory.mkdir(exist_ok=True)
         shutil.rmtree(directory / "out", ignore_errors=True)
@@ -108,9 +115,21 @@ static char prefix[] = "x";
         source.write_text(declarations + runtime + body)
         bitcode = directory / "input.bc"
         run_checked([tool / "clang", "-O1", "-fno-builtin", "-fno-optimize-sibling-calls", "-emit-llvm", "-c", source, "-o", bitcode])
-        result = run_checked([*base, *profile, "--bennett-tier=reversible", "--bennett-entry=main",
-                             f"-bennett-budget-default={steps},131072,4096,32,65536",
-                             f"-bennett-out={directory / 'out'}", "-disable-output", bitcode], code=code)
+        command = [*base, *profile, "--bennett-tier=reversible", "--bennett-entry=main",
+                   f"-bennett-budget-default={steps},131072,4096,32,65536",
+                   f"-bennett-out={directory / 'out'}", "-disable-output", bitcode]
+        if analysis_ms is not None:
+            command.append(f"-bennett-analysis-budget-ms={analysis_ms}")
+        started, before = time.monotonic(), resource.getrusage(resource.RUSAGE_CHILDREN)
+        try:
+            result = run_checked(command, code=code, timeout=(analysis_ms / 1000 + 30) if analysis_ms else 120)
+        finally:
+            if analysis_ms is not None:
+                after = resource.getrusage(resource.RUSAGE_CHILDREN)
+                timing = dict(allowance_ms=analysis_ms, wall_seconds=time.monotonic()-started,
+                              cpu_seconds=after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime)
+                (directory / "analysis-time.json").write_text(json.dumps(timing) + "\n")
+                print(f"LLVM {args.major} recursive compiler timing: {timing}", flush=True)
         if code:
             assert "unimplemented" in result.stderr and "§17.6" in result.stderr, result.stderr
             assert not (directory / "out/main/launch.bennett").exists()
@@ -125,6 +144,8 @@ static char prefix[] = "x";
         obj = selected / "launch.bennett"
         run_checked([ref, "check", obj])
         run_checked([ref, "hash", obj])
+        text = obj.read_text()
+        assert text == rewrite_claims(text, identities(text)), "ISA 0.9 envelope claims differ from §9.2"
         if name == "literal-2":
             # Stale identity is rejected independently by the pinned reader.
             stale = selected / "stale.bennett"
@@ -176,45 +197,47 @@ static char prefix[] = "x";
             rejected = run_checked([*command, "--replay-tape", journal], code=1)
             assert "replay mismatch" in rejected.stderr and rejected.stdout == "", rejected
 
-    # §17.5 effective code: 0 -> 4, all other u64 values preserved. The
-    # successor 'y' write and status 99 must never become observable.
-    for code in [*faults["codes"], 4, 9, 2**63+17]:
-        obj = produce(f"literal-{code}", f'''int main(void) {{
- __bennett_effect_console_write(prefix,1);
- __bennett_rt_fail({code}UL);
- __bennett_effect_console_write("y",1); return 99;
-}}''')
-        execute(obj, code or 4)
+    if args.case != "recursive":
+        # §17.5 effective code: 0 -> 4, all other u64 values preserved. The
+        # successor 'y' write and status 99 must never become observable.
+        for code in [*faults["codes"], 4, 9, 2**63+17]:
+            obj = produce(f"literal-{code}", f'''int main(void) {{
+     __bennett_effect_console_write(prefix,1);
+     __bennett_rt_fail({code}UL);
+     __bennett_effect_console_write("y",1); return 99;
+    }}''', runtime=fault_runtime)
+            execute(obj, code or 4)
 
-    # Exactly two materialised instructions: effect and ret. Counter checks
-    # do not count themselves (§17.6's 0/1/2 boundary witness).
-    for steps, expected, prefix in [(0, 1, ""), (1, 1, "78"), (2, None, "78")]:
-        obj = produce(f"steps-{steps}", 'int main(void) { __bennett_effect_console_write(prefix,1); return 0; }', steps)
-        execute(obj, expected, prefix)
+        # Exactly two materialised instructions: effect and ret. Counter checks
+        # do not count themselves (§17.6's 0/1/2 boundary witness).
+        for steps, expected, prefix in [(0, 1, ""), (1, 1, "78"), (2, None, "78")]:
+            obj = produce(f"steps-{steps}", 'int main(void) { __bennett_effect_console_write(prefix,1); return 0; }', steps)
+            execute(obj, expected, prefix)
 
-    # Real source operations exercise the ISA's implicit fault rules, as
-    # distinct from the materialised runtime's explicit fault primitive.
-    for name, code, argc, operation in [
-        ("div0", 5, 0, "return 10 / argc;"),
-        ("signed-overflow", 6, -1, "return (-2147483647 - 1) / argc;"),
-        ("invalid-memory", 7, 0, "return *(int *)(unsigned long)argc;"),
-        ("unmodelled", 8, 0, "missing_service(); return 99;"),
-        ("entropy", 10, 0, "__bennett_effect_entropy_read(entropy,1); return 99;"),
-        ("heap", 2, 0, "__bennett_rt_allocate(131073); return 99;"),
-        ("shadow-stack", 2, 0, "__bennett_rt_ss_push(65537,8); return 99;"),
-    ]:
-        obj = produce(name, 'int main(int argc, char **argv) { '
-                      + '__bennett_effect_console_write(prefix,1); ' + operation + ' }',
-                      runtime='extern void missing_service(void); static char entropy[1];\n')
-        replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20,
-                                           reply=argc.to_bytes(4,"little",signed=True).hex()+"00"*16)]))
-        execute(obj, code)
+        # Real source operations exercise the ISA's implicit fault rules, as
+        # distinct from the materialised runtime's explicit fault primitive.
+        for name, code, argc, operation in [
+            ("div0", 5, 0, "return 10 / argc;"),
+            ("signed-overflow", 6, -1, "return (-2147483647 - 1) / argc;"),
+            ("invalid-memory", 7, 0, "return *(int *)(unsigned long)argc;"),
+            ("unmodelled", 8, 0, "missing_service(); return 99;"),
+            ("entropy", 10, 0, "__bennett_effect_entropy_read(entropy,1); return 99;"),
+            ("heap", 2, 0, "__bennett_rt_allocate(131073); return 99;"),
+            ("shadow-stack", 2, 0, "__bennett_rt_ss_push(65537,8); return 99;"),
+        ]:
+            obj = produce(name, 'int main(int argc, char **argv) { '
+                          + '__bennett_effect_console_write(prefix,1); ' + operation + ' }',
+                          runtime='extern void missing_service(void); static char entropy[1];\n'
+                          + (allocation_runtime if name == "heap" else ""))
+            replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20,
+                                               reply=argc.to_bytes(4,"little",signed=True).hex()+"00"*16)]))
+            execute(obj, code)
 
     # A recursive SCC must have fresh ISA 0.9 identities, and the terminal
     # record must preserve all open activations for FAILED reversal.
     obj = produce("recursive-fault", '''int main(int argc, char **argv) {
  __bennett_effect_console_write(prefix,1); return __bennett_rt_recurse(argc);
-}''', runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
+}''', analysis_ms=args.recursive_analysis_ms, runtime='''__attribute__((noinline)) int __bennett_rt_recurse(int n) {
  if (!n) { __bennett_nz_fault(3); return 99; }
  return __bennett_rt_recurse(n-1)+1;
 }
@@ -222,6 +245,9 @@ static char prefix[] = "x";
     # argc=2 takes precisely the three-open-activation trajectory 2,1,0.
     replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20, reply="02000000"+"00"*16)]))
     execute(obj, 3)
+    if args.case == "recursive":
+        print(f"LLVM {args.major}: recursive fault trajectory and FAILED reversal passed")
+        return
 
     # Finite dynamic literal dispatch must retain 64 bits (§17.6).
     for argc, code in [(0, 0), (1, 2), (2, 2**64-1)]:
@@ -229,11 +255,11 @@ static char prefix[] = "x";
  __bennett_effect_console_write(prefix,1);
  __bennett_rt_fail(argc == 0 ? 0UL : argc == 1 ? 2UL : 18446744073709551615UL);
  return 99;
-}''')
+}''', runtime=fault_runtime)
         replies.write_text(json.dumps([dict(service="bennett.argv", payload="00"*20,
                                            reply=argc.to_bytes(4,"little").hex()+"00"*16)]))
         execute(obj, code or 4)
-    produce("unbounded", 'int main(int argc, char **argv) { __bennett_rt_fail((unsigned long)argc); return 0; }', code=1)
+    produce("unbounded", 'int main(int argc, char **argv) { __bennett_rt_fail((unsigned long)argc); return 0; }', runtime=fault_runtime, code=1)
     print(f"LLVM {args.major}: exact typed faults, source-step boundaries, identities and FAILED reversal passed")
 
 
