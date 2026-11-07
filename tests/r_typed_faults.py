@@ -22,7 +22,7 @@ def digest(data):
 
 
 def canonical(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
 
 
 def main():
@@ -157,7 +157,7 @@ static char prefix[] = "x";
         assert forward["console_hex"] == prefix, forward
         assert forward["effect_tape_length"] == (1 if prefix else 0), forward
         if expected is None:
-            assert forward["faults"] == []
+            assert forward["faults"] == [] and forward["results"] == [{"type": "i32", "value": "0"}], forward
         else:
             assert forward["results"] == [] and len(forward["faults"]) == 1, forward
             assert int(forward["faults"][0]["code"]) == expected, forward
