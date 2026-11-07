@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -51,6 +52,10 @@ def main():
             result = run_checked([*base, *profile, "-bennett-analysis-only", "-disable-output", source], code=code)
             if code:
                 assert "BD-E-VERSION" in result.stderr and "§19.9" in result.stderr
+        source.write_text(body + '!llvm.module.flags = !{!0}\n'
+                          + '!0 = !{i32 2, !"bennett.dialect", !"0.3-r1"}\n')
+        result = run_checked([*base, *profile, "-bennett-analysis-only", "-disable-output", source], code=1)
+        assert "BD-E-VERSION" in result.stderr and "§19.9" in result.stderr
         # Query the same library with each explicit option profile parsed. LLVM
         # libraries and option state must live in separate processes per major.
         libraries = run_checked([tool / "llvm-config", "--link-shared", "--libfiles"]).stdout.split()
@@ -118,6 +123,15 @@ static char prefix[] = "x";
         obj = selected / "launch.bennett"
         run_checked([ref, "check", obj])
         run_checked([ref, "hash", obj])
+        if name == "literal-2":
+            # Stale identity is rejected independently by the pinned reader.
+            stale = selected / "stale.bennett"
+            text = re.sub(r'("interface_hash":")[0-9a-f]',
+                          lambda match: match[1] + ("0" if match[0][-1] != "0" else "1"),
+                          obj.read_text(), count=1)
+            stale.write_text(text)
+            result = run_checked([ref, "check", stale], code=1)
+            assert "hash" in result.stderr, result.stderr
         build_bytes = (selected / "build.json").read_bytes().rstrip(b"\n")
         build = json.loads(build_bytes)
         cert = json.loads((selected / "certificate.json").read_text())
@@ -148,6 +162,17 @@ static char prefix[] = "x";
         reverse = json.loads(run_checked([*command, "--reverse"]).stdout)
         assert reverse["status"] == "REVERSED" and reverse["equals_entry"] and reverse["memory_equals_entry"], reverse
         assert reverse["console_hex"] == "" and reverse["effect_tape_length"] == 0, reverse
+        if obj.parent.parent.parent.name == "literal-2":
+            journal = obj.parent / "journal.json"
+            recorded = run_checked([*command, "--tape-out", journal])
+            replayed = run_checked([*command, "--replay-tape", journal])
+            assert recorded.stdout == replayed.stdout
+            entries = json.loads(journal.read_text())
+            assert len(entries) == 1 and entries[0]["bytes"] == "78", entries
+            entries[0]["bytes"] = "79"
+            journal.write_bytes(canonical(entries) + b"\n")
+            rejected = run_checked([*command, "--replay-tape", journal], code=1)
+            assert "replay mismatch" in rejected.stderr and rejected.stdout == "", rejected
 
     # §17.5 effective code: 0 -> 4, all other u64 values preserved. The
     # successor 'y' write and status 99 must never become observable.

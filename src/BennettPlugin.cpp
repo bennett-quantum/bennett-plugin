@@ -293,6 +293,13 @@ static void checkVersion(Module &m) {
     auto *s = dyn_cast<MDString>(md);
     if (!s || s->getString() != contract.dialect)
       fail("BD-E-VERSION", "§19.9 module flag");
+    if (rContractProfile()) {
+      SmallVector<Module::ModuleFlagEntry> flags;
+      m.getModuleFlagsMetadata(flags);
+      for (const auto &flag : flags)
+        if (flag.Key->getString() == "bennett.dialect" && flag.Behavior != Module::Error)
+          fail("BD-E-VERSION", "§19.9 bennett.dialect flag requires Error behaviour");
+    }
   }
 }
 static void checkOperands(Module &m) {
@@ -335,7 +342,8 @@ struct BennettPass : PassInfoMixin<BennettPass> {
     recognise(m);
     checkVersion(m);
     if (rContractProfile() && !m.getModuleFlag("bennett.dialect"))
-      m.addModuleFlag(Module::Error, "bennett.dialect", producerDialect());
+      m.addModuleFlag(Module::Error, "bennett.dialect",
+                      MDString::get(m.getContext(), producerDialect()));
     initialiseComparisonLayout(m);
     if (ValidateOnly) {
       validateResidual(m,ValidateClassical);
