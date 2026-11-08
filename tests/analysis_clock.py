@@ -31,12 +31,16 @@ int main() {
   });
   other.join();
   if (!budget.expired() || *budget.expired()) return 2;
+  auto blocked = budget.elapsedNanoseconds();
+  if (!blocked || *blocked >= 50 * 1000000ULL) return 4;
   volatile unsigned long long value=0;
   while (budget.expired() && !*budget.expired())
     for (unsigned i=0;i<1024;++i) value += i;
   if (!budget.expired() || !*budget.expired()) return 3;
+  auto consumed = budget.elapsedNanoseconds();
+  if (!consumed || *consumed < 50 * 1000000ULL || *consumed < *blocked) return 5;
   auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-wall).count();
-  std::printf("{\"passed\":3,\"cases\":3,\"wall_ms\":%lld}\n",(long long)elapsed);
+  std::printf("{\"passed\":5,\"cases\":5,\"wall_ms\":%lld}\n",(long long)elapsed);
 }
 """)
 exe = d / "clock"
@@ -59,6 +63,6 @@ assert z.returncode == 0, z.stderr
 z = subprocess.run([str(exe)], capture_output=True, text=True, timeout=600)
 assert z.returncode == 0, (z.returncode, z.stdout, z.stderr)
 result = json.loads(z.stdout)
-assert result["passed"] == result["cases"] == 3 and result["wall_ms"] >= 150
+assert result["passed"] == result["cases"] == 5 and result["wall_ms"] >= 150
 (R / ".tmp/analysis-clock.json").write_text(json.dumps(result, indent=2) + "\n")
 print(z.stdout, end="")
