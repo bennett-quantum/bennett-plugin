@@ -1907,18 +1907,21 @@ void Analysis::step(Instruction &i) {
       if (n == "posix_memalign") sizeArg = 2;
       uint64_t extent = UINT64_MAX;
       if (sizeArg < c->arg_size()) {
-        auto sizes = get(c->getArgOperand(sizeArg));
-        if (!sizes.top && !sizes.atoms.empty()) {
-          extent=0;
-          for (auto &v:sizes.atoms) if(v.kind==Atom::Int)
-            extent=std::max(extent,v.integer.getLimitedValue());
-          if(n=="calloc") {
-            auto count=get(c->getArgOperand(0));
-            uint64_t maxCount=count.top ? UINT64_MAX : 0;
-            for(auto &v:count.atoms) if(v.kind==Atom::Int) maxCount=std::max(maxCount,v.integer.getLimitedValue());
-            extent=(uint64_t)std::min<unsigned __int128>(UINT64_MAX,(unsigned __int128)extent*maxCount);
-          }
-        }
+        // Bottom has no possible allocated bytes yet. Only TOP justifies a
+        // symbolic extent; treating bottom as TOP leaves spurious zero facts
+        // behind when the size becomes finite on a later scan.
+        auto maximum = [](const AV &sizes) {
+          uint64_t result = sizes.top ? UINT64_MAX : 0;
+          for (auto &v : sizes.atoms)
+            if (v.kind == Atom::Int)
+              result = std::max(result, v.integer.getLimitedValue());
+          return result;
+        };
+        extent = maximum(get(c->getArgOperand(sizeArg)));
+        if (n == "calloc")
+          extent = (uint64_t)std::min<unsigned __int128>(
+              UINT64_MAX, (unsigned __int128)extent *
+                              maximum(get(c->getArgOperand(0))));
       }
       if (extent) store(integer(APInt(8,0)), a, extent, true);
       if (n == "posix_memalign") {
@@ -1951,6 +1954,12 @@ void Analysis::step(Instruction &i) {
       }
   } else if (isa<BinaryOperator>(i) || isa<ICmpInst>(i)) {
     AV x = get(i.getOperand(0)), y = get(i.getOperand(1));
+    // PT5's elementwise comparison has an empty Cartesian image if either
+    // operand is bottom. In particular bottom is not an unknown Boolean: that
+    // alternative would survive the outer join after a finite operand arrives.
+    if (isa<ICmpInst>(i) && ((!x.top && x.atoms.empty()) ||
+                            (!y.top && y.atoms.empty())))
+      return;
     bool dense=!x.top && !y.top && (i.getOpcode()==Instruction::And || i.getOpcode()==Instruction::Or || i.getOpcode()==Instruction::Xor);
     for(auto &v:x.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
     for(auto &v:y.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
