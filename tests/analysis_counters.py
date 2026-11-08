@@ -167,6 +167,21 @@ define float @top(float %x) {
                  diagnostic="§13.1 incompatible linked entry point")
     assert work["rounds_completed"] == 0 and work["transfer_applications"] == 1, work
 
+    missing = fixture("missing-import", """declare void @__bennett_oracle(ptr, ptr, ptr)
+define internal float @top(float %x) {
+ %v = fadd float %x, 1.0
+ ret float %v
+}
+define void @host() {
+ call void @__bennett_oracle(ptr @top, ptr null, ptr null)
+ ret void
+}""")
+    work = check("missing-import-stop", missing,
+                 diagnostic="§13.1 BENNETT_ARITH_BITCODE could not be read",
+                 environment=dict(os.environ, BENNETT_ARITH_BITCODE=str(
+                     directory / "absent-arithmetic.bc")))
+    assert work["rounds_completed"] > 0 and work["transfer_applications"] > 0, work
+
     # A controlled thread clock makes the interrupted position independent of
     # host speed and also exercises the real pass's clock-unavailable exit.
     clock = directory / "clock.so"
