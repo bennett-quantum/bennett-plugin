@@ -85,7 +85,9 @@ struct AnalysisWork {
 // invocation's frozen receipt, without attaching bookkeeping to the source IR.
 struct AnalysisReceipt {
   const Analysis *owner = nullptr;
+  const Module *module = nullptr;
   std::string json;
+  json::Value document{nullptr};
 };
 thread_local AnalysisReceipt completedReceipt;
 struct AnalysisBudget {
@@ -96,8 +98,14 @@ struct AnalysisBudget {
   const Instruction *at=nullptr;
   const char *rule="PT11 seeds";
   uint64_t ticks=0;
+  enum class ReceiptState { Pending, Emitted };
+  ReceiptState receiptState = ReceiptState::Pending;
   explicit AnalysisBudget(const Analysis *analysis, const Module &module)
       : work(module), owner(analysis) {
+    if (completedReceipt.module != &module) {
+      completedReceipt.document = nullptr;
+      completedReceipt.module = &module;
+    }
     // BennettPlugin.cpp owns this string option. Use LLVM's registered option
     // to honour the same destination even when fail() exits before its writer.
     auto &options = cl::getRegisteredOptions();
@@ -107,21 +115,34 @@ struct AnalysisBudget {
     reportPath = static_cast<cl::opt<std::string> *>(report->second)->getValue();
   }
   void emit(bool stopped) {
-    auto workJSON = work.report(clock.elapsedNanoseconds());
-    std::string receipt = formatv("{0}", json::Value(std::move(workJSON))).str();
+    // A failed output write can call fail() while the scope is still active.
+    // Its exit handler must not print the receipt a second time.
+    if (receiptState == ReceiptState::Emitted) return;
+    receiptState = ReceiptState::Emitted;
+    json::Value workJSON(work.report(clock.elapsedNanoseconds()));
+    std::string receipt = formatv("{0}", workJSON).str();
     errs() << "bennett-analysis-work:" << receipt << '\n';
     if (!stopped) {
-      completedReceipt = {owner, std::move(receipt)};
-      return;
+      completedReceipt.owner = owner;
+      completedReceipt.json = receipt;
     }
     if (!reportPath.empty()) {
+      json::Object report;
+      // A later production analysis must preserve the main report's values,
+      // regions and functions while updating its work receipt. On std::exit,
+      // thread-local documents may already be destroyed; use only this scope.
+      if (!stopped)
+        if (auto *document = completedReceipt.document.getAsObject())
+          report = *document;
+      report["analysis_work"] = std::move(workJSON);
       std::error_code error;
       raw_fd_ostream output(reportPath, error);
       if (error) {
+        if (!stopped) fail("output", error.message());
         errs() << "bennett: output: " << error.message() << '\n';
         return;
       }
-      output << "{\"analysis_work\":" << receipt << "}\n";
+      output << formatv("{0:2}\n", json::Value(std::move(report)));
     }
   }
   [[noreturn]] void exhausted(StringRef reason="S2 round limit") {
@@ -2328,7 +2349,7 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.13"},
+  json::Object result{{"dialect", "0.2.13"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"analysis_rounds", analysisRounds},
@@ -2336,5 +2357,7 @@ json::Object Analysis::report() {
                       {"functions", std::move(funcs)},
                       {"regions", std::move(regions)},
                       {"values", std::move(vals)}};
+  completedReceipt.document = json::Value(json::Object(result));
+  return result;
 }
 } // namespace bennett
