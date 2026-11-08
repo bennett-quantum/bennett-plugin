@@ -6,6 +6,9 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import resource
+import subprocess
+import time
 import sys
 
 from contracts import ROOT, run, sibling
@@ -19,10 +22,23 @@ CASES = {
     "gep-index-wrap-high-bits": (8589934591, ()),
     "fneg-carriers": (2147483648, ()),
     "fneg-nan-payload": (9205677896870470469, ()),
+    "fneg-formats": (1, ()),
     "vector-extrema": (3, ()),
     "vector-reduce-extrema": (9, ()),
     "vector-phi": (1, (1,)),
     "vector-abi": (3, ()),
+    "vector-loop-phi": (3, ()),
+    "vector-forward-block": (7, ()),
+    "vector-abi-indirect": (3, ()),
+    "vector-abi-recursive": (3, ()),
+    "vector-abi-nested": (3, ()),
+    "gep-address-space": (4294967295, ()),
+    "gep-constant-expression": (8, ()),
+    "vector-scalable": (3, ()),
+    "vector-reduce-smax": (9, ()),
+    "vector-reduce-smin": (2147483648, ()),
+    "vector-reduce-umax": (4294967295, ()),
+    "vector-reduce-umin": (1, ()),
 }
 FACTS = {
     "gep-scalar-base-vector-index": {"%p0": ["PTR(@buf,4,0)"], "%p1": ["PTR(@buf,12,0)"]},
@@ -43,7 +59,22 @@ def command(args):
 
 
 def checked(argv, args, **kwargs):
-    result = run(argv, timeout=args.guard_seconds, **kwargs)
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    started = time.monotonic()
+    state = "COMPLETE"
+    try:
+        result = run(argv, timeout=args.guard_seconds, **kwargs)
+    except subprocess.TimeoutExpired:
+        state = "UNKNOWN/TIMEOUT"
+        raise SystemExit(124)
+    finally:
+        after = resource.getrusage(resource.RUSAGE_CHILDREN)
+        args.output.mkdir(parents=True, exist_ok=True)
+        receipt = dict(argv=list(map(str, argv)), wall_seconds=time.monotonic() - started,
+                       cpu_seconds=after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime,
+                       state=state, exit=result.returncode if state == "COMPLETE" else 124)
+        with (args.output / f"commands-{args.major}.jsonl").open("a") as file:
+            file.write(json.dumps(receipt) + "\n")
     assert result.returncode == 0, (list(map(str, argv)), result.returncode, result.stderr)
     return result
 
@@ -60,9 +91,18 @@ def normalise(args, name, dest):
     source, output = FIXTURES / (name + ".ll"), dest / "scalar.ll"
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     checked([*command(args), "-bennett-normalise-only", "-S", source, "-o", output], args)
-    checked([*command(args), "-bennett-validate-only", "-disable-output", output], args)
+    device = output
+    if name == "vector-abi-indirect":
+        # The address-taken source function retains its host vector ABI. Validate
+        # the device graph independently with that H wrapper declared only.
+        device = dest / "device.ll"
+        text, count = re.subn(r"define internal <2 x i32> @identity\(<2 x i32> %v\)[^{]*\{.*?^}",
+                              "declare <2 x i32> @identity(<2 x i32>)", output.read_text(), flags=re.S | re.M)
+        assert count == 1 and "@identity.nz(" in text, text
+        device.write_text(text)
+    checked([*command(args), "-bennett-validate-only", "-disable-output", device], args)
     assert before == hashlib.sha256(source.read_bytes()).hexdigest(), "source fixture changed"
-    body = "\n".join(functions(output.read_text()).values())
+    body = "\n".join(functions(device.read_text()).values())
     assert not re.search(r"<(?:vscale x )?\d+ x ", body), body
     if name.startswith("gep-"):
         assert len(re.findall(r" = getelementptr ", body)) >= 2, body
@@ -85,15 +125,15 @@ def oracle(args, source, name, dest):
     width = 64 if name.startswith(("gep-", "fneg-")) else 32
     shape = ",".join("IN(1,zext)" for _ in inputs) + f";tgt={width}"
     checked([*command(args), "-bennett-oracle=top", "-bennett-scalar-shape=" + shape,
-             "-bennett-out=" + str(output), "-S", source, "-o", h], args)
+             "-bennett-scalar-stack=256", "-bennett-out=" + str(output), "-S", source, "-o", h], args)
     # Compare actual in-memory H functions emitted after production with plain LLVM.
-    assert functions(h.read_text()) == functions(canonical(args, source)), "production mutated H IR"
+    assert h.read_text() == canonical(args, source), "production mutated H module"
     ref = sibling("bennett-isa-spec") / "reference-interpreter/target/debug/bennett-isa-ref"
     for values, want in [(inputs, expected), *((((0,), 5),) if name == "vector-phi" else ())]:
         result = checked([ref, "run-oracle", output / "ref.bennett", "ref", "--input",
-                          ",".join(map(str, values)), "--budget", "1000000,0,65536,64"], args)
+                          ",".join(map(str, values)), "--budget", "1000000,0,256,64"], args)
         data = json.loads(result.stdout)
-        assert (data["code"], data["payload"]) == (0, want), (name, values, want, data)
+        assert (data["code"], int(data["payload"])) == (0, want), (name, values, want, data)
     if name.startswith("fneg-"):
         ir = checked([f"/usr/lib/llvm-{args.major}/bin/llvm-dis", output / "materialised.bc", "-o", "-"], args).stdout
         assert "fneg " not in ir, ir
@@ -105,8 +145,18 @@ def facts(args, source, dest, label):
     h = dest / (label + ".ll")
     checked([*command(args), "-bennett-analysis-only", "-bennett-report=" + str(path),
              "-S", source, "-o", h], args)
-    assert functions(h.read_text()) == functions(canonical(args, source)), "S2 mutated H IR"
+    assert h.read_text() == canonical(args, source), "S2 mutated H module"
     return {v["value"]: (v["top"], set(v["atoms"])) for v in json.loads(path.read_text())["values"] if v["function"] == "top"}
+
+
+def scalar_fact_name(value, explicit, scalar):
+    if value in explicit:
+        return value
+    if value in ("%p0", "%p1"):
+        return "%nz.l" + value[-1] + ".p"
+    returned = re.search(r"ret i\d+ (%[-.\w]+)", functions(scalar.read_text())["top"])
+    assert returned, ("missing scalar return", scalar.read_text())
+    return returned[1]
 
 
 def check_case(args, name):
@@ -117,15 +167,19 @@ def check_case(args, name):
         return oracle(args, scalar, name, dest)
     if args.mode == "production":
         return oracle(args, source, name, dest)
-    if args.mode == "analysis":
-        virtual, explicit = facts(args, source, dest, "virtual"), facts(args, scalar, dest, "explicit")
+    if args.mode in ("analysis", "scalar-analysis"):
+        explicit = facts(args, scalar, dest, "explicit")
         for value, want in FACTS.get(name, {}).items():
-            assert value in virtual, (name, value, virtual)
-            assert virtual[value] == (False, set(want)), (name, value, want, virtual[value])
-            # Extraction is lane renaming; its named scalar producer may be absent.
-            if value in explicit:
-                assert explicit[value] == virtual[value], (name, value, virtual[value], explicit[value])
-        return {"equivalent_named_facts": sorted(FACTS.get(name, {}))}
+            scalar_value = scalar_fact_name(value, explicit, scalar)
+            assert scalar_value in explicit, (name, value, scalar_value, explicit)
+            assert explicit[scalar_value] == (False, set(want)), (name, value, want, explicit[scalar_value])
+        if args.mode == "analysis":
+            virtual = facts(args, source, dest, "virtual")
+            for value, want in FACTS.get(name, {}).items():
+                assert value in virtual, (name, value, virtual)
+                assert virtual[value] == (False, set(want)), (name, value, want, virtual[value])
+                assert explicit[scalar_fact_name(value, explicit, scalar)] == virtual[value]
+        return {"checked_scalar_facts": sorted(FACTS.get(name, {}))}
     return {"scalarised": True}
 
 
@@ -133,7 +187,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--major", type=int, required=True, choices=(18, 23))
     parser.add_argument("--plugin", type=Path)
-    parser.add_argument("--mode", choices=("normalise", "oracle", "analysis", "production"), default="normalise")
+    parser.add_argument("--mode", choices=("normalise", "oracle", "analysis", "scalar-analysis", "production"), default="normalise")
     parser.add_argument("--case", action="append", choices=CASES)
     parser.add_argument("--output", type=Path, default=ROOT / ".tmp/sqlite-vector")
     parser.add_argument("--guard-table", type=Path, required=True)
