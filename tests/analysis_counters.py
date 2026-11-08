@@ -119,6 +119,11 @@ def main(argv=None):
     assert work["function_visits"]["total"] == 12, work
     assert work["function_visits"]["top_limit"] == 10, work
     assert work["function_visits"]["top"] == {f"f{index:02}": 1 for index in range(10)}, work
+    unnamed = fixture("unnamed-functions", """define void @0() { ret void }
+define void @1() { ret void }""")
+    work = check("unnamed-functions", unnamed)
+    assert work["function_visits"]["total"] == 2, work
+    assert work["function_visits"]["top"] == {"@0": 1, "@1": 1}, work
 
     aggregate = fixture("aggregate", """@cell = internal global {i8, i8} zeroinitializer
 define i8 @top() {

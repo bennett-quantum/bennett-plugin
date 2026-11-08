@@ -28,6 +28,7 @@
 #include <tuple>
 using namespace llvm;
 namespace bennett {
+static std::string label(const Value *v);
 namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
@@ -51,7 +52,8 @@ struct AnalysisWork {
     functions.reserve(module.size());
     for (const Function &function : module)
       if (!function.isDeclaration())
-        functions.push_back({function.getName().str(), 0});
+        functions.push_back({function.hasName() ? function.getName().str()
+                                                 : label(&function), 0});
   }
   json::Object report(std::optional<uint64_t> cpuNanoseconds) const {
     std::vector<const FunctionVisits *> ranked;
