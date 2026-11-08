@@ -265,12 +265,10 @@ namespace bennett {
 static Function *normaliseWideIntegerABI(Module &m,Function *root) {
   auto &ctx=m.getContext();
   unsigned normalisationVScale(Module &);
-  std::optional<unsigned> vscale;
+  const unsigned vscale=normalisationVScale(m);
   auto laneCount=[&](VectorType *t) {
     auto count=t->getElementCount();
-    if(!count.isScalable())return count.getKnownMinValue();
-    if(!vscale)vscale=normalisationVScale(m);
-    return count.getKnownMinValue()* *vscale;
+    return count.getKnownMinValue()*(count.isScalable()?vscale:1);
   };
   // Scalar closure pruning deletes H bodies and their attached metadata. Keep
   // the source A(F) across that operation for device-side address comparisons.

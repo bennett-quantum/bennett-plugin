@@ -2,6 +2,7 @@
 """N21 scalar graphs, lane facts, immutable H IR, and selected-oracle results."""
 
 import argparse
+import ctypes
 import hashlib
 import json
 from pathlib import Path
@@ -41,6 +42,8 @@ CASES = {
     "vector-scalable-minimum": (9, ()),
     "vector-scalable-fixed-override": (9, ()),
     "vector-scalable-abi": (7, ()),
+    "vector-scalable-module-order": (22, ()),
+    "vector-scalable-module-order-reversed": (22, ()),
     "vector-reduce-smax": (9, ()),
     "vector-reduce-smin": (2147483648, ()),
     "vector-reduce-umax": (4294967295, ()),
@@ -63,6 +66,8 @@ FACTS = {
     "vector-scalable-option": {"%r": ["INT(10)"]},
     "vector-scalable-fixed-override": {"%r": ["INT(9)"]},
     "vector-scalable-abi": {"%r": []},
+    "vector-scalable-module-order": {"%r": ["INT(22)"]},
+    "vector-scalable-module-order-reversed": {"%r": ["INT(22)"]},
 }
 TOP_FACTS = {"vector-abi", "vector-scalable-abi"}
 
@@ -157,6 +162,12 @@ def oracle(args, source, name, dest):
                           ",".join(map(str, values)), "--budget", "1000000,0,256,64"], args)
         data = json.loads(result.stdout)
         assert (data["code"], int(data["payload"])) == (0, want), (name, values, want, data)
+    if name.startswith("vector-scalable-module-order"):
+        library = dest / "native.so"
+        checked([f"/usr/lib/llvm-{args.major}/bin/clang", "-O0", "-shared", "-fPIC", source, "-o", library], args)
+        native = ctypes.CDLL(str(library.absolute()))
+        native.top.restype = ctypes.c_uint32
+        assert native.top() == expected, "link vscale changed with function order"
     checked([ref, "step-check", output / "ref.bennett", "ref", "--exhaustive", "--max-bits", "1",
              "--budget", "1000000,0,256,64"], args)
     if name.startswith("fneg-"):

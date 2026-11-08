@@ -12,9 +12,19 @@ using namespace llvm;
 namespace bennett {
 static cl::opt<unsigned> VScale("bennett-vscale",cl::init(0),cl::desc("§12.5 link vscale (default: minimum range bound)"));
 
-// Shared only by the N10/N21 and module-ABI materialisers. Fixed equal ranges
-// take precedence; otherwise the driver override or minimum bound fixes V.
-unsigned normalisationVScale(Module &m) {
+// §12.5 fixes one V for the link before N10/N21 erase scalable operations.
+static std::optional<unsigned> frozenLinkVScale(Module &m) {
+  auto *flag=m.getModuleFlag("bennett.normalisation.vscale");
+  if(!flag)return std::nullopt;
+  auto *value=mdconst::dyn_extract<ConstantInt>(flag);
+  if(!value || value->isZero() || value->getValue().ugt(UINT_MAX))
+    fail("input","§12.5 invalid frozen link vscale");
+  return static_cast<unsigned>(value->getZExtValue());
+}
+
+// Private S2 graphs temporarily share their source module. Exclude that graph
+// from the source scan and never record a flag in the unchanged H module.
+static unsigned selectLinkVScale(Module &m,const Function *privateGraph=nullptr) {
   std::function<bool(Type *)> scalable=[&](Type *t) {
     if(auto *v=dyn_cast<VectorType>(t))return v->getElementCount().isScalable();
     if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque())for(auto *e:s->elements())if(scalable(e))return true;
@@ -22,7 +32,7 @@ unsigned normalisationVScale(Module &m) {
     return false;
   };
   std::optional<unsigned> fixed,minimum;bool allFixed=true;
-  for(auto &f:m)if(!f.isDeclaration() && !f.hasFnAttribute("bennett.n21.boundary")) {
+  for(auto &f:m)if(&f!=privateGraph && !f.isDeclaration() && !f.hasFnAttribute("bennett.n21.boundary")) {
     bool uses=scalable(f.getReturnType());for(auto &a:f.args())uses|=scalable(a.getType());
     for(auto &i:instructions(f)) {
       uses|=scalable(i.getType());for(auto &v:i.operands())uses|=scalable(v->getType());
@@ -40,9 +50,18 @@ unsigned normalisationVScale(Module &m) {
   if(VScale.getNumOccurrences()) {if(!VScale)fail("input","§12.5 vscale must be positive");return VScale;}
   return minimum.value_or(1); // LLVM's unconstrained minimum is one.
 }
+
+// Called at each materialisation entry, before any rewriting. The module flag
+// carries the original link choice through later functions, clones and ABI passes.
+unsigned normalisationVScale(Module &m) {
+  if(auto frozen=frozenLinkVScale(m))return *frozen;
+  unsigned value=selectLinkVScale(m);
+  m.addModuleFlag(Module::Error,"bennett.normalisation.vscale",value);
+  return value;
+}
 // M1 scalar materialisation slice. Other rules remain explicit M2 obligations;
 // this function is not a full §12 validator or a production conformance verdict.
-static void normalisePrelude(Function &f, bool privateTransfer) {
+static void normalisePrelude(Function &f, bool privateTransfer, unsigned vscale) {
   // N0's last lowering, invoked only when this intrinsic occurs.
   bool widenable=false;
   for(Instruction &i:instructions(f)) if(auto *c=dyn_cast<IntrinsicInst>(&i))
@@ -233,7 +252,7 @@ static void normalisePrelude(Function &f, bool privateTransfer) {
     if(n=="llvm.allow.runtime.check" || n=="llvm.allow.ubsan.check") v=ConstantInt::getTrue(f.getContext());
     if(n.starts_with("llvm.allow.sanitize.")) v=ConstantInt::getFalse(f.getContext());
     if(n.starts_with("llvm.get.dynamic.area.offset")) v=Constant::getNullValue(c->getType());
-    if(n.starts_with("llvm.vscale.")) v=ConstantInt::get(c->getType(),normalisationVScale(*f.getParent()));
+    if(n.starts_with("llvm.vscale.")) v=ConstantInt::get(c->getType(),vscale);
     if(v) {c->replaceAllUsesWith(v);c->eraseFromParent();i=nullptr;}
   }
   // N12. N27 supplies the corresponding integer helper rewrite below.
@@ -274,13 +293,11 @@ class ScalarLanes {
   SmallVector<Instruction *> deadVectors;
   std::set<Instruction *> visited;
   unsigned vectorStoreOrdinal=0;
-  std::optional<unsigned> vscale;
+  const unsigned vscale;
 
   unsigned laneCount(VectorType *t) {
     auto count=t->getElementCount();
-    if(!count.isScalable())return count.getKnownMinValue();
-    if(!vscale)vscale=normalisationVScale(*f.getParent());
-    return count.getKnownMinValue()* *vscale;
+    return count.getKnownMinValue()*(count.isScalable()?vscale:1);
   }
 
   SmallVector<Value *> lanesOf(Value *v) {
@@ -577,7 +594,7 @@ class ScalarLanes {
   }
 
 public:
-  explicit ScalarLanes(Function &f):f(f),dl(f.getParent()->getDataLayout()) {}
+  ScalarLanes(Function &f,unsigned vscale):f(f),dl(f.getParent()->getDataLayout()),vscale(vscale) {}
 
   void run() {
     SmallVector<Instruction *> work;SmallVector<PHINode *> phis;
@@ -647,8 +664,13 @@ static void normaliseMemoryIntrinsics(Function &f) {
 
 void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   if(f.hasFnAttribute("bennett.n21.boundary"))return;
-  normalisePrelude(f,privateTransfer);
-  ScalarLanes(f).run();
+  unsigned vscale;
+  if(privateTransfer) {
+    auto frozen=frozenLinkVScale(*f.getParent());
+    vscale=frozen?*frozen:selectLinkVScale(*f.getParent(),&f);
+  } else vscale=normalisationVScale(*f.getParent());
+  normalisePrelude(f,privateTransfer,vscale);
+  ScalarLanes(f,vscale).run();
   normaliseMemoryIntrinsics(f);
   normaliseInteger(f);
   normaliseFP(f);
