@@ -347,7 +347,7 @@ The source keeps configured classes available; no replacement executor or privat
     "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
     "scripts/record-verification.py": {"complexity": 62, "functions": 10, "length_max": 100, "length_p50": 9, "length_p90": 41, "over_300": 0, "trivial_wrappers": 1},
     "scripts/test": {"complexity": 8, "functions": 2, "length_max": 34, "length_p50": 23, "length_p90": 34, "over_300": 0, "trivial_wrappers": 0},
-    "src/Analysis.cpp": {"complexity": 6155, "functions": 68, "length_max": 531, "length_p50": 16, "length_p90": 66, "over_300": 1, "trivial_wrappers": 4},
+    "src/Analysis.cpp": {"complexity": 6407, "functions": 81, "length_max": 515, "length_p50": 15, "length_p90": 66, "over_300": 1, "trivial_wrappers": 6},
     "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
     "src/BennettPlugin.cpp": {"complexity": 909, "functions": 20, "length_max": 138, "length_p50": 15, "length_p90": 45, "over_300": 0, "trivial_wrappers": 2},
@@ -378,8 +378,11 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/allocator_closure.py": {"complexity": 27, "functions": 2, "length_max": 153, "length_p50": 2, "length_p90": 153, "over_300": 0, "trivial_wrappers": 1},
     "tests/analysis_clock.py": {"complexity": 1, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_counters.py": {"complexity": 19, "functions": 3, "length_max": 218, "length_p50": 46, "length_p90": 218, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_convergence.py": {"complexity": 9, "functions": 2, "length_max": 40, "length_p50": 17, "length_p90": 40, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_monotone.py": {"complexity": 17, "functions": 4, "length_max": 168, "length_p50": 4, "length_p90": 168, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_pointer_closure.py": {"complexity": 25, "functions": 4, "length_max": 229, "length_p50": 16, "length_p90": 229, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 66, "length_p50": 66, "length_p90": 66, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 68, "length_p50": 68, "length_p90": 68, "over_300": 0, "trivial_wrappers": 0},
     "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_defaults.py": {"complexity": 4, "functions": 1, "length_max": 57, "length_p50": 57, "length_p90": 57, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_fallback.py": {"complexity": 10, "functions": 1, "length_max": 120, "length_p50": 120, "length_p90": 120, "over_300": 0, "trivial_wrappers": 0},
@@ -437,7 +440,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/wide.py": {"complexity": 249, "functions": 2, "length_max": 4, "length_p50": 2, "length_p90": 4, "over_300": 0, "trivial_wrappers": 1}
   },
   "litter": [],
-  "long_functions": [{"file": "src/Analysis.cpp", "length": 531, "line": 1360, "name": "step", "trivial": false}, {"file": "src/Normalise.cpp", "length": 500, "line": 14, "name": "normaliseScalar", "trivial": false}, {"file": "tests/production_shapes.py", "length": 319, "line": 9, "name": "main", "trivial": false}, {"file": "tests/reversible.py", "length": 301, "line": 18, "name": "main", "trivial": false}, {"file": "tests/review_regressions.py", "length": 849, "line": 230, "name": "main", "trivial": false}, {"file": "tests/softfloat.py", "length": 780, "line": 63, "name": "main", "trivial": false}],
+  "long_functions": [{"file": "src/Analysis.cpp", "length": 515, "line": 1576, "name": "step", "trivial": false}, {"file": "src/Normalise.cpp", "length": 500, "line": 14, "name": "normaliseScalar", "trivial": false}, {"file": "tests/production_shapes.py", "length": 319, "line": 9, "name": "main", "trivial": false}, {"file": "tests/reversible.py", "length": 301, "line": 18, "name": "main", "trivial": false}, {"file": "tests/review_regressions.py", "length": 849, "line": 230, "name": "main", "trivial": false}, {"file": "tests/softfloat.py", "length": 780, "line": 63, "name": "main", "trivial": false}],
   "process_identifiers": 2
 }
 ```
