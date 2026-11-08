@@ -1464,16 +1464,17 @@ static bool longAdditiveCycle(Value *value, Value *source,
 // several walks generate the subgroup with the minimum trailing-zero count.
 // Only witnessed finite index alternatives contribute generators. New facts
 // are reconsidered on subsequent transfers; no size threshold widens AV.
-static void closePointerOrbit(PHINode &phi, const DataLayout &layout, AV &facts,
+static void closePointerOrbit(Value &source, ArrayRef<Value *> incoming,
+                              const DataLayout &layout, AV &facts,
                               function_ref<AV(Value *, const Instruction *)> indices) {
-  if (!phi.getType()->isPointerTy()) return;
-  unsigned width = layout.getPointerTypeSizeInBits(phi.getType());
-  if (width != layout.getIndexTypeSizeInBits(phi.getType()) || width > 64) return;
+  if (!source.getType()->isPointerTy()) return;
+  unsigned width = layout.getPointerTypeSizeInBits(source.getType());
+  if (width != layout.getIndexTypeSizeInBits(source.getType()) || width > 64) return;
   unsigned zeros = width;
   std::set<Value *> path;
   std::function<void(Value *, APInt)> walk = [&](Value *value, APInt delta) {
     budgetTick();
-    if (value == &phi) {
+    if (value == &source) {
       if (!delta.isZero()) zeros = std::min(zeros, delta.countr_zero());
       return;
     }
@@ -1520,7 +1521,7 @@ static void closePointerOrbit(PHINode &phi, const DataLayout &layout, AV &facts,
     }
     path.erase(value);
   };
-  for (Value *incoming : phi.incoming_values()) walk(incoming, APInt(width, 0));
+  for (Value *value : incoming) walk(value, APInt(width, 0));
   // A 2^63 stride has just two members and the ordinary transfer enumerates
   // them. Larger signed strides do not fit Atom's existing representation.
   if (zeros == width || zeros >= 63) return;
@@ -1541,6 +1542,36 @@ static void closePointerOrbit(PHINode &phi, const DataLayout &layout, AV &facts,
   // also reaches outside that object, as the enumerating transfer would.
   if (objectOrbit) numericalUnknown(closure);
   facts = std::move(closure);
+}
+static void closeStoredPointerOrbit(StoreInst &store, const DataLayout &layout,
+                                    AV &written, function_ref<AV(Value *)> facts,
+                                    function_ref<AV(Value *, const Instruction *)> indices) {
+  if (!store.getValueOperand()->getType()->isPointerTy()) return;
+  AV address = facts(store.getPointerOperand());
+  if (!llvm::any_of(address.atoms, [](const Atom &a) {
+        return a.kind == Atom::Ptr && a.object;
+      })) return;
+  // A whole pointer load from this same SSA address reads every value written
+  // here (PT6/PT7). This is an exact feedback edge even without an SSA phi.
+  // Partial accesses and EXT-only loads do not establish that edge.
+  std::set<Value *> seen;
+  std::function<void(Value *)> visit = [&](Value *value) {
+    if (!seen.insert(value).second) return;
+    if (auto *load = dyn_cast<LoadInst>(value)) {
+      if (load->getPointerOperand() == store.getPointerOperand() &&
+          load->getType() == store.getValueOperand()->getType())
+        closePointerOrbit(*load, {store.getValueOperand()}, layout, written, indices);
+    } else if (auto *gep = dyn_cast<GEPOperator>(value)) {
+      visit(gep->getPointerOperand());
+    } else if (auto *phi = dyn_cast<PHINode>(value)) {
+      for (Value *incoming : phi->incoming_values()) visit(incoming);
+    } else if (auto *select = dyn_cast<SelectInst>(value)) {
+      visit(select->getTrueValue()); visit(select->getFalseValue());
+    } else if (auto *freeze = dyn_cast<FreezeInst>(value)) {
+      visit(freeze->getOperand(0));
+    }
+  };
+  visit(store.getValueOperand());
 }
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
@@ -1595,6 +1626,17 @@ void Analysis::step(Instruction &i) {
     for(auto *callee:edges[slice.get()])edges[i.getFunction()].insert(callee);
     virtualFP=false;return;
   }
+  auto gepIndex = [&](Value *v, const Instruction *at) {
+    AV domain = get(v);
+    if (auto bound = indexBounds.find({at, v}); bound != indexBounds.end()) {
+      if (domain.top) domain = bound->second;
+      else for (auto it = domain.atoms.begin(); it != domain.atoms.end();)
+        if (it->kind == Atom::Int && !bound->second.atoms.count(*it))
+          it = domain.atoms.erase(it);
+        else ++it;
+    }
+    return domain;
+  };
   AV a;
   if (composite(i))
     return;
@@ -1744,6 +1786,8 @@ void Analysis::step(Instruction &i) {
   else if (auto *s = dyn_cast<StoreInst>(&i)) {
 
     AV written = get(s->getValueOperand());
+    closeStoredPointerOrbit(*s, M.getDataLayout(), written,
+                            [&](Value *v) { return get(v); }, gepIndex);
     if (auto *b = dyn_cast<BinaryOperator>(s->getValueOperand()))
       for (Value *operand : b->operands())
         if (auto *l = dyn_cast<LoadInst>(operand);
@@ -1762,17 +1806,8 @@ void Analysis::step(Instruction &i) {
       for (Value *v : p->incoming_values())
         if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry))
           a.top = true;
-    closePointerOrbit(*p, M.getDataLayout(), a, [&](Value *v, const Instruction *at) {
-      AV domain = get(v);
-      if (auto bound = indexBounds.find({at, v}); bound != indexBounds.end()) {
-        if (domain.top) domain = bound->second;
-        else for (auto it = domain.atoms.begin(); it != domain.atoms.end();)
-          if (it->kind == Atom::Int && !bound->second.atoms.count(*it))
-            it = domain.atoms.erase(it);
-          else ++it;
-      }
-      return domain;
-    });
+    SmallVector<Value *, 4> incoming(p->incoming_values());
+    closePointerOrbit(*p, incoming, M.getDataLayout(), a, gepIndex);
     // Exact finite additive closure, including small counters: enumerate the
     // subgroup once instead of waiting one whole-program round per element.
     if (!a.top && p->getType()->isIntegerTy()) {

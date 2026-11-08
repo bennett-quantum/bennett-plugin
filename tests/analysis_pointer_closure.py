@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 import re
 
-from analysis_convergence import frozen_clock
+from analysis_convergence import MAX_ROUNDS, frozen_clock
 from contracts import ROOT, run
 
 
@@ -55,14 +55,14 @@ def main(argv=None):
     environment = frozen_clock(directory)
     results = []
 
-    def check(name, body, layout="e-p:64:64", diagnostic=None):
+    def check(name, body, layout="e-p:64:64", diagnostic=None, max_rounds=MAX_ROUNDS):
         source = directory / f"{name}.ll"
         source.write_text(f'target datalayout = "{layout}"\n' + body)
         report = directory / f"{name}.json"
         result = run([
             f"/usr/lib/llvm-{args.major}/bin/opt", f"-load-pass-plugin={plugin}",
             "-passes=bennett", "-bennett-dialect=0.2.13", "-bennett-analysis-only",
-            "-bennett-analysis-max-rounds=64", f"-bennett-report={report}",
+            f"-bennett-analysis-max-rounds={max_rounds}", f"-bennett-report={report}",
             "-disable-output", source,
         ], env=environment)
         (directory / f"{name}.stderr").write_text(result.stderr)
@@ -71,7 +71,7 @@ def main(argv=None):
             assert result.returncode and diagnostic in result.stderr, result.stderr
         else:
             assert result.returncode == 0, result.stderr
-            assert data["analysis_work"]["rounds_completed"] <= 64, data
+            assert data["analysis_work"]["rounds_completed"] <= max_rounds, data
         results.append({"case": name, "exit": result.returncode,
                         "rounds": data["analysis_work"]["rounds_completed"]})
         return {row["value"]: row for row in data.get("values", [])}
@@ -174,6 +174,33 @@ done: ret ptr %value
 """)
     assert "FN(@target,0,0)" in overlap["%value"]["atoms"], overlap["%value"]
     assert overlap["%value"]["top"], overlap["%value"]
+
+    memory = check("memory-cursor-cycle", """
+@data = internal global [16 x i8] zeroinitializer
+@cursor = internal global ptr @data
+define ptr @top() {
+ %old = load ptr, ptr @cursor
+ %next = getelementptr i8, ptr %old, i8 8
+ store ptr %next, ptr @cursor
+ ret ptr %next
+}
+""", layout="e-p:8:8", max_rounds=4)  # seed, feedback, stable; one spare scan
+    expected = least_fixpoint(8, {"cursor": {0}}, [("cursor", "cursor", 8)])["cursor"]
+    assert represented_offsets(memory["%old"]["atoms"], "@data", 8) == expected, memory
+    assert represented_offsets(memory["%next"]["atoms"], "@data", 8) == expected, memory
+
+    external = check("external-memory-is-not-feedback", """
+@data = internal global [16 x i8] zeroinitializer
+define ptr @top(ptr %cursor, i1 %condition) {
+ %old = load ptr, ptr %cursor
+ %seed = select i1 %condition, ptr @data, ptr %old
+ %next = getelementptr i8, ptr %seed, i64 8
+ store ptr %next, ptr %cursor
+ ret ptr %next
+}
+""")
+    assert external["%next"]["atoms"] == ["PTR(@data,8,0)"], external
+    assert external["%next"]["top"], external
 
     identities = check("identities-and-growing-increments", """
 @a = internal global i8 0
