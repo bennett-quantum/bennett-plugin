@@ -111,6 +111,37 @@ define i1 @top() {{
     check("function-order", value_domains(reports[0]) == value_domains(reports[1]),
           [value_domains(r)["top", "%comparison"] for r in reports])
 
+    data = analyse("bottom-with-top", SOURCES["bottom"] + """
+declare i32 @unknown()
+define i1 @top() {
+ %a = call i32 @source()
+ %b = call i32 @unknown()
+ %left = icmp eq i32 %a, %b
+ %right = icmp ne i32 %b, %a
+ ret i1 %left
+}
+""")
+    for name in ("%left", "%right"):
+        check("bottom-with-top-" + name, value_domains(data)["top", name] == (False, []),
+              value_domains(data)["top", name])
+
+    # With no seed, the least solution of x = (x == 0) is bottom.
+    # Inflationary outer joins cannot oscillate, even with the old default.
+    data = analyse("unseeded-cycle", """define internal i1 @cycle() {
+entry:
+ %seed = call i1 @empty()
+ br label %loop
+loop:
+ %x = phi i1 [ %seed, %entry ], [ %comparison, %loop ]
+ %comparison = icmp eq i1 %x, false
+ br label %loop
+}
+define internal i1 @empty() { unreachable }
+""")
+    for name in ("%x", "%comparison"):
+        check("unseeded-cycle-" + name, value_domains(data)["cycle", name] == (False, []),
+              value_domains(data)["cycle", name])
+
     # Audit companions: PT3 unions value operands even with a bottom condition;
     # casts and integer Cartesian products have no empty-product Boolean default.
     data = analyse("copies-and-binops", SOURCES["bottom"] + """
@@ -154,6 +185,20 @@ define i32 @top() {
                   and domains["top", "%outside"] == (False, []), domains)
         check(f"extent-order-{allocator}", value_domains(pair[0]) == value_domains(pair[1]),
               [value_domains(r)["top", "%outside"] for r in pair])
+
+    data = analyse("calloc-bottom-count-top-size", """declare ptr @calloc(i64,i64)
+declare i64 @unknown()
+define internal i64 @empty() { unreachable }
+define i8 @top() {
+ %count = call i64 @empty()
+ %size = call i64 @unknown()
+ %p = call ptr @calloc(i64 %count, i64 %size)
+ %v = load i8, ptr %p
+ ret i8 %v
+}
+""")
+    check("calloc-bottom-count-top-size", value_domains(data)["top", "%v"] == (False, []),
+          value_domains(data)["top", "%v"])
 
     (directory / "results.json").write_text(json.dumps({"receipts": receipts, "failures": failures}, indent=2) + "\n")
     assert not failures, failures
