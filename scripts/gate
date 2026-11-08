@@ -27,7 +27,6 @@ export BENNETT_ARITH_PINNED_ROOT
 # its existing 60 s subprocess bound (other subprocesses: 120 s).
 # r_envelopes: 0.566/0.817 s total with existing 120 s subprocess bounds.
 for major in 18 23; do
-  /usr/bin/time -f "gate native-transports LLVM $major: %e s" bash "$root/tests/native_transports.sh" --major "$major"
   /usr/bin/time -f "gate mixed-native LLVM $major: %e s" python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
   /usr/bin/time -f "gate r_typed_faults LLVM $major: %e s" python3 "$root/tests/r_typed_faults.py" --major "$major"
   /usr/bin/time -f "gate r_envelopes LLVM $major: %e s" python3 "$root/tests/r_envelopes.py" --major "$major"

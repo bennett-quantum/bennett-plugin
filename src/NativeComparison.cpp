@@ -257,6 +257,80 @@ void writeReport(StringRef text) {
   if(out.has_error())fail("BD-E-NATIVE-OUTPUT","cannot write comparison report");
 }
 
+bool isRuntimeTransport(const Function &f) {
+  StringRef name = f.getName();
+  return name.starts_with("__bennett_rt_transport_");
+}
+void importRuntimeTransports(Module &m) {
+  // §§17.7/19.5: the native support link supplies syscall transports. Their
+  // device wrappers must not be checked or published as native source bodies.
+  for (auto &f : m) if (isRuntimeTransport(f)) {
+    f.deleteBody(); f.setAttributes(AttributeList());
+  }
+}
+json::Array prepareSymbols(Module &m, StringRef identity) {
+  importRuntimeTransports(m);
+  // Stable aliases expose private/unnamed source definitions without copying
+  // them. Runtime imports have neither a definition alias nor source provenance.
+  json::Array symbols;
+  SmallVector<GlobalValue *> values;
+  for (auto &g : m.globals()) if (!g.isDeclaration()) values.push_back(&g);
+  for (auto &f : m) if (!f.isDeclaration()) values.push_back(&f);
+  for (unsigned i = 0; i < values.size(); ++i) {
+    auto *v = values[i];
+    auto name = "__bennett_comparison_" + identity.take_front(20).str() + "_" + std::to_string(i);
+    if (m.getNamedValue(name))
+      fail("BD-E-NATIVE-INPUT", "comparison symbol collision", v);
+    v->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
+    GlobalAlias::create(GlobalValue::ExternalLinkage, name, v);
+    json::Object row{{"llvm_name", v->getName()}, {"native_symbol", name}};
+    if (auto *g = dyn_cast<GlobalVariable>(v)) {
+      row["kind"] = "global";
+      row["source_key"] = scalarGlobalKey(*g);
+      row["size"] = int64_t(m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue());
+      row["alignment"] = int64_t(m.getDataLayout().getPreferredAlign(g).value());
+    } else {
+      row["kind"] = "function";
+      row["source_key"] = v->getName();
+      cast<Function>(v)->addFnAttr("bennett.native.materialised.sha256", identity);
+    }
+    symbols.push_back(std::move(row));
+  }
+  return symbols;
+}
+json::Array finaliseSymbols(Module &m, json::Array &symbols, StringRef identity) {
+  json::Array definitions;
+  for (auto &item : symbols) {
+    auto *row = item.getAsObject();
+    auto name = row ? row->getString("native_symbol") : std::nullopt;
+    auto *alias = name ? dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)) : nullptr;
+    if (!alias) fail("BD-E-NATIVE-INPUT", "prepared source symbol correspondence was lost");
+    if (row->getString("kind") != "function") {
+      definitions.push_back(std::move(item));
+      continue;
+    }
+    auto *f = dyn_cast_or_null<Function>(alias->getAliaseeObject());
+    if (!f) fail("BD-E-NATIVE-INPUT", "prepared source function provenance was lost", alias);
+    bool transport = isRuntimeTransport(*f) && row->getString("llvm_name") == f->getName();
+    auto provenance = f->getFnAttribute("bennett.native.materialised.sha256");
+    if (f->isDeclaration() ? !transport :
+        !provenance.isStringAttribute() || provenance.getValueAsString() != identity)
+      fail("BD-E-NATIVE-INPUT", "prepared source function provenance was lost", alias);
+    if (transport) {
+      // An importer may have left an alias to a declaration. LLVM requires
+      // aliases to name definitions, so publish only the real import name.
+      alias->replaceAllUsesWith(f);
+      alias->eraseFromParent();
+      continue;
+    }
+    definitions.push_back(std::move(item));
+  }
+  // A runtime closure link between prepare and finalise can reintroduce these
+  // wrappers; the final native-support link still owns their implementation.
+  importRuntimeTransports(m);
+  return definitions;
+}
+
 struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
   PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
     if (NativeRecord.empty() || NativeEntry.empty() || NativeReport.empty())
@@ -309,33 +383,7 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
     }
 
     auto fingerprint = structure(m);
-    // Stable, collision-resistant aliases expose private/unnamed source
-    // definitions to the comparison linker without changing their bodies or
-    // making a second copy of any source global.
-    json::Array symbols;
-    SmallVector<GlobalValue *> values;
-    for (auto &g : m.globals()) if (!g.isDeclaration()) values.push_back(&g);
-    for (auto &f : m) if (!f.isDeclaration()) values.push_back(&f);
-    for (unsigned i = 0; i < values.size(); ++i) {
-      auto *v = values[i];
-      auto name = "__bennett_comparison_" + identity.substr(0, 20) + "_" + std::to_string(i);
-      if (m.getNamedValue(name))
-        fail("BD-E-NATIVE-INPUT", "comparison symbol collision", v);
-      v->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
-      GlobalAlias::create(GlobalValue::ExternalLinkage, name, v);
-      json::Object row{{"llvm_name", v->getName()}, {"native_symbol", name}};
-      if (auto *g = dyn_cast<GlobalVariable>(v)) {
-        row["kind"] = "global";
-        row["source_key"] = scalarGlobalKey(*g);
-        row["size"] = int64_t(m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue());
-        row["alignment"] = int64_t(m.getDataLayout().getPreferredAlign(g).value());
-      } else {
-        row["kind"] = "function";
-        row["source_key"] = v->getName();
-        cast<Function>(v)->addFnAttr("bennett.native.materialised.sha256", identity);
-      }
-      symbols.push_back(std::move(row));
-    }
+    auto symbols = prepareSymbols(m, identity);
     auto binding="__bennett_native_"+identity.substr(0,20)+"_bind";
     if(!NativePrepareOnly)binding=lowerNativeMarkers(m,identity,shadowStack,sourceSteps);
     json::Object report{{"schema", "bennett-native-comparison-1"},
@@ -374,18 +422,7 @@ struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
         !report->getArray("symbols"))
       fail("BD-E-NATIVE-INPUT","invalid prepared component metadata");
     auto identity=*report->getString("materialised_sha256");
-    for(auto &item:*report->getArray("symbols")) {
-      auto *row=item.getAsObject();
-      auto name=row?row->getString("native_symbol"):std::nullopt;
-      auto *alias=name?dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)):nullptr;
-      if(!alias)fail("BD-E-NATIVE-INPUT","prepared source symbol correspondence was lost");
-      if(row->getString("kind")=="function") {
-        auto *f=dyn_cast_or_null<Function>(alias->getAliaseeObject());
-        if(!f || f->isDeclaration() || !f->hasFnAttribute("bennett.native.materialised.sha256") ||
-            f->getFnAttribute("bennett.native.materialised.sha256").getValueAsString()!=identity)
-          fail("BD-E-NATIVE-INPUT","prepared source function provenance was lost",alias);
-      }
-    }
+    (*report)["symbols"] = finaliseSymbols(m, *report->getArray("symbols"), identity);
     auto limit=[&](StringRef field)->std::optional<uint64_t> {
       auto text=report->getString(field);
       if(!text)return std::nullopt;
