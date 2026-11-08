@@ -346,7 +346,7 @@ The source keeps configured classes available; no replacement executor or privat
     "scripts/coverage": {"complexity": 14, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
     "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
     "scripts/record-verification.py": {"complexity": 62, "functions": 10, "length_max": 100, "length_p50": 9, "length_p90": 41, "over_300": 0, "trivial_wrappers": 1},
-    "scripts/test": {"complexity": 8, "functions": 2, "length_max": 34, "length_p50": 23, "length_p90": 34, "over_300": 0, "trivial_wrappers": 0},
+    "scripts/test": {"complexity": 9, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
     "src/Analysis.cpp": {"complexity": 6155, "functions": 68, "length_max": 531, "length_p50": 16, "length_p90": 66, "over_300": 1, "trivial_wrappers": 4},
     "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
