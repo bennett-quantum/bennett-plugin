@@ -136,6 +136,10 @@ COMMAND_HANG_GUARDS_S = {
     "shadow_stack": 60,
     "production_lifts": 60,
     "review_regressions": 60,
+    # tests/native_transports.sh (both majors in one run): 1.41 s wall, this
+    # 12-core host, 2026-11-08 (bennett-plugin-job-vzv .tmp/r3-transports/
+    # orch-repro.log); 10x is below the 60 s floor.
+    "native_transports": 60,
 }
 SUITE_HANG_GUARD_S = 2655
 UNKNOWN_EXIT_STATUS = 124
@@ -187,6 +191,7 @@ def main():
     environment.setdefault("TMPDIR", str(temporary))
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     policies = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
+    policies.append(["bash", "-e", "tests/native_transports.sh"])
     groups = [
         [
             [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
