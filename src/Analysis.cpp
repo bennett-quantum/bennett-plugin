@@ -220,6 +220,37 @@ bool Atom::operator<(const Atom &b) const {
   if(numerical!=b.numerical)return numerical<b.numerical;
   return integer.ult(b.integer);
 }
+static int64_t residue(int64_t offset, int64_t stride) {
+  int64_t result = offset % stride;
+  return result < 0 ? result + stride : result;
+}
+static void canonicalOffset(int64_t &offset, int64_t &stride) {
+  if (stride == 1) stride = -1;
+  if (stride == -1) offset = 0;
+  else if (stride > 0) offset = residue(offset, stride);
+}
+static bool offsetContains(int64_t outerOffset, int64_t outerStride,
+                           int64_t innerOffset, int64_t innerStride) {
+  if (outerStride == -1) return true;
+  if (!outerStride) return !innerStride && outerOffset == innerOffset;
+  return innerStride != -1 && innerStride % outerStride == 0 &&
+         residue(innerOffset, outerStride) == residue(outerOffset, outerStride);
+}
+static bool pointerContains(const Atom &outer, const Atom &inner) {
+  return outer.kind == Atom::Ptr && inner.kind == Atom::Ptr &&
+         outer.object == inner.object && outer.numerical == inner.numerical &&
+         outer.integer == inner.integer &&
+         offsetContains(outer.offset, outer.stride, inner.offset, inner.stride);
+}
+static bool contains(const AV &outer, const AV &inner) {
+  if (inner.top && !outer.top) return false;
+  for (const auto &a : inner.atoms) {
+    if ((a.kind == Atom::Int && outer.top) || outer.atoms.count(a)) continue;
+    if (!llvm::any_of(outer.atoms, [&](const Atom &b) { return pointerContains(b, a); }))
+      return false;
+  }
+  return true;
+}
 bool AV::merge(const AV &v) {
   if (activeBudget) ++activeBudget->work.avMerges;
   budgetTick();
@@ -233,18 +264,13 @@ bool AV::merge(const AV &v) {
   for (auto a : v.atoms) {
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
-      auto cover=a;cover.offset=0;cover.stride=-1;
-      if(atoms.count(cover))continue;
-      if(a.stride==-1) {
-        a.offset=0;
-        // (X,*) already denotes every specific/residue offset of the same
-        // provenance. Canonicalise this exact union; never widen a finite
-        // domain or remove ROOT, object identity or numerical-origin flags.
-        for(auto it=atoms.begin();it!=atoms.end();) {
-          if(it->kind==Atom::Ptr && it->object==a.object && it->numerical==a.numerical && it->integer==a.integer)it=atoms.erase(it);
-          else ++it;
-        }
-      }
+      canonicalOffset(a.offset, a.stride);
+      if (llvm::any_of(atoms, [&](const Atom &b) { return pointerContains(b, a); }))
+        continue;
+      // A proven coset absorbs exactly its members, with provenance intact.
+      for (auto it = atoms.begin(); it != atoms.end();)
+        if (pointerContains(a, *it)) it = atoms.erase(it);
+        else ++it;
     }
     bool inserted=atoms.insert(a).second;
     change |= inserted;
@@ -331,7 +357,14 @@ AV Analysis::displace(const AV &source,const APInt &delta,unsigned pointerWidth,
       if(low+d<0) include((__int128)a.offset+d+modulus);
     } else {
       auto offset=APInt(bits,a.offset,true)+delta;
-      if(a.stride || !offset.isSignedIntN(64)) {
+      // Translation permutes a full-width power-of-two coset exactly. These
+      // are the subgroups produced by modular pointer-cycle closure (PT2).
+      if (a.stride > 0 && isPowerOf2_64(a.stride) && bits == pointerWidth &&
+          bits <= 64 && Log2_64(a.stride) < bits) {
+        a.offset = offset.getSExtValue();
+        canonicalOffset(a.offset, a.stride);
+        numericalUnknown(result);
+      } else if(a.stride || !offset.isSignedIntN(64)) {
         a.offset=0;a.stride=-1;numericalUnknown(result);
       } else {
         a.offset=offset.getSExtValue();
@@ -631,6 +664,36 @@ static bool overlaps(const Atom &p, const Slot &s, uint64_t size) {
   if(distance<0) distance+=stride;
   return distance < s.bytes || distance+size>stride;
 }
+// PT8 intersects each represented storage interval with a finite copy. A
+// residue family is an exact union of intervals, not a partially known value.
+static void copySlotFamily(const Slot &slot, const Atom &source,
+                           const Atom &destination, uint64_t length,
+                           function_ref<void(const AV &, const AV &, uint64_t, bool)> write) {
+  assert(slot.stride && !source.stride && !destination.stride);
+  __int128 begin = source.offset, end = begin + length;
+  __int128 first = std::max(begin - slot.bytes + 1, (__int128)INT64_MIN);
+  __int128 last = std::min(end, (__int128)INT64_MAX + 1);
+  int64_t step = slot.stride == -1 ? 1 : slot.stride;
+  __int128 remainder = (first - slot.offset) % step;
+  if (remainder < 0) remainder += step;
+  if (remainder) first += step - remainder;
+  for (__int128 offset = first; offset < last; offset += step) {
+    budgetTick();
+    __int128 lo = std::max(offset, begin), hi = std::min(offset + slot.bytes, end);
+    if (lo >= hi) continue;
+    auto target = destination;
+    target.offset = (APInt(64, destination.offset) + APInt(64, uint64_t(lo - begin))).getSExtValue();
+    AV address{{target}, false};
+    if (slot.filled || (lo == offset && hi == offset + slot.bytes))
+      write(slot.value, address, uint64_t(hi - lo), slot.filled);
+    else {
+      AV partial; partial.top = true;
+      for (const auto &a : slot.value.atoms)
+        if (a.kind == Atom::Root) partial.atoms.insert(a);
+      write(partial, address, uint64_t(hi - lo), false);
+    }
+  }
+}
 void Analysis::indexSlot(size_t n) {
   auto &s=slots[n];
   if(!s.stride && !s.filled) {
@@ -654,9 +717,11 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   return result;
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
-  for (auto &a : p.atoms)
+  bool compact = false;
+  for (auto a : p.atoms)
     if (a.kind == Atom::Ptr) {
       if (activeBudget) ++activeBudget->work.slotJoins;
+      canonicalOffset(a.offset, a.stride);
       // Initial zero images with the same start are nested intervals. Their
       // exact union is the largest extent, not a new slot for every loop round.
       if(filled && !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int && v.atoms.begin()->integer.isZero()) {
@@ -673,6 +738,15 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         }
         if(found)continue;
       }
+      // A narrower write may be omitted only when every one of its values is
+      // already present throughout the covering family. Never spread a new
+      // value from one exact address to the rest of a residue class.
+      if (!filled && llvm::any_of(otherSlots[a.object], [&](size_t n) {
+            const auto &s = slots[n];
+            return !s.filled && s.bytes == size && s.numerical == a.numerical &&
+                   offsetContains(s.offset, s.stride, a.offset, a.stride) &&
+                   contains(s.value, v);
+          })) continue;
       SlotKey key{a.object,a.offset,a.stride,size,filled,a.numerical};
       auto [it,inserted]=slotIndex.emplace(key,slots.size());
       if(inserted) {
@@ -680,7 +754,34 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         indexSlot(it->second);
         changed=true;
       } else changed|=slots[it->second].value.merge(v);
+      compact |= !filled && a.stride != 0;
     }
+  if (compact) {
+    // Keep initial byte images and representation widths separate. Remove an
+    // old slot only when the whole interval/value fact is represented by a
+    // family, then rebuild the positional indices after the vector compacts.
+    std::vector<Slot> retained;
+    for (size_t n = 0; n < slots.size(); ++n) {
+      const auto &s = slots[n];
+      bool covered = !s.filled && llvm::any_of(otherSlots[s.object], [&](size_t m) {
+        const auto &family = slots[m];
+        return m != n && !family.filled && family.bytes == s.bytes &&
+               family.numerical == s.numerical &&
+               offsetContains(family.offset, family.stride, s.offset, s.stride) &&
+               contains(family.value, s.value);
+      });
+      if (!covered) retained.push_back(s);
+    }
+    if (retained.size() != slots.size()) {
+      slots = std::move(retained);
+      slotIndex.clear(); exactSlots.clear(); otherSlots.clear(); maxSlotBytes.clear();
+      for (size_t n = 0; n < slots.size(); ++n) {
+        const auto &s = slots[n];
+        slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);
+        indexSlot(n);
+      }
+    }
+  }
 }
 AV Analysis::read(Value *base, uint64_t offset, Type *t) {
   AV p=get(base), shifted;shifted.top=p.top;
@@ -778,15 +879,16 @@ AV Analysis::load(const AV &p, Type *t) {
             r.merge(decoded);
             continue;
           }
-          bool exact = a.stride == 0 && s.stride == 0 && a.offset == s.offset &&
-                       size == s.bytes;
-          bool sameClass = size == s.bytes &&
-                           ((a.offset - s.offset) % (int64_t)size == 0) &&
-                           (a.stride == 0 || a.stride % (int64_t)size == 0) &&
-                           (s.stride == 0 || s.stride % (int64_t)size == 0);
-          if (exact || sameClass)
-            r.merge(s.value);
-          else {
+          // A family can have both identical-interval and partial-overlap
+          // members. PT6 retains the whole FN/ROOT/pointer alternatives from
+          // the former even when the latter also contribute non-handle TOP.
+          int64_t spacing = std::gcd(a.stride, s.stride);
+          __int128 difference = (__int128)a.offset - s.offset;
+          bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
+          bool whole = size == s.bytes && sameStart;
+          bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
+          if (whole) r.merge(s.value);
+          if (!onlyWhole) {
             partial = true;
             for (auto &b : s.value.atoms)
               if (b.kind == Atom::Root)
@@ -1357,6 +1459,89 @@ static bool longAdditiveCycle(Value *value, Value *source,
       return true;
   return false;
 }
+// A closed walk in a full-width pointer-copy/GEP graph is a translation in
+// Z/(2^width). Its repeated image is the coset generated by its displacement;
+// several walks generate the subgroup with the minimum trailing-zero count.
+// Only witnessed finite index alternatives contribute generators. New facts
+// are reconsidered on subsequent transfers; no size threshold widens AV.
+static void closePointerOrbit(PHINode &phi, const DataLayout &layout, AV &facts,
+                              function_ref<AV(Value *, const Instruction *)> indices) {
+  if (!phi.getType()->isPointerTy()) return;
+  unsigned width = layout.getPointerTypeSizeInBits(phi.getType());
+  if (width != layout.getIndexTypeSizeInBits(phi.getType()) || width > 64) return;
+  unsigned zeros = width;
+  std::set<Value *> path;
+  std::function<void(Value *, APInt)> walk = [&](Value *value, APInt delta) {
+    budgetTick();
+    if (value == &phi) {
+      if (!delta.isZero()) zeros = std::min(zeros, delta.countr_zero());
+      return;
+    }
+    if (!path.insert(value).second) return;
+    if (auto *gep = dyn_cast<GEPOperator>(value)) {
+      if (layout.getPointerTypeSizeInBits(gep->getType()) == width &&
+          layout.getIndexTypeSizeInBits(gep->getType()) == width) {
+        APInt offset(width, 0);
+#if LLVM_VERSION_MAJOR >= 23
+        SmallMapVector<Value *, APInt, 4> variables;
+#else
+        MapVector<Value *, APInt> variables;
+#endif
+        if (gep->collectOffset(layout, width, variables, offset)) {
+          std::vector<APInt> offsets{offset};
+          for (auto &variable : variables) {
+            AV domain = indices(variable.first, dyn_cast<Instruction>(value));
+            // PT2 can enumerate every value of a small unknown index exactly.
+            constexpr unsigned SmallIndexBits = 12; // normative INT limit K=4096
+            if (domain.top && variable.first->getType()->isIntegerTy() &&
+                variable.first->getType()->getIntegerBitWidth() <= SmallIndexBits) {
+              unsigned bits = variable.first->getType()->getIntegerBitWidth();
+              domain = {};
+              for (unsigned n = 0; n < (1u << bits); ++n)
+                domain.merge(integer(APInt(bits, n)));
+            }
+            if (domain.top) { offsets.clear(); break; }
+            std::vector<APInt> next;
+            for (const auto &a : domain.atoms)
+              if (a.kind == Atom::Int)
+                for (const auto &d : offsets)
+                  next.push_back(d + a.integer.sextOrTrunc(width) * variable.second);
+            offsets = std::move(next);
+          }
+          for (const auto &d : offsets) walk(gep->getPointerOperand(), delta + d);
+        }
+      }
+    } else if (auto *other = dyn_cast<PHINode>(value)) {
+      for (Value *incoming : other->incoming_values()) walk(incoming, delta);
+    } else if (auto *select = dyn_cast<SelectInst>(value)) {
+      walk(select->getTrueValue(), delta); walk(select->getFalseValue(), delta);
+    } else if (auto *freeze = dyn_cast<FreezeInst>(value)) {
+      walk(freeze->getOperand(0), delta);
+    }
+    path.erase(value);
+  };
+  for (Value *incoming : phi.incoming_values()) walk(incoming, APInt(width, 0));
+  // A 2^63 stride has just two members and the ordinary transfer enumerates
+  // them. Larger signed strides do not fit Atom's existing representation.
+  if (zeros == width || zeros >= 63) return;
+  AV closure; closure.top = facts.top;
+  bool objectOrbit = false;
+  int64_t stride = int64_t(1) << zeros;
+  for (auto a : facts.atoms) {
+    if (a.kind == Atom::Ptr && a.object) {
+      if (a.stride != -1) {
+        a.stride = std::gcd(a.stride, stride);
+        canonicalOffset(a.offset, a.stride);
+      }
+      objectOrbit = true;
+    }
+    closure.merge(AV{{a}, false});
+  }
+  // External pointers, FN and ROOT are copied by GEP. A concrete object orbit
+  // also reaches outside that object, as the enumerating transfer would.
+  if (objectOrbit) numericalUnknown(closure);
+  facts = std::move(closure);
+}
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
     ++activeBudget->work.worklistPops;
@@ -1577,51 +1762,17 @@ void Analysis::step(Instruction &i) {
       for (Value *v : p->incoming_values())
         if (longAdditiveCycle(v, p, [&](Value *x) { return get(x); },ReversibleEntry))
           a.top = true;
-    // PT2: a full-width constant GEP recurrence denotes the complete modular
-    // additive orbit. Solve it as a residue class, rather than allocating one
-    // memory slot per iteration (musl strlen/memcpy pointer induction).
-    if(ReversibleEntry && p->getType()->isPointerTy()) {
-      auto pw=M.getDataLayout().getPointerTypeSizeInBits(p->getType());
-      if(pw==M.getDataLayout().getIndexTypeSizeInBits(p->getType())) {
-        std::set<Value *> path;unsigned zeros=pw;
-        std::function<void(Value *,APInt)> orbit=[&](Value *v,APInt delta) {
-          if(v==p) {if(!delta.isZero())zeros=std::min(zeros,delta.countr_zero());return;}
-          if(!path.insert(v).second)return;
-          if(auto *g=dyn_cast<GEPOperator>(v)) {
-            APInt offset(pw,0);
-#if LLVM_VERSION_MAJOR >= 23
-            SmallMapVector<Value *,APInt,4> variables;
-#else
-            MapVector<Value *,APInt> variables;
-#endif
-            if(g->collectOffset(M.getDataLayout(),pw,variables,offset)) {
-              std::vector<APInt> offsets{offset};bool finite=true;
-              for(auto &variable:variables) {
-                auto fact=get(variable.first);if(fact.top || fact.atoms.empty()) {finite=false;break;}
-                std::vector<APInt> next;
-                for(auto &atom:fact.atoms)if(atom.kind==Atom::Int)
-                  for(auto &d:offsets)next.push_back(d+atom.integer.sextOrTrunc(pw)*variable.second);
-                if(next.size()>4096) {finite=false;break;}offsets=std::move(next);
-              }
-              if(finite)for(auto &d:offsets)orbit(g->getPointerOperand(),delta+d);
-            }
-          } else if(auto *q=dyn_cast<PHINode>(v))for(Value *x:q->incoming_values())orbit(x,delta);
-          else if(auto *s=dyn_cast<SelectInst>(v)) {orbit(s->getTrueValue(),delta);orbit(s->getFalseValue(),delta);}
-          path.erase(v);
-        };
-        for(Value *v:p->incoming_values())orbit(v,APInt(pw,0));
-        if(zeros<pw && zeros<63) {
-          AV closure;closure.top=a.top;
-          for(auto atom:a.atoms) {
-            if(atom.kind==Atom::Ptr && atom.object && !atom.stride) {
-              atom.stride=int64_t(1)<<zeros;atom.offset=uint64_t(atom.offset)&(atom.stride-1);
-            }
-            closure.merge(AV{{atom},false});
-          }
-          numericalUnknown(closure);a=std::move(closure);
-        }
+    closePointerOrbit(*p, M.getDataLayout(), a, [&](Value *v, const Instruction *at) {
+      AV domain = get(v);
+      if (auto bound = indexBounds.find({at, v}); bound != indexBounds.end()) {
+        if (domain.top) domain = bound->second;
+        else for (auto it = domain.atoms.begin(); it != domain.atoms.end();)
+          if (it->kind == Atom::Int && !bound->second.atoms.count(*it))
+            it = domain.atoms.erase(it);
+          else ++it;
       }
-    }
+      return domain;
+    });
     // Exact finite additive closure, including small counters: enumerate the
     // subgroup once instead of waiting one whole-program round per element.
     if (!a.top && p->getType()->isIntegerTy()) {
@@ -1665,7 +1816,12 @@ void Analysis::step(Instruction &i) {
           if (p.kind == Atom::Ptr && p.object == s.object)
             for (auto &d : dst.atoms)
               if (d.kind == Atom::Ptr) {
-                if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
+                if (s.stride && len && !p.stride && !d.stride) {
+                  copySlotFamily(s, p, d, len->getZExtValue(),
+                      [&](const AV &value, const AV &address, uint64_t bytes, bool filled) {
+                        store(value, address, bytes, filled);
+                      });
+                } else if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
                   int64_t lo=std::max(p.offset,s.offset);
                   __int128 hi=std::min((__int128)p.offset+len->getZExtValue(),(__int128)s.offset+s.bytes);
                   if(hi>lo) store(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);

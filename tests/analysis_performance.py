@@ -4,6 +4,8 @@
 import argparse, json, subprocess, time
 from contracts import ROOT as R
 from analysis_counters import main as analysis_counters
+from analysis_convergence import main as analysis_convergence
+from analysis_pointer_closure import main as analysis_pointer_closure
 
 
 def main():
@@ -67,6 +69,8 @@ def main():
         rounds=data["analysis_rounds"],
         budget_diagnostic=diagnostic,
         work_counters=analysis_counters(["--major", str(a.major)]),
+        convergence=analysis_convergence(["--major", str(a.major)]),
+        pointer_closure=analysis_pointer_closure(["--major", str(a.major)]),
     )
     (R / f".tmp/analysis-performance-{a.major}.json").write_text(
         json.dumps(result, indent=2) + "\n"
