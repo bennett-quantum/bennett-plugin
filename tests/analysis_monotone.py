@@ -125,6 +125,44 @@ define i1 @top() {
         check("bottom-with-top-" + name, value_domains(data)["top", name] == (False, []),
               value_domains(data)["top", name])
 
+    for name, body, expected_atoms in (
+        ("bottom", "unreachable", []),
+        ("null", "ret ptr null", ["INT(1)"]),
+    ):
+        data = analyse("pointer-derived-" + name, f"""
+define internal ptr @address() {{ {body} }}
+define i1 @top() {{
+ %p = call ptr @address()
+ %bits = ptrtoint ptr %p to i64
+ %comparison = icmp eq i64 %bits, 0
+ ret i1 %comparison
+}}
+""")
+        check("pointer-derived-" + name,
+              value_domains(data)["top", "%comparison"] == (False, expected_atoms),
+              value_domains(data)["top", "%comparison"])
+
+    # PT10's per-lane compare already preserves empty finite products. Keep
+    # that behavior alongside scalar PT5 and independently check both lanes.
+    for name, body, first, second in (
+        ("bottom", "unreachable", [], []),
+        ("finite", "ret <2 x i32> <i32 1, i32 0>", ["INT(0)"], ["INT(1)"]),
+    ):
+        data = analyse("vector-" + name, f"""
+define internal <2 x i32> @source() {{ {body} }}
+define i1 @top() {{
+ %a = call <2 x i32> @source()
+ %comparison = icmp eq <2 x i32> %a, zeroinitializer
+ %first = extractelement <2 x i1> %comparison, i32 0
+ %second = extractelement <2 x i1> %comparison, i32 1
+ ret i1 %first
+}}
+""")
+        for value, expected_atoms in (("%first", first), ("%second", second)):
+            check("vector-" + name + value,
+                  value_domains(data)["top", value] == (False, expected_atoms),
+                  value_domains(data)["top", value])
+
     # With no seed, the least solution of x = (x == 0) is bottom.
     # Inflationary outer joins cannot oscillate, even with the old default.
     data = analyse("unseeded-cycle", """define internal i1 @cycle() {

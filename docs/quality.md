@@ -379,7 +379,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/analysis_clock.py": {"complexity": 1, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_counters.py": {"complexity": 19, "functions": 3, "length_max": 218, "length_p50": 46, "length_p90": 218, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_convergence.py": {"complexity": 9, "functions": 2, "length_max": 40, "length_p50": 17, "length_p90": 40, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_monotone.py": {"complexity": 17, "functions": 4, "length_max": 168, "length_p50": 4, "length_p90": 168, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_monotone.py": {"complexity": 21, "functions": 4, "length_max": 206, "length_p50": 4, "length_p90": 206, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_pointer_closure.py": {"complexity": 25, "functions": 4, "length_max": 229, "length_p50": 16, "length_p90": 229, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 68, "length_p50": 68, "length_p90": 68, "over_300": 0, "trivial_wrappers": 0},
