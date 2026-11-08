@@ -58,7 +58,13 @@ FACTS = {
     # PT11 seeds the internal callee of the H-only top with non-handle top.
     "vector-abi": {"%r": []},
     "vector-abi-device": {"%r": ["INT(3)"]},
+    "vector-scalable-fixed": {"%r": ["INT(9)"]},
+    "vector-scalable-minimum": {"%r": ["INT(9)"]},
+    "vector-scalable-option": {"%r": ["INT(10)"]},
+    "vector-scalable-fixed-override": {"%r": ["INT(9)"]},
+    "vector-scalable-abi": {"%r": []},
 }
+TOP_FACTS = {"vector-abi", "vector-scalable-abi"}
 
 
 def command(args):
@@ -151,6 +157,8 @@ def oracle(args, source, name, dest):
                           ",".join(map(str, values)), "--budget", "1000000,0,256,64"], args)
         data = json.loads(result.stdout)
         assert (data["code"], int(data["payload"])) == (0, want), (name, values, want, data)
+    checked([ref, "step-check", output / "ref.bennett", "ref", "--exhaustive", "--max-bits", "1",
+             "--budget", "1000000,0,256,64"], args)
     if name.startswith("fneg-"):
         ir = checked([f"/usr/lib/llvm-{args.major}/bin/llvm-dis", output / "materialised.bc", "-o", "-"], args).stdout
         assert "fneg " not in ir, ir
@@ -190,12 +198,12 @@ def check_case(args, name):
         for value, want in FACTS.get(name, {}).items():
             scalar_value = scalar_fact_name(value, explicit, scalar)
             assert scalar_value in explicit, (name, value, scalar_value, explicit)
-            expected = (name == "vector-abi", set(want))
+            expected = (name in TOP_FACTS, set(want))
             assert explicit[scalar_value] == expected, (name, value, expected, explicit[scalar_value])
         if args.mode == "analysis":
             for value, want in FACTS.get(name, {}).items():
                 assert value in virtual, (name, value, virtual)
-                expected = (name == "vector-abi", set(want))
+                expected = (name in TOP_FACTS, set(want))
                 assert virtual[value] == expected, (name, value, expected, virtual[value])
                 assert explicit[scalar_fact_name(value, explicit, scalar)] == virtual[value]
         return {"checked_scalar_facts": sorted(FACTS.get(name, {}))}
