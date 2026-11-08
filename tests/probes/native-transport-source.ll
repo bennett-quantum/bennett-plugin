@@ -33,6 +33,12 @@ define void @__bennett_rt_source_helper() {
   ret void
 }
 define void @entry(ptr %p) {
+  ; Optimisation may inline transport wrappers into ordinary source functions.
+  call void @__bennett_effect_clock_read(ptr %p)
+  call void @__bennett_effect_entropy_read(ptr %p, i64 8)
+  call void @__bennett_effect_console_write(ptr %p, i64 8)
+  call void @__bennett_effect_block_read(i64 0, ptr %p)
+  call void @__bennett_effect_block_write(i64 0, ptr %p)
   call void @__bennett_rt_source_helper()
   call void @__bennett_rt_transport_clock_read(ptr %p)
   call void @__bennett_rt_transport_entropy_read(ptr %p, i64 8)

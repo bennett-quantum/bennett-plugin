@@ -78,6 +78,10 @@ done
 "${finalise[@]}" "-bennett-native-report=$work/finalised.json" "$work/relinked.bc" -S -o "$work/finalised.ll"
 "$tool/opt" -passes=verify "$work/finalised.ll" -disable-output
 test "$(rg -c '^declare .*@__bennett_rt_transport_' "$work/finalised.ll")" = 6
+if rg -q 'call .*@__bennett_effect_' "$work/finalised.ll"; then
+  echo 'source effect marker retained after finalisation' >&2
+  exit 1
+fi
 jq -e --arg identity "$identity" '.phase == "finalised" and .materialised_sha256 == $identity and (.symbols | length) == 2' "$work/finalised.json" >/dev/null
 "${prepare[@]}" "-bennett-native-report=$work/direct.json" "$work/device.bc" -S -o "$work/direct.ll"
 "$tool/opt" -passes=verify "$work/direct.ll" -disable-output
