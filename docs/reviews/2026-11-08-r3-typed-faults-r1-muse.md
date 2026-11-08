@@ -1,0 +1,23 @@
+# Review: r3-typed-faults round 1 (muse)
+
+Reviewed range: `main...job/r3-typed-faults`, implementation head `3cfcf49718c34bbdc9a9a0a78d4d92029b7b940c` (20e40fa..3cfcf49, 14 commits, 12 files; a concurrent review-only commit 76414fe landed during this review and is outside the reviewed implementation range).
+
+Verdict: **CLEAR** — no P0/P1 findings.
+
+## What was verified (commands run by the reviewer, all builds/tests via `.tmp/r3-typed-faults/slot.py`)
+
+- Rebuilt both majors (`./scripts/build`, exit 0), then re-ran at head: `tests/r_envelopes.py` and `tests/r_typed_faults.py` on LLVM 18 and 23 (all cases: version negotiation, literal/step/source-operation faults, recursive SCC fault 3, dynamic dispatch, FAILED reversal) — all passed. The tests execute produced objects under the pinned ISA 0.9 reference reader (3b10907) with exact code/prefix/terminal assertions, so fault identities are oracle-anchored, not self-derived.
+- Independent §9.2 re-derivation: reviewer-written script (from ISA 0.9 §9.2 parts 1–6, JCS key-component arrays sorted by UTF-8 bytes, SCC rule) re-derived every symbol's `interface_hash` for five produced objects (literal 2^64−1, recursive-fault cyclic SCC, div0, dynamic-2, heap) — all matched the claims. Emitted bodies spot-checked directly: `fault 18446744073709551615`, `fault 4` for code 0, `fault 1` step exhaustion, no `^trap` row in steps-0, header `isa=0.9 … ptr_width=64`.
+- Legacy 0.8 track: `tests/dialect_version.py` (pins SHA-256 of a pre-change `launch.bennett`), `tests/varargs.py` (the N23 shared-path risk in `src/Reversible.inc`/`src/CCCalls.inc`) on both majors and `tests/reversible.py` on 18 — passed. Diff-reading confirms every version-parameterised site (`producerDialect/ISA/Mapping`, `coverageSource`, `isaHeader`, envelope `isa=` prefixes, verdict/blockers) yields the exact legacy literal in Legacy profile, and `layoutEnvelope` (Production.cpp:113) preserves legacy dotted keys, ordering and collision behaviour at all five converted envelope sites (oracle/lproc closure scoping included).
+- Hang guards: implementer's `guard-check.py` (7 controls) and `snapguard-controls.py` re-run green; `scripts/quality.py --check` green (ratchet present in gate.toml, quality.md updated; no HANDOFF.md in repo). Gate logs for 627aa40/505165d/5fe2142 confirm the red chain the guard commits answer; exit 124 = UNKNOWN is settled (rule 4/9) and not re-litigated here.
+- Code read against pinned contracts: ISA 0.9 §§4.9/5.4 (code table, effective cause) and §9.2/K47, dialect 0.3-r1 §§1.7/17.5/17.6/19.9. Typed-fault mapping (`typedFault`, Production.cpp:532; step counter fault 1, Production.cpp:316) matches; remaining `trap` rows are code-4 causes (`unreachable`, descriptor mismatch) or analysis-proven-unreachable dispatch guards, not non-4 replacements. Red-first structure holds (20e40fa tests precede 33feed5; 42ca42d array regression precedes 9aa2c4b; both new drivers would fail at main, where `-bennett-dialect=0.3-r1` is rejected). Full gate on this head runs separately per rule 4 and was not duplicated here.
+
+## P2+ nits (one bead: bp-5n5)
+
+Report `isa` stays "0.8" in 0.3-r1 mode (Analysis.cpp:2213; `producerReport` BennettPlugin.cpp:306 overrides only `dialect`; reproduced by reviewer probe); unbounded dynamic fault codes fail loud instead of dispatching (Production.cpp:542-549); blocked 0.9 quantum/oracle path can leave isa=0.8 `ref.bennett` files from `lowerScalar` (Scalar.cpp:832,950) before failing loud, and its option check runs after analysis/report output; no K47 dotted-name collision fixture; bare 120 s timeouts without UNKNOWN semantics in the new drivers (r_typed_faults.py:125, contracts default); `producerIdentity` (BennettPlugin.cpp:86) silently defaults to the legacy string pre-parse and `exit(1)`s on a mismatched pair during identity query; job-named `.tmp/r3-typed-faults` work dirs and a scratch-worktree path cited in committed test comments.
+
+Coverage: read closely — full diff of all 12 files, `typedFault`/`layoutEnvelope`/`compareTree`/pass-order code paths, both new tests end-to-end, pinned ISA/dialect clauses above, implementer PROGRESS + gate logs. Skimmed — pre-existing `Entry` lowering internals outside the diff, `hostStub` launch-ABI body (unchanged), entry_snapshot test body beyond its guard wrapper and call sites.
+
+Owned-path note: the range touches `src/Reversible.inc`, `src/CCCalls.inc`, `scripts/gate` and `tests/entry_snapshot.py` beyond the original job brief's list; the review brief scopes these commits in (gatefix/resume work) and their behaviour is verified above, so this is recorded, not graded.
+
+Provenance: implementer gpt-6.1-sol; reviewer muse-wonder-full-1.0, fresh session (D9).

@@ -1,4 +1,5 @@
 status = "milestone-1-in-progress"
+
 dialect = "0.2.13"
 isa = "0.8"
 dialect_sha256 = "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda15"
@@ -21,3 +22,11 @@ llvm18_support_sha256 = "c7a1306784e7f487c040b724e2074294ff687f149bf6403a9e40397
 llvm23_support_sha256 = "f7fee923e2b06d1c4106439e46ed03936a9ee7721d3498d008e298cb5265cade"
 checker_script_sha256 = "bb11d8498a8403a415a77910193302b00bb1978d6ee24c0079bab5aa69ab5c2e"
 checker_source_sha256 = "a5c383379ce3dcf5a53eca274aa446e968d533c13516a64a9d80dd6e3298828d"
+
+[profiles.r_contract]
+dialect = "0.3-r1"
+isa = "0.9"
+mapping = "0.3"
+normaliser = "0.2.8"
+replay = "saved-tape-v1"
+dialect_commit = "4bca41b49eb0999449c9475cb15e78b1e83d18e2"

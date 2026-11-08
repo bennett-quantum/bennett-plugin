@@ -1,17 +1,35 @@
 #!/usr/bin/env python3
-"""Automatic CC snapshots: observe payloads, faults, private writes and clean release."""
+"""Automatic CC snapshots: observe payloads, faults, private writes and clean release.
 
-import argparse, json, shutil, subprocess, hashlib
+Exit 124 means UNKNOWN: a hang guard expired. Test failures retain their exit status.
+"""
+
+import argparse, json, shutil, subprocess, hashlib, shlex, sys
 from production import REF as DEBUG_REF
 
 REF = DEBUG_REF.parent.parent / "release/bennett-isa-ref"
-from functools import partial
-from contracts import run
+from contextlib import suppress
+from contracts import run as _run
 
-run = partial(run, timeout=1200)
+# `python3 -B tests/entry_snapshot.py --major 18`, timed with the per-call
+# limit lifted locally on this 12-core Intel i7-1365U host, 2026-11-08:
+# slowest subprocess 850.375730 s (logical-stack reference run-program).
+# The guard is 10x that measurement, rounded up to whole seconds.
+ENTRY_SNAPSHOT_HANG_GUARD_S = 8504
+UNKNOWN_EXIT_STATUS = 124
 from contracts import ROOT as R
 
 from production_environments import descriptor, DECL
+
+
+def run(command):
+    with suppress(subprocess.TimeoutExpired):
+        return _run(command, timeout=ENTRY_SNAPSHOT_HANG_GUARD_S)
+    print(
+        f"UNKNOWN: hang guard {ENTRY_SNAPSHOT_HANG_GUARD_S} s exceeded by {shlex.join(map(str, command))}",
+        file=sys.stderr, flush=True,
+    )
+    raise SystemExit(UNKNOWN_EXIT_STATUS)
 
 
 def source(region, setup, argument="0", mutation="", result=7, second=None):

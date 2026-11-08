@@ -8,7 +8,7 @@ static void normaliseRAsm(Function &f, json::Array &coverage) {
     auto text=std::regex_replace(StringRef(assembly->getAsmString()).str(),std::regex("[;\\s]+")," ");text=StringRef(text).trim().str();
     bool erased=c->getType()->isVoidTy() && (text.empty() || text=="pause" || text=="nop");
     coverage.push_back(json::Object{{"function",f.getName()},{"asm",text},{"constraints",assembly->getConstraintString()},
-      {"source","dialect-0.2.13:N31"},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
+      {"source",coverageSource("N31")},{"classification",erased?"lowered":"trapped"},{"reason",erased?"§15.2 barrier/no-op":"§15.2 unlisted asm row: F(8)"}});
     if(!erased) {
       IRBuilder<> b(c);auto fault=f.getParent()->getOrInsertFunction("__bennett_nz_fault",b.getVoidTy(),b.getInt64Ty());
       auto *trap=b.CreateCall(fault,{b.getInt64(8)});
@@ -91,7 +91,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     e.ccHeapBytes=std::max(e.ccHeapBytes,callee.ccHeapBytes);
     json::Array pt,rt;for(auto &t:callee.paramTypes)pt.push_back(t);for(auto &t:callee.resultTypes)rt.push_back(t);
     auto tier=callee.rTier?"r":"cc";
-    auto sig=jcs(json::Value(json::Object{{"abi","0.8"},{"kind",tier},{"tier",tier},{"params",std::move(pt)},{"results",std::move(rt)}}));
+    auto sig=jcs(json::Value(json::Object{{"abi",producerISA()},{"kind",tier},{"tier",tier},{"params",std::move(pt)},{"results",std::move(rt)}}));
     e.ccFunctions[names.at(f)]={sig,"fn "+std::string(tier)+" @"+names.at(f)+" ("+join(callee.params)+") ("+join(callee.results)+") () () ()\n"+join(callee.rows,"\n")};
   }
   e.rows={"^entry():"};
@@ -116,14 +116,14 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     auto selector=e.emit("i32","load.i32 "+e.fieldPointer(p,4));status=e.emit("i32","select "+exiting+" "+selector+" "+status);
   }
   e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
-  json::Object record{{"dialect","0.2.13"},{"isa","0.8"},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
-    {"mode","reversible"},{"verdict","blocked:BD-B-ISA7"},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
+  json::Object record{{"dialect",producerDialect()},{"isa",producerISA()},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
+    {"mode","reversible"},{"verdict",reversibleVerdict()},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
   record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
-  json::Object cert{{"versions",json::Object{{"isa","0.8"},{"cert","0.8"}}},{"regions",json::Object{}},
+  json::Object cert{{"versions",json::Object{{"isa",producerISA()},{"cert",producerISA()}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
   auto object=launchObject(e,record,cert);write(dir+"/launch.bennett",object);
   auto build=jcs(json::Value(std::move(record)));write(dir+"/build.json",build+"\n");
-  cert["producer"]=json::Object{{"name","bennett-plugin"},{"version","0.2.13+build."+hash(build)},
+  cert["producer"]=json::Object{{"name","bennett-plugin"},{"version",producerDialect()+"+build."+hash(build)},
     {"materialisation",json::Object{{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},{"normaliser_version","0.2.8"}}}};
   write(dir+"/certificate.json",jcs(json::Value(std::move(cert)))+"\n");
   auto report=completeCoverage(object);auto sections=objectSections(object);auto symbols=parse(sections.at("symbols"));
@@ -133,20 +133,19 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     for(auto &entry:*report.getArray("entries")) {
       auto *entryObject=entry.getAsObject();auto *at=entryObject->getArray("point");
       if((*at)[0].getAsString()==identity && (*at)[1].getAsString()==p->getString("block") && (*at)[2].getAsInteger()==p->getInteger("ordinal")) {
-        (*entryObject)["source"]="dialect-0.2.13:N31";(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
+        (*entryObject)["source"]=coverageSource("N31");(*entryObject)["classification"]="trapped";(*entryObject)["reason"]=*p->getString("reason");
       }
     }
   }
   auto coverage=jcs(json::Value(std::move(report)))+"\n";write(dir+"/coverage.json",coverage);write(dir+"/all-coverage.json",coverage);
-  write(dir+"/blockers.json",jcs(json::Value(json::Array{json::Object{{"code","BD-B-ISA7"},{"entry",entryName},
-    {"section","11.5/17.6/25.1"},{"reason","R entry: mandatory pre-instruction typed fault 1 requires ISA-7; generic trap only on exhausted counter; no later source effect; prefix history retained"}}}))+"\n");
+  write(dir+"/blockers.json",reversibleBlockers(entryName));
   // Device bitcode retains materialised bodies; host main gets the launch ABI.
   launch->eraseFromParent();root->setName(entryName);
   checkComparisonMaterialisation(m);
   raw_fd_ostream bc(out.str()+"/device.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(m,bc);bc.close();
   auto buildRecord=parse(build);hostStub(sourceEntry,object,*buildRecord.getAsObject(),sharesGlobalState(sourceEntry, sourceAnalysis));
   raw_fd_ostream host(out.str()+"/host.bc",ec);if(ec)fail("output",ec.message());WriteBitcodeToFile(source,host);host.close();
-  write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict","blocked:BD-B-ISA7"}}}))+"\n");
+  write(out.str()+"/launches.json",jcs(json::Value(json::Array{json::Object{{"entry",entryName},{"object",entryName+"/launch.bennett"},{"build_sha256",hash(build)},{"verdict",reversibleVerdict()}}}))+"\n");
   json::Object artifacts;
   for(auto file:{"host.bc","device.bc","launches.json"}) {auto bytes=read(out.str()+"/"+file);artifacts[file]=json::Object{{"bytes",int64_t(bytes.size())},{"sha256",hash(bytes)}};}
   for(auto file:{"launch.bennett","build.json","certificate.json","coverage.json","all-coverage.json","blockers.json"}) {auto path=entryName+"/"+file;auto bytes=read(out.str()+"/"+path);artifacts[path]=json::Object{{"bytes",int64_t(bytes.size())},{"sha256",hash(bytes)}};}
