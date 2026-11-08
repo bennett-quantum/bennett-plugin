@@ -3,6 +3,7 @@
 
 import argparse, json, subprocess, time
 from contracts import ROOT as R
+from analysis_counters import main as analysis_counters
 
 
 def main():
@@ -65,6 +66,7 @@ def main():
         seconds=elapsed,
         rounds=data["analysis_rounds"],
         budget_diagnostic=diagnostic,
+        work_counters=analysis_counters(["--major", str(a.major)]),
     )
     (R / f".tmp/analysis-performance-{a.major}.json").write_text(
         json.dumps(result, indent=2) + "\n"

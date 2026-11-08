@@ -18,23 +18,135 @@
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 #include <numeric>
+#include <cstdlib>
 #include "llvm/Support/CommandLine.h"
 #include <tuple>
 using namespace llvm;
 namespace bennett {
+static std::string label(const Value *v);
 namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
     cl::desc("S2 thread CPU allowance in milliseconds; source/ISA budgets are independent"));
+struct AnalysisWork {
+  static constexpr size_t TopFunctionLimit = 10;
+  uint64_t transferApplications = 0;
+  // S2 scans an implicit instruction worklist each round. Count dispatches,
+  // including cached transfers and private normalisation instructions.
+  uint64_t worklistPops = 0;
+  uint64_t roundsCompleted = 0;
+  uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
+  uint64_t functionVisits = 0;
+  struct FunctionVisits {
+    std::string name;
+    uint64_t visits = 0;
+  };
+  std::vector<FunctionVisits> functions;
+
+  explicit AnalysisWork(const Module &module) {
+    functions.reserve(module.size());
+    for (const Function &function : module)
+      if (!function.isDeclaration())
+        functions.push_back({function.hasName() ? function.getName().str()
+                                                 : label(&function), 0});
+  }
+  json::Object report(std::optional<uint64_t> cpuNanoseconds) const {
+    std::vector<const FunctionVisits *> ranked;
+    for (const auto &function : functions)
+      if (function.visits) ranked.push_back(&function);
+    llvm::sort(ranked, [](const auto *a, const auto *b) {
+      if (a->visits != b->visits) return a->visits > b->visits;
+      return a->name < b->name;
+    });
+    json::Object top;
+    for (size_t n = 0; n < std::min(TopFunctionLimit, ranked.size()); ++n)
+      top[ranked[n]->name] = ranked[n]->visits;
+    json::Object cpu{{"deterministic", false}};
+    if (cpuNanoseconds) cpu["value"] = double(*cpuNanoseconds) / 1000000.0;
+    else {
+      cpu["value"] = nullptr;
+      cpu["error"] = "S2 thread CPU clock unavailable";
+    }
+    return json::Object{{"transfer_applications", transferApplications},
+            {"worklist_pops", worklistPops},
+            {"rounds_completed", roundsCompleted},
+            {"join_count", avMerges + fieldJoins + slotJoins},
+            {"av_merges", avMerges}, {"field_joins", fieldJoins},
+            {"slot_joins", slotJoins},
+            {"function_visits", json::Object{{"total", functionVisits},
+                {"top_limit", TopFunctionLimit}, {"top", std::move(top)}}},
+            {"cpu_ms", std::move(cpu)}};
+  }
+};
+// The existing pass calls report() immediately after run(). Retain just that
+// invocation's frozen receipt, without attaching bookkeeping to the source IR.
+struct AnalysisReceipt {
+  const Analysis *owner = nullptr;
+  const Module *module = nullptr;
+  std::string json;
+  json::Value document{nullptr};
+};
+thread_local AnalysisReceipt completedReceipt;
 struct AnalysisBudget {
   AnalysisBudgetClock clock{AnalysisMilliseconds};
+  AnalysisWork work;
+  const Analysis *owner;
+  std::string reportPath;
   const Instruction *at=nullptr;
   const char *rule="PT11 seeds";
   uint64_t ticks=0;
+  enum class ReceiptState { Pending, Emitted };
+  ReceiptState receiptState = ReceiptState::Pending;
+  explicit AnalysisBudget(const Analysis *analysis, const Module &module)
+      : work(module), owner(analysis) {
+    if (completedReceipt.module != &module) {
+      completedReceipt.document = nullptr;
+      completedReceipt.module = &module;
+    }
+    // BennettPlugin.cpp owns this string option. Use LLVM's registered option
+    // to honour the same destination even when fail() exits before its writer.
+    auto &options = cl::getRegisteredOptions();
+    auto report = options.find("bennett-report");
+    if (report == options.end())
+      fail("analysis-resource", "bennett-report option is not registered");
+    reportPath = static_cast<cl::opt<std::string> *>(report->second)->getValue();
+  }
+  void emit(bool stopped) {
+    // A failed output write can call fail() while the scope is still active.
+    // Its exit handler must not print the receipt a second time.
+    if (receiptState == ReceiptState::Emitted) return;
+    receiptState = ReceiptState::Emitted;
+    json::Value workJSON(work.report(clock.elapsedNanoseconds()));
+    std::string receipt = formatv("{0}", workJSON).str();
+    errs() << "bennett-analysis-work:" << receipt << '\n';
+    if (!stopped) {
+      completedReceipt.owner = owner;
+      completedReceipt.json = receipt;
+    }
+    if (!reportPath.empty()) {
+      json::Object report;
+      // A later production analysis must preserve the main report's values,
+      // regions and functions while updating its work receipt. On std::exit,
+      // thread-local documents may already be destroyed; use only this scope.
+      if (!stopped)
+        if (auto *document = completedReceipt.document.getAsObject())
+          report = *document;
+      report["analysis_work"] = std::move(workJSON);
+      std::error_code error;
+      raw_fd_ostream output(reportPath, error);
+      if (error) {
+        if (!stopped) fail("output", error.message());
+        errs() << "bennett: output: " << error.message() << '\n';
+        return;
+      }
+      output << formatv("{0:2}\n", json::Value(std::move(report)));
+    }
+  }
   [[noreturn]] void exhausted(StringRef reason="S2 round limit") {
     std::string message="§5.2 "+std::string(rule)+" budget exhausted at AV(";
     raw_string_ostream out(message);
@@ -71,8 +183,21 @@ void budgetTick() {if(activeBudget)activeBudget->check();}
 struct BudgetScope {
   AnalysisBudget budget;
   AnalysisBudget *previous=activeBudget;
-  BudgetScope() {activeBudget=&budget;}
-  ~BudgetScope() {activeBudget=previous;}
+  BudgetScope(const Analysis *analysis, const Module &module)
+      : budget(analysis, module) {
+    // fail() uses std::exit, which leaves this automatic object alive and does
+    // not run its destructor. This also covers failures in transfer helpers.
+    static const int registered = std::atexit([] {
+      if (activeBudget) activeBudget->emit(true);
+    });
+    activeBudget = &budget;
+    if (registered != 0)
+      fail("analysis-resource", "cannot register analysis work receipt");
+  }
+  ~BudgetScope() {
+    budget.emit(false);
+    activeBudget=previous;
+  }
 };
 }
 static AV atom(Atom::Kind k, const Value *o = nullptr, int64_t off = 0,
@@ -96,6 +221,7 @@ bool Atom::operator<(const Atom &b) const {
   return integer.ult(b.integer);
 }
 bool AV::merge(const AV &v) {
+  if (activeBudget) ++activeBudget->work.avMerges;
   budgetTick();
   bool change = false;
   if (v.top && !top) {
@@ -530,6 +656,7 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   for (auto &a : p.atoms)
     if (a.kind == Atom::Ptr) {
+      if (activeBudget) ++activeBudget->work.slotJoins;
       // Initial zero images with the same start are nested intervals. Their
       // exact union is the largest extent, not a new slot for every loop round.
       if(filled && !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int && v.atoms.begin()->integer.isZero()) {
@@ -871,6 +998,7 @@ AV Analysis::field(const Value *v, const Path &path) {
   return fields[{v, path}];
 }
 void Analysis::setField(const Value *v, const Path &path, const AV &a) {
+  if (activeBudget) ++activeBudget->work.fieldJoins;
   if (path.empty())
     changed |= values[v].merge(a);
   else
@@ -1231,6 +1359,7 @@ static bool longAdditiveCycle(Value *value, Value *source,
 }
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
+    ++activeBudget->work.worklistPops;
     activeBudget->at=&i;
     activeBudget->rule=isa<LoadInst>(i)?"PT6":isa<StoreInst>(i)?"PT7":isa<GetElementPtrInst>(i)?"PT2":isa<CallBase>(i)?"PT8/PT9/PT12":isa<PHINode>(i)||isa<SelectInst>(i)?"PT3":i.getType()->isAggregateType()?"PT10":"PT4/PT5";
     activeBudget->check(true);
@@ -1253,6 +1382,7 @@ void Analysis::step(Instruction &i) {
     if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),equal))return;
     old=std::move(inputs);
   }
+  if (activeBudget) ++activeBudget->work.transferApplications;
   // S2 evaluates precisely the same N9/N32/N33 graph on private instructions.
   // Operands retain source identities; host IR and its attributes stay untouched.
   bool fp=false;
@@ -1759,7 +1889,7 @@ void Analysis::step(Instruction &i) {
   changed |= values[&i].merge(a);
 }
 void Analysis::run() {
-  BudgetScope scope;
+  BudgetScope scope(this, M);
   // PT2 permits sound bounds on GEP indices. Obtain them without changing the
   // reference value sets: mem2reg only on a private analysis clone, then SCEV.
   // In particular, a bounded array loop must not contaminate an adjacent field
@@ -1895,13 +2025,19 @@ void Analysis::run() {
     changed = false;
     seeds();
     const Instruction *lastChanged=nullptr;const char *lastRule=nullptr;
-    for (Function &f : M)
+    size_t functionIndex = 0;
+    for (Function &f : M) {
+      if (f.isDeclaration()) continue;
+      ++scope.budget.work.functionVisits;
+      ++scope.budget.work.functions[functionIndex++].visits;
       for (Instruction &i : instructions(f)) {
         bool prior=changed;changed=false;
         step(i);
         if(changed) {lastChanged=&i;lastRule=scope.budget.rule;}
         changed|=prior;
       }
+    }
+    ++scope.budget.work.roundsCompleted;
     if (++rounds >= MaxAnalysisRounds && changed) {
       scope.budget.at=lastChanged;scope.budget.rule=lastRule?lastRule:"PT11 seeds";
       scope.budget.exhausted();
@@ -2161,6 +2297,12 @@ static std::string label(const Value *v) {
   return s;
 }
 json::Object Analysis::report() {
+  if (completedReceipt.owner != this)
+    fail("analysis-resource", "report must follow this analysis run");
+  auto work = json::parse(completedReceipt.json);
+  if (!work)
+    fail("analysis-resource", "invalid analysis work receipt: " +
+         toString(work.takeError()));
   json::Array funcs, regions, vals;
   for (Function &f : M)
     if (!f.isDeclaration()) {
@@ -2209,12 +2351,15 @@ json::Object Analysis::report() {
             }
       }
     }
-  return json::Object{{"dialect", "0.2.13"},
+  json::Object result{{"dialect", "0.2.13"},
                       {"isa", "0.8"},
                       {"mode", "analysis-only"},
                       {"analysis_rounds", analysisRounds},
+                      {"analysis_work", std::move(*work)},
                       {"functions", std::move(funcs)},
                       {"regions", std::move(regions)},
                       {"values", std::move(vals)}};
+  completedReceipt.document = json::Value(json::Object(result));
+  return result;
 }
 } // namespace bennett

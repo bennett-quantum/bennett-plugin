@@ -294,6 +294,10 @@ also passed **8/8 each**, exit 0. `python3 -B scripts/quality.py --check` and
 
 ## Function size and cognitive-complexity baseline
 
+Device analysis work receipts (`analysis_work`, every exit path) raise the Analysis.cpp complexity
+from 6021 to 6155 and its longest function from 529 to 531 lines, add tests/analysis_counters.py, and
+add one line to tests/analysis_performance.py; the baseline below records them.
+
 Run `python3 -B scripts/quality.py` to reproduce the baseline below and
 `python3 -B scripts/quality.py --check` to compare against it. The single `quality baseline`
 check in gate.toml runs before the slow plugin gate. No absolute score or coverage threshold is used.
@@ -343,8 +347,8 @@ The source keeps configured classes available; no replacement executor or privat
     "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
     "scripts/record-verification.py": {"complexity": 64, "functions": 5, "length_max": 150, "length_p50": 9, "length_p90": 150, "over_300": 0, "trivial_wrappers": 1},
     "scripts/test": {"complexity": 9, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
-    "src/Analysis.cpp": {"complexity": 6021, "functions": 63, "length_max": 529, "length_p50": 17, "length_p90": 60, "over_300": 1, "trivial_wrappers": 4},
-    "src/AnalysisBudgetClock.h": {"complexity": 20, "functions": 3, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
+    "src/Analysis.cpp": {"complexity": 6155, "functions": 68, "length_max": 531, "length_p50": 16, "length_p90": 66, "over_300": 1, "trivial_wrappers": 4},
+    "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
     "src/BennettPlugin.cpp": {"complexity": 909, "functions": 20, "length_max": 138, "length_p50": 15, "length_p90": 45, "over_300": 0, "trivial_wrappers": 2},
     "src/ByteOrder.h": {"complexity": 15, "functions": 1, "length_max": 15, "length_p50": 15, "length_p90": 15, "over_300": 0, "trivial_wrappers": 0},
@@ -373,8 +377,9 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/aggregate_rows.py": {"complexity": 26, "functions": 1, "length_max": 179, "length_p50": 179, "length_p90": 179, "over_300": 0, "trivial_wrappers": 0},
     "tests/allocator_closure.py": {"complexity": 27, "functions": 2, "length_max": 153, "length_p50": 2, "length_p90": 153, "over_300": 0, "trivial_wrappers": 1},
     "tests/analysis_clock.py": {"complexity": 1, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_counters.py": {"complexity": 19, "functions": 3, "length_max": 218, "length_p50": 46, "length_p90": 218, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 65, "length_p50": 65, "length_p90": 65, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 66, "length_p50": 66, "length_p90": 66, "over_300": 0, "trivial_wrappers": 0},
     "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_defaults.py": {"complexity": 4, "functions": 1, "length_max": 57, "length_p50": 57, "length_p90": 57, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_fallback.py": {"complexity": 10, "functions": 1, "length_max": 120, "length_p50": 120, "length_p90": 120, "over_300": 0, "trivial_wrappers": 0},

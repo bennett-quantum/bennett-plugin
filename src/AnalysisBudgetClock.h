@@ -18,10 +18,15 @@ class AnalysisBudgetClock {
 public:
   explicit AnalysisBudgetClock(unsigned milliseconds)
       : limit(uint64_t(milliseconds) * 1000000) {}
-  std::optional<bool> expired() const {
+  std::optional<uint64_t> elapsedNanoseconds() const {
     auto now = read();
     if (!start || !now || *now < *start) return std::nullopt;
-    return *now - *start >= limit;
+    return *now - *start;
+  }
+  std::optional<bool> expired() const {
+    auto elapsed = elapsedNanoseconds();
+    if (!elapsed) return std::nullopt;
+    return *elapsed >= limit;
   }
 };
 }
