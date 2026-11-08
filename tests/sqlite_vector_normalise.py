@@ -27,6 +27,7 @@ CASES = {
     "vector-reduce-extrema": (9, ()),
     "vector-phi": (1, (1,)),
     "vector-abi": (3, ()),
+    "vector-abi-device": (3, ()),
     "vector-loop-phi": (3, ()),
     "vector-forward-block": (7, ()),
     "vector-abi-indirect": (3, ()),
@@ -35,6 +36,11 @@ CASES = {
     "gep-address-space": (4294967295, ()),
     "gep-constant-expression": (8, ()),
     "vector-scalable": (3, ()),
+    "vector-scalable-fixed": (9, ()),
+    "vector-scalable-option": (10, ()),
+    "vector-scalable-minimum": (9, ()),
+    "vector-scalable-fixed-override": (9, ()),
+    "vector-scalable-abi": (7, ()),
     "vector-reduce-smax": (9, ()),
     "vector-reduce-smin": (2147483648, ()),
     "vector-reduce-umax": (4294967295, ()),
@@ -49,13 +55,16 @@ FACTS = {
     "vector-extrema": {"%r": ["INT(1)", "INT(3)"]},
     "vector-reduce-extrema": {"%r": ["INT(1)", "INT(9)"]},
     "vector-phi": {"%r": ["INT(1)", "INT(5)"]},
-    "vector-abi": {"%r": ["INT(3)"]},
+    # PT11 seeds the internal callee of the H-only top with non-handle top.
+    "vector-abi": {"%r": []},
+    "vector-abi-device": {"%r": ["INT(3)"]},
 }
 
 
 def command(args):
+    override = [f"-bennett-vscale={args.vscale}"] if getattr(args, "vscale", None) else []
     return [f"/usr/lib/llvm-{args.major}/bin/opt", f"-load-pass-plugin={args.plugin}",
-            "-passes=bennett", "-bennett-dialect=0.2.13"]
+            "-passes=bennett", "-bennett-dialect=0.2.13", *override]
 
 
 def checked(argv, args, **kwargs):
@@ -64,6 +73,7 @@ def checked(argv, args, **kwargs):
     state = "COMPLETE"
     try:
         result = run(argv, timeout=args.guard_seconds, **kwargs)
+        state = "COMPLETE" if result.returncode == 0 else "FAILED"
     except subprocess.TimeoutExpired:
         state = "UNKNOWN/TIMEOUT"
         raise SystemExit(124)
@@ -72,7 +82,7 @@ def checked(argv, args, **kwargs):
         args.output.mkdir(parents=True, exist_ok=True)
         receipt = dict(argv=list(map(str, argv)), wall_seconds=time.monotonic() - started,
                        cpu_seconds=after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime,
-                       state=state, exit=result.returncode if state == "COMPLETE" else 124)
+                       state=state, exit=124 if state == "UNKNOWN/TIMEOUT" else result.returncode)
         with (args.output / f"commands-{args.major}.jsonl").open("a") as file:
             file.write(json.dumps(receipt) + "\n")
     assert result.returncode == 0, (list(map(str, argv)), result.returncode, result.stderr)
@@ -88,6 +98,7 @@ def functions(text):
 
 
 def normalise(args, name, dest):
+    args.vscale = 3 if name in ("vector-scalable-option", "vector-scalable-fixed-override") else None
     source, output = FIXTURES / (name + ".ll"), dest / "scalar.ll"
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     checked([*command(args), "-bennett-normalise-only", "-S", source, "-o", output], args)
@@ -99,6 +110,12 @@ def normalise(args, name, dest):
         text, count = re.subn(r"define internal <2 x i32> @identity\(<2 x i32> %v\)[^{]*\{.*?^}",
                               "declare <2 x i32> @identity(<2 x i32>)", output.read_text(), flags=re.S | re.M)
         assert count == 1 and "@identity.nz(" in text, text
+        device.write_text(text)
+    if name == "vector-abi-device":
+        device = dest / "device.ll"
+        text, count = re.subn(r"define void @launch\(\)[^{]*\{.*?^}",
+                              "declare void @launch()", output.read_text(), flags=re.S | re.M)
+        assert count == 1, text
         device.write_text(text)
     checked([*command(args), "-bennett-validate-only", "-disable-output", device], args)
     assert before == hashlib.sha256(source.read_bytes()).hexdigest(), "source fixture changed"
@@ -169,15 +186,17 @@ def check_case(args, name):
         return oracle(args, source, name, dest)
     if args.mode in ("analysis", "scalar-analysis"):
         explicit = facts(args, scalar, dest, "explicit")
+        virtual = facts(args, source, dest, "virtual") if args.mode == "analysis" else None
         for value, want in FACTS.get(name, {}).items():
             scalar_value = scalar_fact_name(value, explicit, scalar)
             assert scalar_value in explicit, (name, value, scalar_value, explicit)
-            assert explicit[scalar_value] == (False, set(want)), (name, value, want, explicit[scalar_value])
+            expected = (name == "vector-abi", set(want))
+            assert explicit[scalar_value] == expected, (name, value, expected, explicit[scalar_value])
         if args.mode == "analysis":
-            virtual = facts(args, source, dest, "virtual")
             for value, want in FACTS.get(name, {}).items():
                 assert value in virtual, (name, value, virtual)
-                assert virtual[value] == (False, set(want)), (name, value, want, virtual[value])
+                expected = (name == "vector-abi", set(want))
+                assert virtual[value] == expected, (name, value, expected, virtual[value])
                 assert explicit[scalar_fact_name(value, explicit, scalar)] == virtual[value]
         return {"checked_scalar_facts": sorted(FACTS.get(name, {}))}
     return {"scalarised": True}

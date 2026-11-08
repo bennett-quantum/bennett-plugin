@@ -7,8 +7,39 @@
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Scalar/LowerWidenableCondition.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Support/CommandLine.h"
 using namespace llvm;
 namespace bennett {
+static cl::opt<unsigned> VScale("bennett-vscale",cl::init(0),cl::desc("§12.5 link vscale (default: minimum range bound)"));
+
+// Shared only by the N10/N21 and module-ABI materialisers. Fixed equal ranges
+// take precedence; otherwise the driver override or minimum bound fixes V.
+unsigned normalisationVScale(Module &m) {
+  std::function<bool(Type *)> scalable=[&](Type *t) {
+    if(auto *v=dyn_cast<VectorType>(t))return v->getElementCount().isScalable();
+    if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque())for(auto *e:s->elements())if(scalable(e))return true;
+    if(auto *a=dyn_cast<ArrayType>(t))return scalable(a->getElementType());
+    return false;
+  };
+  std::optional<unsigned> fixed,minimum;bool allFixed=true;
+  for(auto &f:m)if(!f.isDeclaration() && !f.hasFnAttribute("bennett.n21.boundary")) {
+    bool uses=scalable(f.getReturnType());for(auto &a:f.args())uses|=scalable(a.getType());
+    for(auto &i:instructions(f)) {
+      uses|=scalable(i.getType());for(auto &v:i.operands())uses|=scalable(v->getType());
+      if(auto *call=dyn_cast<IntrinsicInst>(&i))uses|=call->getIntrinsicID()==Intrinsic::vscale;
+    }
+    if(!uses)continue;
+    auto range=f.getFnAttribute(Attribute::VScaleRange);
+    unsigned lower=range.isValid()?range.getVScaleRangeMin():1;
+    if(range.isValid())minimum=minimum?std::min(*minimum,lower):lower;
+    auto upper=range.isValid()?range.getVScaleRangeMax():std::optional<unsigned>();
+    if(!upper || *upper!=lower || (fixed && *fixed!=lower))allFixed=false;
+    if(upper && *upper==lower)fixed=lower;
+  }
+  if(allFixed && fixed)return *fixed;
+  if(VScale.getNumOccurrences()) {if(!VScale)fail("input","§12.5 vscale must be positive");return VScale;}
+  return minimum.value_or(1); // LLVM's unconstrained minimum is one.
+}
 // M1 scalar materialisation slice. Other rules remain explicit M2 obligations;
 // this function is not a full §12 validator or a production conformance verdict.
 static void normalisePrelude(Function &f, bool privateTransfer) {
@@ -202,7 +233,7 @@ static void normalisePrelude(Function &f, bool privateTransfer) {
     if(n=="llvm.allow.runtime.check" || n=="llvm.allow.ubsan.check") v=ConstantInt::getTrue(f.getContext());
     if(n.starts_with("llvm.allow.sanitize.")) v=ConstantInt::getFalse(f.getContext());
     if(n.starts_with("llvm.get.dynamic.area.offset")) v=Constant::getNullValue(c->getType());
-    if(n.starts_with("llvm.vscale.")) v=ConstantInt::get(c->getType(),1);
+    if(n.starts_with("llvm.vscale.")) v=ConstantInt::get(c->getType(),normalisationVScale(*f.getParent()));
     if(v) {c->replaceAllUsesWith(v);c->eraseFromParent();i=nullptr;}
   }
   // N12. N27 supplies the corresponding integer helper rewrite below.
@@ -233,7 +264,7 @@ static void normalisePrelude(Function &f, bool privateTransfer) {
     }
 }
 
-// N21 uses fixed vscale=1 (§12.5). PHI shells break SSA cycles; recursive
+// N21 uses the link vscale (§12.5). PHI shells break SSA cycles; recursive
 // lookup makes scalarisation independent of the physical basic-block order.
 class ScalarLanes {
   Function &f;
@@ -243,11 +274,19 @@ class ScalarLanes {
   SmallVector<Instruction *> deadVectors;
   std::set<Instruction *> visited;
   unsigned vectorStoreOrdinal=0;
+  std::optional<unsigned> vscale;
+
+  unsigned laneCount(VectorType *t) {
+    auto count=t->getElementCount();
+    if(!count.isScalable())return count.getKnownMinValue();
+    if(!vscale)vscale=normalisationVScale(*f.getParent());
+    return count.getKnownMinValue()* *vscale;
+  }
 
   SmallVector<Value *> lanesOf(Value *v) {
     auto found=laneValues.find(v);if(found!=laneValues.end())return found->second;
     if(auto *c=dyn_cast<Constant>(v))if(auto *splat=c->getSplatValue())
-      return SmallVector<Value *>(cast<VectorType>(v->getType())->getElementCount().getKnownMinValue(),splat);
+      return SmallVector<Value *>(laneCount(cast<VectorType>(v->getType())),splat);
     if(auto *expression=dyn_cast<ConstantExpr>(v)) {
       auto *copy=expression->getAsInstruction();copy->dropPoisonGeneratingFlags();
       copy->insertInto(&f.getEntryBlock(),f.getEntryBlock().getFirstInsertionPt());
@@ -257,7 +296,7 @@ class ScalarLanes {
     }
     if(auto *c=dyn_cast<Constant>(v)) {
       SmallVector<Value *> result;
-      unsigned count=cast<VectorType>(v->getType())->getElementCount().getKnownMinValue();
+      unsigned count=laneCount(cast<VectorType>(v->getType()));
       for(unsigned k=0;k<count;++k) {
         auto *e=c->getAggregateElement(k);
         if(!e)unimplemented("§12 N21 constant vector lane",2,c);
@@ -298,7 +337,7 @@ class ScalarLanes {
         "udiv.fix.sat","scmp","ucmp","pdep","pext","clmul"};
       auto *input=call->arg_empty()?nullptr:dyn_cast<VectorType>(call->getArgOperand(0)->getType());
       if(input && input->getElementType()->isIntegerTy() && integerOps.count(op.str())) {
-        unsigned count=input->getElementCount().getKnownMinValue();
+        unsigned count=laneCount(input);
         SmallVector<SmallVector<Value *>> args;bool ready=true;
         for(Value *arg:call->args()) {
           auto lanes=arg->getType()->isVectorTy()?lanesOf(arg):SmallVector<Value *>(count,arg);
@@ -377,7 +416,7 @@ class ScalarLanes {
   void lowerMemory(Instruction *i) {
     if(auto *l=dyn_cast<LoadInst>(i);l && l->getType()->isVectorTy()) {
       auto *t=cast<VectorType>(l->getType());IRBuilder<NoFolder> b(l);SmallVector<Value *> values;
-      for(unsigned k=0;k<t->getElementCount().getKnownMinValue();++k) {
+      for(unsigned k=0;k<laneCount(t);++k) {
         auto suffix=std::to_string(k)+"."+l->getName().str();
         auto *p=pointer(b,l->getPointerOperand(),t->getElementType(),k,"nz.p"+suffix);
         auto *v=b.CreateLoad(t->getElementType(),p,"nz.l"+suffix);
@@ -405,7 +444,7 @@ class ScalarLanes {
       if(input.empty())return;
       auto *destVector=dyn_cast<VectorType>(bc->getType());
       Type *element=destVector?destVector->getElementType():bc->getType();
-      unsigned count=destVector?destVector->getElementCount().getKnownMinValue():1;
+      unsigned count=destVector?laneCount(destVector):1;
       unsigned sw=dl.getTypeSizeInBits(input[0]->getType()).getKnownMinValue(),dw=dl.getTypeSizeInBits(element).getKnownMinValue();
       unsigned total=sw*input.size();
       IRBuilder<NoFolder> b(bc);auto name=bc->getName().str();SmallVector<Value *> values;
@@ -440,7 +479,7 @@ class ScalarLanes {
     auto *insert=dyn_cast<InsertElementInst>(i);
     if(!extract && !insert) return;
     auto *vector=i->getOperand(0);auto *index=i->getOperand(extract?1:2);
-    unsigned count=cast<VectorType>(vector->getType())->getElementCount().getKnownMinValue();
+    unsigned count=laneCount(cast<VectorType>(vector->getType()));
     auto *constant=dyn_cast<ConstantInt>(index);
     if(constant && constant->getValue().uge(count)) {
       i->replaceAllUsesWith(extract?Constant::getNullValue(i->getType()):vector);deadVectors.push_back(i);return;
@@ -477,7 +516,7 @@ class ScalarLanes {
 
   void lowerElementwise(Instruction *i) {
     if(!i->getType()->isVectorTy())return;
-    unsigned count=cast<VectorType>(i->getType())->getElementCount().getKnownMinValue();
+    unsigned count=laneCount(cast<VectorType>(i->getType()));
     SmallVector<SmallVector<Value *>> inputs;
     for(Value *operand:i->operands()) {
       auto lanes=operand->getType()->isVectorTy()?lanesOf(operand):SmallVector<Value *>(count,operand);
@@ -521,7 +560,11 @@ class ScalarLanes {
       auto left=lanesOf(shuffle->getOperand(0)),right=lanesOf(shuffle->getOperand(1));
       if(left.empty() || right.empty())return;
       SmallVector<Value *> result;
-      for(int lane:shuffle->getShuffleMask())result.push_back(lane<0?left[0]:unsigned(lane)<left.size()?left[lane]:right[lane-left.size()]);
+      auto mask=shuffle->getShuffleMask();
+      for(unsigned k=0;k<laneCount(cast<VectorType>(shuffle->getType()));++k) {
+        int lane=mask[k%mask.size()];
+        result.push_back(lane<0?left[0]:unsigned(lane)<left.size()?left[lane]:right[lane-left.size()]);
+      }
       laneValues[i]=result;deadVectors.push_back(i);return;
     }
     case Instruction::BitCast:lowerBitcast(i);return;
@@ -541,7 +584,7 @@ public:
     for(auto &i:instructions(f))work.push_back(&i);
     for(auto *i:work)if(auto *phi=dyn_cast<PHINode>(i);phi && phi->getType()->isVectorTy()) {
       auto *type=cast<VectorType>(phi->getType());SmallVector<Value *> lanes;IRBuilder<> b(phi);
-      for(unsigned k=0;k<type->getElementCount().getKnownMinValue();++k)
+      for(unsigned k=0;k<laneCount(type);++k)
         lanes.push_back(b.CreatePHI(type->getElementType(),phi->getNumIncomingValues(),"nz.l"+std::to_string(k)+"."+phi->getName()));
       laneValues[phi]=lanes;phis.push_back(phi);deadVectors.push_back(phi);
     }

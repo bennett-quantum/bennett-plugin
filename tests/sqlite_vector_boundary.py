@@ -44,6 +44,18 @@ def check_case(args, name):
         from sqlite_vector_normalise import CASES
         CASES[name] = (3, ())
         oracle(args, source, name, dest)
+        entry = dest / "vector-entry"
+        entry.mkdir(exist_ok=True)
+        checked([*command(args), "-bennett-oracle=identity",
+                 "-bennett-scalar-shape=IN(32,zext),IN(32,zext);tgt=64",
+                 "-bennett-scalar-stack=256", "-bennett-out=" + str(entry),
+                 "-disable-output", source], args)
+        from contracts import sibling
+        ref = sibling("bennett-isa-spec") / "reference-interpreter/target/debug/bennett-isa-ref"
+        result = checked([ref, "run-oracle", entry / "ref.bennett", "ref", "--input", "1,3",
+                          "--budget", "1000000,0,256,64"], args)
+        data = json.loads(result.stdout)
+        assert (data["code"], int(data["payload"])) == (0, 12884901889), data
     return {"symbol": symbol, "native_result": 3, "idempotent": True}
 
 

@@ -264,8 +264,24 @@ void normaliseWideFP(Function &f) {
 namespace bennett {
 static Function *normaliseWideIntegerABI(Module &m,Function *root) {
   auto &ctx=m.getContext();
+  unsigned normalisationVScale(Module &);
+  std::optional<unsigned> vscale;
+  auto laneCount=[&](VectorType *t) {
+    auto count=t->getElementCount();
+    if(!count.isScalable())return count.getKnownMinValue();
+    if(!vscale)vscale=normalisationVScale(m);
+    return count.getKnownMinValue()* *vscale;
+  };
+  // Scalar closure pruning deletes H bodies and their attached metadata. Keep
+  // the source A(F) across that operation for device-side address comparisons.
+  for(auto &f:m)if(f.hasFnAttribute("bennett.n21.address") && !f.getMetadata("bennett.address")) {
+    uint64_t address;
+    if(f.getFnAttribute("bennett.n21.address").getValueAsString().getAsInteger(10,address))
+      fail("input","§12 N21 invalid boundary address",&f);
+    f.setMetadata("bennett.address",MDNode::get(ctx,ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(ctx),address))));
+  }
   std::function<Type *(Type *)> shape=[&](Type *t)->Type * {
-    if(auto *v=dyn_cast<VectorType>(t)) {SmallVector<Type *> fields(v->getElementCount().getKnownMinValue(),shape(v->getElementType()));return StructType::get(ctx,fields);}
+    if(auto *v=dyn_cast<VectorType>(t)) {SmallVector<Type *> fields(laneCount(v),shape(v->getElementType()));return StructType::get(ctx,fields);}
     if(wide(t)) {SmallVector<Type *> fields;unsigned n=t->getIntegerBitWidth();for(unsigned k=0;k<(n+63)/64;++k)fields.push_back(IntegerType::get(ctx,std::min(64u,n-64*k)));return StructType::get(ctx,fields);}
     if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque()) {SmallVector<Type *> fields;bool change=false;for(auto *e:s->elements()){auto *v=shape(e);change|=v!=e;fields.push_back(v);}if(change)return StructType::get(ctx,fields,s->isPacked());}
     if(auto *a=dyn_cast<ArrayType>(t)) {auto *e=shape(a->getElementType());if(e!=a->getElementType())return ArrayType::get(e,a->getNumElements());}
@@ -296,7 +312,7 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     Type *to=unpack?old:shape(old);if(shape(old)==old)return v;
     if(auto *vector=dyn_cast<VectorType>(old)) {
       Value *out=Constant::getNullValue(to);
-      for(unsigned k=0;k<vector->getElementCount().getKnownMinValue();++k) {
+      for(unsigned k=0;k<laneCount(vector);++k) {
         Value *lane=unpack?b.CreateExtractValue(v,{k}):b.CreateExtractElement(v,b.getInt32(k));
         lane=adapt(b,lane,vector->getElementType(),unpack);
         out=unpack?b.CreateInsertElement(out,lane,b.getInt32(k)):b.CreateInsertValue(out,lane,{k});
@@ -397,6 +413,8 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     bool hidden=demoted(f->getReturnType());
     bool external=nf->isDeclaration();auto *adapter=external?nf:f;
     f->addFnAttr("bennett.n21.boundary");
+    if(auto *address=f->getMetadata("bennett.address"))
+      f->addFnAttr("bennett.n21.address",std::to_string(cast<ConstantInt>(cast<ConstantAsMetadata>(address->getOperand(0))->getValue())->getZExtValue()));
     adapter->addFnAttr("bennett.n21.boundary");
     adapter->addFnAttr("bennett.native.comparison.runtime");
     auto *entry=BasicBlock::Create(ctx,"entry",adapter);IRBuilder<> b(entry);
