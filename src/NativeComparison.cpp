@@ -219,13 +219,25 @@ public:
   }
 };
 
+SmallVector<std::pair<CallBase *, Function *>> markerCalls(Module &m) {
+  SmallVector<std::pair<CallBase *, Function *>> calls;
+  for (auto &f : m) for (auto &i : instructions(f)) if (auto *call = dyn_cast<CallBase>(&i))
+    if (auto *g = resolve(call->getCalledOperand()); g && markers().count(g->getName().str()))
+      calls.push_back({call, g});
+  return calls;
+}
+Function *nativeEffectImport(Module &m, const Function &marker) {
+  StringRef effect = marker.getName();
+  if (!effect.consume_front("__bennett_effect_")) return nullptr;
+  // §11.2 effect signatures match the syscall transports except console,
+  // whose existing native adapter supplies stdout's descriptor and return ABI.
+  StringRef prefix = effect == "console_write" ? "__bennett_rt_native_" : "__bennett_rt_transport_";
+  return cast<Function>(m.getOrInsertFunction((prefix + effect).str(), marker.getFunctionType()).getCallee());
+}
 std::string lowerNativeMarkers(Module &m, StringRef identity,
                               std::optional<uint64_t> shadowStack,
                               std::optional<uint64_t> sourceSteps) {
-  SmallVector<std::pair<CallBase *, Function *>> calls;
-  for (auto &f : m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
-    if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str()))
-      calls.push_back({call,g});
+  auto calls = markerCalls(m);
   Bridge bridge(m, identity,shadowStack,sourceSteps);
   DenseMap<Function *, Function *> replacements;
   for (auto [call, g] : calls) {
@@ -235,9 +247,8 @@ std::string lowerNativeMarkers(Module &m, StringRef identity,
         replacement = bridge.allocate(g->getFunctionType());
       else if (g->getName() == "__bennett_qfree")
         replacement = bridge.release(g->getFunctionType());
-      else if (g->getName() == "__bennett_effect_console_write")
-        replacement = cast<Function>(m.getOrInsertFunction("__bennett_rt_native_console_write",
-                                                          g->getFunctionType()).getCallee());
+      else if (auto *effect = nativeEffectImport(m, *g))
+        replacement = effect;
       else
         fail("BD-E-NATIVE-MARKERS", "native comparison lowering required", call);
       replacements[g] = replacement;
@@ -442,26 +453,19 @@ struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
   static bool isRequired() { return true; }
 };
 // H modules can be linked after marked-module materialisation. Their runtime
-// console transport must be adapted without normalising them as device code or
+// effect transports must be adapted without normalising them as device code or
 // replacing any protected materialised body with another runtime publication.
 struct NativeHostImportsPass : PassInfoMixin<NativeHostImportsPass> {
   PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
     bool component=false;
     for(auto &f:m)component |= f.hasFnAttribute("bennett.native.materialised.sha256");
     if(!component)fail("BD-E-NATIVE-INPUT","host import adaptation requires a materialised native component");
-    SmallVector<CallBase *> calls;
-    for(auto &f:m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
-      if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str())) {
-        if(f.hasFnAttribute("bennett.native.materialised.sha256"))
-          fail("BD-E-NATIVE-INPUT","host linking introduced markers into a protected materialised body",call);
-        if(g->getName()!="__bennett_effect_console_write")
-          fail("BD-E-NATIVE-MARKERS","native host import needs backend lowering",call);
-        calls.push_back(call);
-      }
-    for(auto *call:calls) {
-      auto *old=resolve(call->getCalledOperand());
-      auto replacement=m.getOrInsertFunction("__bennett_rt_native_console_write",old->getFunctionType());
-      call->setCalledFunction(cast<Function>(replacement.getCallee()));
+    for (auto [call, old] : markerCalls(m)) {
+      if (call->getFunction()->hasFnAttribute("bennett.native.materialised.sha256"))
+        fail("BD-E-NATIVE-INPUT", "host linking introduced markers into a protected materialised body", call);
+      auto *replacement = nativeEffectImport(m, *old);
+      if (!replacement) fail("BD-E-NATIVE-MARKERS", "native host import needs backend lowering", call);
+      call->setCalledFunction(replacement);
       if(old->use_empty())old->eraseFromParent();
     }
     return PreservedAnalyses::none();

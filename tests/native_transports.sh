@@ -11,7 +11,7 @@ test "$1" = --major
 major=$2
 tool=/usr/lib/llvm-$major/bin
 plugin=$root/build/libbennett-plugin-$major.so
-work=$root/.tmp/native-transports/$major
+work=${TMPDIR:?}/native-transports/$major
 mkdir -p "$work"
 fixture=$root/tests/probes/native-transport-import.ll
 finalise=("$tool/opt" "-load-pass-plugin=$plugin" -passes=bennett-native-comparison-finalise)
@@ -27,6 +27,12 @@ if rg -q '^@transport = alias' "$work/import.ll"; then
 fi
 rg -q 'call void @__bennett_rt_transport_clock_read\(ptr null\)' "$work/import.ll"
 jq -e '.phase == "finalised" and [.symbols[].native_symbol] == ["source"]' "$work/import.json" >/dev/null
+# A legacy prepared definition must retain provenance until it crosses the
+# transport boundary; its final declaration still carries no materialised stamp.
+sed 's/^declare void @__bennett_rt_transport_clock_read(ptr)$/define void @__bennett_rt_transport_clock_read(ptr %p) #0 { ret void }/' "$fixture" > "$work/legacy.ll"
+"${finalise[@]}" "-bennett-native-report=$work/legacy.json" "$work/legacy.ll" -S -o "$work/legacy-finalised.ll"
+"$tool/opt" -passes=verify "$work/legacy-finalised.ll" -disable-output
+rg -q '^declare void @__bennett_rt_transport_clock_read\(ptr\)$' "$work/legacy-finalised.ll"
 
 for case in unknown stamped-unknown runtime-helper missing-provenance missing-transport-provenance retargeted; do
   case "$case" in
@@ -86,5 +92,19 @@ jq -e --arg identity "$identity" '.phase == "finalised" and .materialised_sha256
 "${prepare[@]}" "-bennett-native-report=$work/direct.json" "$work/device.bc" -S -o "$work/direct.ll"
 "$tool/opt" -passes=verify "$work/direct.ll" -disable-output
 test "$(rg -c '^declare .*@__bennett_rt_transport_' "$work/direct.ll")" = 6
+"$tool/llvm-extract" --func=entry "$work/device.bc" -S -o "$work/host-entry.ll"
+sed 's/@entry(/@host(/g' "$work/host-entry.ll" > "$work/host.ll"
+"$tool/llvm-link" "$work/direct.ll" "$work/host.ll" -o "$work/host-linked.bc"
+"$tool/opt" "-load-pass-plugin=$plugin" -passes=bennett-native-host-imports "$work/host-linked.bc" -S -o "$work/host-finalised.ll"
+"$tool/opt" -passes=verify "$work/host-finalised.ll" -disable-output
+if rg -q 'call .*@__bennett_effect_' "$work/host-finalised.ll"; then
+  echo 'host effect marker retained after import adaptation' >&2
+  exit 1
+fi
+if "$tool/opt" "-load-pass-plugin=$plugin" -passes=bennett-native-host-imports "$work/prepared.ll" -disable-output >"$work/protected.stdout" 2>"$work/protected.stderr"; then
+  echo 'host import adaptation changed a protected source body' >&2
+  exit 1
+fi
+rg -q 'BD-E-NATIVE-INPUT.*host linking introduced markers into a protected materialised body' "$work/protected.stderr"
 test "$(sha256sum "$work/device.bc" | cut -d' ' -f1)" = "$identity"
-echo "LLVM $major: import alias, six transport wrappers, closure relink, direct adaptation; six provenance failures rejected"
+echo "LLVM $major: import alias, legacy definition, six wrappers, five effects, closure relink, direct and host adaptation; seven provenance failures rejected"

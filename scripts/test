@@ -187,7 +187,7 @@ def main():
     environment.setdefault("TMPDIR", str(temporary))
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     policies = [[sys.executable, "-B", f"tests/{name}.py"] for name in POLICIES]
-    policies.append(["bash", "tests/native_transports.sh"])
+    policies.append(["bash", "-e", "tests/native_transports.sh"])
     groups = [
         [
             [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
