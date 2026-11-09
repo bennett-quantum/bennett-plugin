@@ -206,10 +206,20 @@ These focused measurements do not claim full gate coverage or LLVM 23 coverage.
 
 ## Contracts and remaining mechanics
 
-Dialect 0.2.13 / ISA 0.8 stay pinned. Arithmetic is 5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab
+Dialect 0.2.13 / ISA 0.8 stay pinned. Arithmetic is 19fb8b55d28f22f8cfe191082f2b16d4d890f9da
 (1141 exports per LLVM major); allocator and native support are both
 248e468ca505c684bbf254e52eb8148f1e530c83. Published allocator bookkeeping changes are
 derived and tested in allocator_closure.py, including the separate 128-byte heap boundary.
+The arithmetic publication check in `tests/arith_pin.py` compares both pin records,
+cache paths and bitcode bytes against the immutable publication's `SHA256SUMS`;
+`tests/pin_policy.py` runs it by default and rejects altered gate hashes, paths and commits.
+The update from 5e9b450 preserves all 1141 export signatures on both majors, checked
+with `llvm-nm` and `llvm-dis`. Fresh builds and the full soft-float drivers pass
+(112/112 on LLVM 18, 116/116 on LLVM 23), as do allocator, CC and native consumers.
+Numerical L acceptance remains blocked: the unchanged LLVM 18 mixed-native driver
+exhausts its 120000 ms S2 thread-CPU allowance in `bennett_sf_eval` before emitting
+the device-FP object. The arithmetic pin and compiler allowance remain unchanged
+by this observation; no full-gate or rung-3 acceptance is claimed.
 Shared native/device globals remain promised and pending the published native-sharing contract;
 the approved native adapter interim prints that fact and exits 125 before state can reset.
 
@@ -384,6 +394,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/analysis_pointer_closure.py": {"complexity": 25, "functions": 4, "length_max": 229, "length_p50": 16, "length_p90": 229, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 68, "length_p50": 68, "length_p90": 68, "over_300": 0, "trivial_wrappers": 0},
+    "tests/arith_pin.py": {"complexity": 4, "functions": 2, "length_max": 23, "length_p50": 14, "length_p90": 23, "over_300": 0, "trivial_wrappers": 0},
     "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_defaults.py": {"complexity": 4, "functions": 1, "length_max": 57, "length_p50": 57, "length_p90": 57, "over_300": 0, "trivial_wrappers": 0},
     "tests/build_fallback.py": {"complexity": 10, "functions": 1, "length_max": 120, "length_p50": 120, "length_p90": 120, "over_300": 0, "trivial_wrappers": 0},
@@ -411,7 +422,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/native_link.py": {"complexity": 16, "functions": 5, "length_max": 222, "length_p50": 16, "length_p90": 222, "over_300": 0, "trivial_wrappers": 0},
     "tests/normalisation_check.cpp": {"complexity": 56, "functions": 3, "length_max": 26, "length_p50": 13, "length_p90": 26, "over_300": 0, "trivial_wrappers": 0},
     "tests/normalisation_scope.py": {"complexity": 16, "functions": 4, "length_max": 35, "length_p50": 12, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
-    "tests/pin_policy.py": {"complexity": 31, "functions": 26, "length_max": 88, "length_p50": 10, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
+    "tests/pin_policy.py": {"complexity": 32, "functions": 27, "length_max": 88, "length_p50": 11, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
     "tests/pinned_siblings.py": {"complexity": 6, "functions": 2, "length_max": 19, "length_p50": 13, "length_p90": 19, "over_300": 0, "trivial_wrappers": 0},
     "tests/prior_objects.py": {"complexity": 3, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "tests/probes/r-hello.c": {"complexity": 0, "functions": 1, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
