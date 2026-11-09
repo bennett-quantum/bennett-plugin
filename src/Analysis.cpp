@@ -245,6 +245,9 @@ static AV integer(APInt n) {
 bool Atom::operator<(const Atom &b) const {
   if(kind!=b.kind)return kind<b.kind;
   if(object!=b.object)return std::less<const Value *>{}(object,b.object);
+  // Keep exact pointers contiguous so union can skip them when indexing
+  // residue families. This is a set order, never an abstract-value widening.
+  if(kind==Atom::Ptr && stride!=b.stride)return stride<b.stride;
   if(offset!=b.offset)return offset<b.offset;
   if(stride!=b.stride)return stride<b.stride;
   if(integer.getBitWidth()!=b.integer.getBitWidth())return integer.getBitWidth()<b.integer.getBitWidth();
@@ -310,10 +313,17 @@ bool AV::merge(const AV &v) {
       if (!indexedFamilies || familyObject != a.object) {
         families.clear();
         for (auto it = atoms.lower_bound(first);
-             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object; ++it) {
+             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object;) {
           memoryWork(&AnalysisWork::MemoryWork::mergeFamilyVisits);
+          if (!it->stride) {
+            auto afterExact = first;
+            afterExact.stride = 1;
+            it = atoms.lower_bound(afterExact);
+            continue;
+          }
           const auto &b = *it;
-          if (b.stride) families.push_back(b);
+          families.push_back(b);
+          ++it;
         }
         familyObject = a.object;
         indexedFamilies = true;
