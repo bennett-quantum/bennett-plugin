@@ -44,15 +44,25 @@ def main():
                   for v in data['values']}
         return values, data['analysis_work']['memory']
 
-    for count in (16, 32, 64):
+    for separate, count in product((False, True), (16, 32, 64)):
         globals_ = 'target datalayout = "e-p:64:64"\n' + '\n'.join(
             f'@t{i} = internal global i8 0' for i in range(count))
         globals_ += f'\n@data = internal global [{count} x ptr] zeroinitializer\n'
+        if separate:
+            globals_ += '\n'.join(f'@cell{i} = internal global ptr null' for i in range(count)) + '\n'
         globals_ += f'@targets = internal constant [{count} x ptr] [' + ', '.join(
             f'ptr @t{i}' for i in range(count)) + ']\n'
         globals_ += f'@addresses = internal constant [{count} x ptr] [' + ', '.join(
-            f'ptr getelementptr (ptr, ptr @data, i64 {i})' for i in range(count)) + ']\n'
-        blocks = {'entry': 'br label %body', 'body': '''
+            f'ptr @cell{i}' if separate else f'ptr getelementptr (ptr, ptr @data, i64 {i})'
+            for i in range(count)) + ']\n'
+        body = '''
+ %vp = getelementptr ptr, ptr @targets, i64 %index
+ %v = load ptr, ptr %vp
+ %ap = getelementptr ptr, ptr @addresses, i64 %index
+ %locations = load ptr, ptr %ap
+ store ptr %v, ptr %locations
+ %r = load ptr, ptr %locations
+ br label %exit''' if separate else '''
  %vp = getelementptr ptr, ptr @targets, i64 %index
  %v = load ptr, ptr %vp
  %dst = getelementptr ptr, ptr @data, i64 %index
@@ -60,20 +70,23 @@ def main():
  %ap = getelementptr ptr, ptr @addresses, i64 %index
  %locations = load ptr, ptr %ap
  %r = load ptr, ptr %locations
- br label %exit''', 'exit': 'ret ptr %r'}
+ br label %exit'''
+        blocks = {'entry': 'br label %body', 'body': body, 'exit': 'ret ptr %r'}
         helper = 'define internal i8 @helper() { ret i8 9 }\n'
         domains = []
         for order in ('original', 'functions', 'blocks'):
             block_order = ('entry', 'exit', 'body') if order == 'blocks' else ('entry', 'body', 'exit')
             top = 'define ptr @top(i64 %index) {\n' + '\n'.join(
                 b + ':\n ' + blocks[b] for b in block_order) + '\n}\n'
-            values, memory = analyse(f'{count}-{order}', globals_ + (
+            values, memory = analyse(f'{separate}-{count}-{order}', globals_ + (
                 top + helper if order == 'functions' else helper + top))
             assert values['top', '%r'] == (True, sorted(f'PTR(@t{i},0,0)' for i in range(count))), values
             domains.append(values)
-            assert memory['load_image_computations'] == 3, memory
-            assert memory['load_signature_hits'] == count - 1, memory
+            assert memory['load_image_computations'] == (count + 2 if separate else 3), memory
+            assert memory['load_signature_hits'] == (0 if separate else count - 1), memory
             assert memory['load_image_union_skips'] == 2 * (count - 1), memory
+            if separate:
+                assert memory['load_image_intern_hits'] == count - 1, memory
         assert domains[0] == domains[1] == domains[2], (count, 'evaluation order')
 
     for (endian, expected), count in product(
@@ -111,6 +124,24 @@ define void @top() {
 ''')
     for name in ('%x', '%y'):
         assert values['top', name] == (False, ['INT(0)', 'PTR(@a,0,0)', 'PTR(@b,0,0)']), values
+    values, _ = analyse('shared-invalidation', '''target datalayout = "e-p:64:64"
+@a = internal global i8 0
+@b = internal global i8 0
+@cellA = internal global ptr @a
+@cellB = internal global ptr @a
+define void @top() {
+ %a1 = load ptr, ptr @cellA
+ %b1 = load ptr, ptr @cellB
+ store ptr @b, ptr @cellA
+ %a2 = load ptr, ptr @cellA
+ %b2 = load ptr, ptr @cellB
+ ret void
+}
+''')
+    for name in ('%a1', '%a2'):
+        assert values['top', name] == (False, ['PTR(@a,0,0)', 'PTR(@b,0,0)']), values
+    for name in ('%b1', '%b2'):
+        assert values['top', name] == (False, ['PTR(@a,0,0)']), values
     values, _ = analyse('interval-class', '''target datalayout = "e-p:64:64"
 @cell = internal global ptr null
 @a = internal global i8 0

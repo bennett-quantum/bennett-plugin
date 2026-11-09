@@ -1,5 +1,6 @@
 #include "Bennett.h"
 #include "AnalysisBudgetClock.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
@@ -34,6 +35,11 @@ namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
     cl::desc("S2 thread CPU allowance in milliseconds; source/ISA budgets are independent"));
+static bool sameAV(const AV &a, const AV &b) {
+  return a.top == b.top && a.atoms.size() == b.atoms.size() &&
+         std::equal(a.atoms.begin(), a.atoms.end(), b.atoms.begin(),
+                    [](const Atom &x, const Atom &y) { return !(x < y) && !(y < x); });
+}
 struct AnalysisWork {
   static constexpr size_t TopFunctionLimit = 10;
   uint64_t transferApplications = 0;
@@ -47,6 +53,7 @@ struct AnalysisWork {
     uint64_t loadAddresses = 0, loadSlotTests = 0, loadImageHits = 0, loadImageMisses = 0;
     uint64_t loadImageComputations = 0, loadSignatureHits = 0, loadImageUnionSkips = 0;
     uint64_t loadByteSlotTests = 0;
+    uint64_t loadImageInternHits = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
@@ -55,6 +62,7 @@ struct AnalysisWork {
               {"load_image_computations", loadImageComputations},
               {"load_signature_hits", loadSignatureHits}, {"load_image_union_skips", loadImageUnionSkips},
               {"load_byte_slot_tests", loadByteSlotTests},
+              {"load_image_intern_hits", loadImageInternHits},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -131,6 +139,8 @@ struct AnalysisBudget {
   using LoadImage = std::shared_ptr<const AV>;
   std::map<const Value *, std::map<std::pair<Atom, Type *>, LoadImage>> loadImages;
   std::map<const Value *, std::map<LoadSignature, LoadImage>> loadSignatures;
+  std::map<size_t, SmallVector<std::weak_ptr<const AV>, 4>> loadImagePool;
+  LoadImage internLoadImage(AV image);
   void invalidateLoadImages(const Value *object) {
     loadImages.erase(object);
     loadSignatures.erase(object);
@@ -224,6 +234,29 @@ void memoryWork(uint64_t AnalysisWork::MemoryWork::*counter, uint64_t count = 1)
   if (!activeBudget) return;
   activeBudget->work.memory.*counter += count;
   if (auto *f = activeBudget->work.currentFunction) f->memory.*counter += count;
+}
+AnalysisBudget::LoadImage AnalysisBudget::internLoadImage(AV image) {
+  auto hash = hash_combine(image.top, image.atoms.size());
+  for (const auto &a : image.atoms) {
+    budgetTick();
+    hash = hash_combine(hash, a.kind, a.object, a.offset, a.stride,
+                        a.integer.getBitWidth(), a.integer, a.numerical);
+  }
+  auto &bucket = loadImagePool[static_cast<size_t>(hash)];
+  for (auto it = bucket.begin(); it != bucket.end();) {
+    if (auto prior = it->lock()) {
+      // The hash selects candidates only. Full AV equality is required,
+      // including integer widths, numerical provenance and explicit ROOTs.
+      if (sameAV(*prior, image)) {
+        memoryWork(&AnalysisWork::MemoryWork::loadImageInternHits);
+        return prior;
+      }
+      ++it;
+    } else it = bucket.erase(it);
+  }
+  auto result = std::make_shared<const AV>(std::move(image));
+  bucket.push_back(result);
+  return result;
 }
 struct BudgetScope {
   AnalysisBudget budget;
@@ -1214,7 +1247,7 @@ AV Analysis::load(const AV &p, Type *t) {
           auto prior = memo.find(signature);
           if (prior == memo.end())
             prior = memo.emplace(std::move(signature),
-                                 std::make_shared<const AV>(image(parts))).first;
+                                 activeBudget->internLoadImage(image(parts))).first;
           else memoryWork(&AnalysisWork::MemoryWork::loadSignatureHits);
           found = images.emplace(key, prior->second).first;
         } else memoryWork(&AnalysisWork::MemoryWork::loadImageHits);
@@ -1950,11 +1983,7 @@ void Analysis::step(Instruction &i) {
     std::vector<AV> inputs;for(Value *v:i.operands())
       for(auto &leaf:leaves(v->getType(),M.getDataLayout()))inputs.push_back(field(v,leaf.path));
     auto &old=pureInputs[&i];
-    auto equal=[](const AV &a,const AV &b) {
-      return a.top==b.top && a.atoms.size()==b.atoms.size() &&
-        std::equal(a.atoms.begin(),a.atoms.end(),b.atoms.begin(),[](auto &x,auto &y){return !(x<y) && !(y<x);});
-    };
-    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),equal))return;
+    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),sameAV))return;
     old=std::move(inputs);
   }
   if (activeBudget) {
