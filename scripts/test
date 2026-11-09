@@ -19,6 +19,7 @@ POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ra
 DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
+    "analysis_pt6_residue": (),
     "validation": (),
     "scalars": (),
     "address_spaces": (),
@@ -98,6 +99,9 @@ COMMAND_HANG_GUARDS_S = {
     "build_defaults": 65,
     "recognition": 60,
     "analysis_edges": 60,
+    # PT6 control/residue: 0.101404 s max wall on Spiral, 2026-11-09;
+    # tests/analysis_pt6_residue.py, LLVM18/23; 10x is below the 60 s floor.
+    "analysis_pt6_residue": 60,
     "validation": 60,
     "scalars": 60,
     "address_spaces": 60,
