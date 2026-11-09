@@ -46,6 +46,7 @@ struct AnalysisWork {
   struct MemoryWork {
     uint64_t loadAddresses = 0, loadSlotTests = 0, loadImageHits = 0, loadImageMisses = 0;
     uint64_t loadImageComputations = 0, loadSignatureHits = 0, loadImageUnionSkips = 0;
+    uint64_t loadByteSlotTests = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
@@ -53,6 +54,7 @@ struct AnalysisWork {
               {"load_image_hits", loadImageHits}, {"load_image_misses", loadImageMisses},
               {"load_image_computations", loadImageComputations},
               {"load_signature_hits", loadSignatureHits}, {"load_image_union_skips", loadImageUnionSkips},
+              {"load_byte_slot_tests", loadByteSlotTests},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -1140,11 +1142,21 @@ AV Analysis::load(const AV &p, Type *t) {
         // Immutable initialiser bytes reconstruct whole integer loads exactly.
         if (auto *g = dyn_cast<GlobalVariable>(a.object);
             g && g->isConstant() && t->isIntegerTy() && a.stride == 0) {
+          SmallVector<size_t, 4> byteSlots;
+          for (auto [n, classification] : parts)
+            if (!slots[n].stride) byteSlots.push_back(n);
+          // Any slot covering a requested byte overlaps the load interval.
+          // Preserve the original first-match order while excluding unrelated
+          // objects and intervals, including entirely out-of-object reads.
+          llvm::sort(byteSlots);
           APInt bits(t->getIntegerBitWidth(), 0);
           bool known = true;
           for (unsigned b = 0; b < size; ++b) {
             bool found = false;
-            for (auto &s : slots)
+            for (auto n : byteSlots) {
+              memoryWork(&AnalysisWork::MemoryWork::loadByteSlotTests);
+              budgetTick();
+              const auto &s = slots[n];
               if (s.object == a.object && s.stride == 0 &&
                   s.offset <= a.offset + b &&
                   a.offset + b < s.offset + (int64_t)s.bytes &&
@@ -1164,6 +1176,7 @@ AV Analysis::load(const AV &p, Type *t) {
                 found = true;
                 break;
               }
+            }
             known &= found;
           }
           if (known) {

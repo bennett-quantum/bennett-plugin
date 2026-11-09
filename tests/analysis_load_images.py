@@ -9,6 +9,7 @@ invalidate all memoized representations of the written object.
 """
 
 import argparse
+from itertools import product
 import json
 from pathlib import Path
 
@@ -75,19 +76,27 @@ def main():
             assert memory['load_image_union_skips'] == 2 * (count - 1), memory
         assert domains[0] == domains[1] == domains[2], (count, 'evaluation order')
 
-    for endian, expected in (('e', (1, 2, 513, 770)), ('E', (4, 3, 1027, 770))):
-        values, _ = analyse('immutable-' + endian, f'target datalayout = "{endian}-p:64:64"\n' + '''
+    for (endian, expected), count in product(
+            (('e', (1, 2, 513, 770)), ('E', (4, 3, 1027, 770))), (16, 32, 64)):
+        unrelated = '\n'.join(f'@unrelated{i} = internal global i8 0' for i in range(count))
+        values, memory = analyse(f'immutable-{endian}-{count}',
+            f'target datalayout = "{endian}-p:64:64"\n' + unrelated + '\n' + '''
 @word = internal constant i32 67305985
 define void @top() {
  %a = load i8, ptr @word, align 1
  %b = load i8, ptr getelementptr (i8, ptr @word, i64 1), align 1
  %c = load i16, ptr @word, align 1
  %d = load i16, ptr getelementptr (i8, ptr @word, i64 1), align 1
+ %missing = load i16, ptr getelementptr (i8, ptr @word, i64 64), align 1
  ret void
 }
 ''')
         for name, number in zip(('%a', '%b', '%c', '%d'), expected):
             assert values['top', name] == (False, [f'INT({number})']), values
+        assert values['top', '%missing'] == (True, []), values
+        # Four valid reads inspect 1+1+2+2 bytes of the one matching slot.
+        # The out-of-object address has no candidate byte slot to inspect.
+        assert memory['load_byte_slot_tests'] == 6, memory
     values, _ = analyse('invalidation', '''target datalayout = "e-p:64:64"
 @cell = internal global ptr null
 @a = internal global i8 0
