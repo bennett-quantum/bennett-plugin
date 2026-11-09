@@ -391,7 +391,7 @@ struct Entry {
       return n;
     }
     if (auto *fn = resolve(v); fn && v->getType()->isPointerTy()) {
-      auto n=fresh("ptr");auto address=operand(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),functionAddress(fn)));
+      auto n=fresh("ptr");auto address=functionConstant(fn);
       rows.push_back(n+" = inttoptr "+address);return n;
     }
     if (auto *g=dyn_cast<ConstantExpr>(v);g && g->getOpcode()==Instruction::GetElementPtr)return gep(cast<GEPOperator>(g));
@@ -694,39 +694,60 @@ struct Entry {
   unsigned dispatchBlock = 0;
   Function *selectedCallee = nullptr;
   bool generalDescriptor = false;
-  std::set<uint64_t> functionAddresses;
-  uint64_t functionAddress(Function *fn) {
-    if (auto address = comparisonFunctionAddress(*fn)) {
-      functionAddresses.insert(*address);
-      return *address;
-    }
+  std::set<Function *> addressedFunctions;
+  uint64_t functionKey(Function *fn) {
+    addressedFunctions.insert(fn);
+    if (auto address = comparisonFunctionAddress(*fn)) return *address;
     if (hasComparisonLayout())
       fail("BD-E-COMPARISON-LAYOUT", "missing function address", fn);
-    // Standalone comparison link, matching the module-order convention used
-    // for data by the scalar linker. The production driver owns §19.5 layout.
-    uint64_t address=comparisonDataBase();
-    for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
-    address=alignTo(address,uint64_t(4096));
-    address=comparisonTextBase(address+std::max(table.capacities[1],ccHeapBytes));
-    for(auto &g:m) {
-      if(&g==fn) {
-        functionAddresses.insert(address);
-        return address;
+    // Module order is also address order in a standalone comparison link.
+    // Keep a symbolic key until every device range has been placed (§19.5).
+    return std::distance(m.begin(),fn->getIterator());
+  }
+  std::string functionConstant(Function *fn) {
+    functionKey(fn);
+    auto type="i"+std::to_string(m.getDataLayout().getPointerSizeInBits());
+    auto value=fresh(type);
+    rows.push_back(value+" = const."+type+" CCFUNCTION"+std::to_string(std::distance(m.begin(),fn->getIterator())));
+    return value;
+  }
+  void resolveFunctionAddresses(uint64_t regionsEnd,
+                                const std::vector<std::pair<uint64_t,uint64_t>> &deviceRanges) {
+    const auto pw=m.getDataLayout().getPointerSizeInBits();
+    const uint64_t limit=pw<64?(uint64_t(1)<<pw)-1:uint64_t(INT64_MAX);
+    constexpr uint64_t FunctionSpacing=16; // Standalone module-order link convention.
+    auto text=comparisonTextBase(regionsEnd);
+    uint64_t index=0;
+    for(auto &fn:m) {
+      auto resolved=comparisonFunctionAddress(fn);
+      if(!hasComparisonLayout() && (text>limit || index>(limit-text)/FunctionSpacing))
+        fail("BD-E-COMPARISON-LAYOUT", "device ranges leave no comparison function address", &fn);
+      auto address=resolved.value_or(hasComparisonLayout()?0:text+index*FunctionSpacing);
+      bool overlaps=false;
+      if(resolved)for(auto range:deviceRanges)overlaps|=address>=range.first && address<range.second;
+      if(resolved && (overlaps || address>limit))
+        fail("BD-E-COMPARISON-LAYOUT", "resolved function address overlaps device ranges or exceeds target addresses", &fn);
+      if(addressedFunctions.count(&fn)) {
+        fn.setMetadata("bennett.address",MDNode::get(m.getContext(),
+            ConstantAsMetadata::get(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),address))));
+        auto marker=std::regex("CCFUNCTION"+std::to_string(index)+"\\b");
+        for(auto &row:rows)row=std::regex_replace(row,marker,std::to_string(address));
+        for(auto &body:ccFunctions)body.second.second=std::regex_replace(body.second.second,marker,std::to_string(address));
       }
-      address+=16;
+      ++index;
     }
-    llvm_unreachable("function missing from comparison link");
   }
   AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
   bool singletonInt(AV v) { return !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int; }
   // The same unsigned, balanced compare tree serves candidate addresses,
   // fields, register identities and finite allocation widths (§14.2).
   void compareTree(std::string value, unsigned w, const std::vector<uint64_t> &keys,
-                   const std::function<void(uint64_t)> &body, const std::string &bad) {
+                   const std::function<void(uint64_t)> &body, const std::string &bad,
+                   const std::map<uint64_t,Function *> *functions = nullptr) {
     std::function<void(unsigned,unsigned)> tree=[&](unsigned lo,unsigned hi) {
       if(lo==hi){rows.push_back("br ^"+bad+"()");return;}
       unsigned mid=(lo+hi)/2;auto key=keys[mid];
-      auto k=operand(ConstantInt::get(IntegerType::get(m.getContext(),w),key)),eq=fresh("i1");
+      auto k=functions?functionConstant(functions->at(key)):operand(ConstantInt::get(IntegerType::get(m.getContext(),w),key)),eq=fresh("i1");
       auto leaf="dispatch"+std::to_string(dispatchBlock++),rest=leaf+"rest";
       rows.push_back(eq+" = icmp.eq "+value+" "+k);
       rows.push_back("br "+eq+" ^"+leaf+"() ^"+rest+"()");rows.push_back("^"+leaf+"():");body(key);
@@ -848,9 +869,9 @@ struct Entry {
     };
     if(candidates.size()==1 && resolve(c.getArgOperand(0)))compile(*candidates.begin());
     else {
-      std::map<uint64_t,Function *> ordered;for(auto *fn:candidates)if(!fn->isDeclaration())ordered[functionAddress(fn)]=fn;
+      std::map<uint64_t,Function *> ordered;for(auto *fn:candidates)if(!fn->isDeclaration())ordered[functionKey(fn)]=fn;
       auto address=fresh("i"+std::to_string(pw));rows.push_back(address+" = ptrtoint.i"+std::to_string(pw)+" "+operand(c.getArgOperand(0)));
-      std::vector<uint64_t> keys;for(auto &v:ordered)keys.push_back(v.first);compareTree(address,pw,keys,[&](uint64_t k){compile(ordered.at(k));},bad);
+      std::vector<uint64_t> keys;for(auto &v:ordered)keys.push_back(v.first);compareTree(address,pw,keys,[&](uint64_t k){compile(ordered.at(k));},bad,&ordered);
     }
     rows.push_back("^"+bad+"():");rows.push_back("trap");rows.push_back("^"+done+"():");generalDescriptor=false;
   }
@@ -1505,7 +1526,7 @@ struct Entry {
       std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
       for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
         if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
-          candidates[functionAddress(candidate)]=candidate;
+          candidates[functionKey(candidate)]=candidate;
       for(auto &candidate:candidates)keys.push_back(candidate.first);
       auto args=callArguments(*c);
       auto result=c->getType()->isVoidTy()?std::vector<std::string>{}:destinations(c);
@@ -1517,7 +1538,7 @@ struct Entry {
         if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
         rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
         rows.push_back("br ^"+done+"("+join(values)+")");
-      },bad);
+      },bad,&candidates);
       rows.push_back("^"+bad+"():");rows.push_back("trap");
       std::vector<std::string> bindings;
       if(!result.empty()) {auto fs=fields(c->getType());for(unsigned k=0;k<result.size();++k)bindings.push_back(result[k]+":"+fieldType(fs[k].type));}
@@ -1877,6 +1898,38 @@ std::map<std::string,std::string> objectSections(StringRef object) {
 }
 // Unified production layout. Standalone reference files retain their original
 // images/layout/hash for independent published-object comparisons.
+json::Object placeInterfaceRegions(const std::vector<std::map<std::string,std::string>> &references,
+                                  uint64_t &endAddress, uint64_t &memCount,
+                                  std::vector<std::pair<uint64_t,uint64_t>> &deviceRanges) {
+  json::Object interfaces;
+  for(unsigned i=0;i<references.size();++i) {
+    auto &sec=references[i];auto syms=parse(sec.at("symbols"));
+    for(auto &v:*syms.getAsObject()) {
+      auto *sym=v.second.getAsObject();
+      if(sym->getString("kind")!="oracle")continue;
+      auto name=sym->getString("name")->str();
+      auto &body=sec.at("functions");auto begin=body.find("oracle @"+name+" ");
+      auto header=StringRef(body).drop_front(begin).split('\n').first.str();
+      json::Object regions;std::regex mem(R"(([A-Za-z_][A-Za-z_0-9]*):region\[([0-9]+),([0-9]+)\])");
+      for(std::sregex_iterator it(header.begin(),header.end(),mem),end;it!=end;++it) {
+        auto exponent=std::stoul((*it)[2]),width=std::stoul((*it)[3]);
+        if(exponent>=63 || width%8 || !width || (uint64_t(1)<<exponent)>uint64_t(INT64_MAX)/(width/8))
+          fail("BD-E-COMPARISON-LAYOUT", "interface region exceeds comparison address space");
+        auto size=(uint64_t(1)<<exponent)*(width/8);
+        if(endAddress>uint64_t(INT64_MAX)-(size-1))
+          fail("BD-E-COMPARISON-LAYOUT", "interface alignment exceeds comparison address space");
+        endAddress=alignTo(endAddress,size);
+        if(size>uint64_t(INT64_MAX)-endAddress)
+          fail("BD-E-COMPARISON-LAYOUT", "interface extent exceeds comparison address space");
+        regions[(*it)[1].str()]=json::Object{{"base",int64_t(endAddress)}};
+        deviceRanges.push_back({endAddress,endAddress+size});
+        endAddress+=size;++memCount;
+      }
+      interfaces[name+(i?std::to_string(i):"")]=std::move(regions);
+    }
+  }
+  return interfaces;
+}
 std::string linkReferences(Entry &e) {
   auto &dl=e.m.getDataLayout(); auto pw=dl.getPointerSizeInBits();
   std::string prefix="isa=" + producerISA() + "\nptr_width="+std::to_string(pw)+"\n";
@@ -1897,9 +1950,7 @@ std::string linkReferences(Entry &e) {
       return;
     }
     if (auto *fn=dyn_cast<Function>(v)) {
-      auto address=e.functionAddress(const_cast<Function *>(fn));
-      const_cast<Function *>(fn)->setMetadata("bennett.address",MDNode::get(e.m.getContext(),
-          ConstantAsMetadata::get(ConstantInt::get(dl.getIntPtrType(e.m.getContext()),address))));
+      e.functionKey(const_cast<Function *>(fn));
       return;
     }
     if(auto *constant=dyn_cast<Constant>(v))for(auto &operand:constant->operands())relocation(operand);
@@ -1917,8 +1968,7 @@ std::string linkReferences(Entry &e) {
     // The shared image and the indirect compare trees use the same addresses.
     for(auto &f:e.m) {
       if (hasComparisonLayout() && !comparisonFunctionAddress(f)) continue;
-      auto address=e.functionAddress(&f);
-      f.setMetadata("bennett.address",MDNode::get(e.m.getContext(),ConstantAsMetadata::get(ConstantInt::get(e.m.getDataLayout().getIntPtrType(e.m.getContext()),address))));
+      e.functionKey(&f);
     }
   }
   uint64_t base=comparisonDataBase();
@@ -1937,7 +1987,7 @@ std::string linkReferences(Entry &e) {
   }
   std::map<const GlobalVariable *,uint64_t> sourceBases;
   for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
-  json::Object globals,interfaces;
+  json::Object globals;
   uint64_t heap=comparisonHeapBase().value_or(alignTo(base,uint64_t(4096))),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
   for(auto &ref:e.references) {
@@ -1947,11 +1997,16 @@ std::string linkReferences(Entry &e) {
   }
   heapLimit=std::max(heapLimit,e.ccHeapBytes);
   if (parsed.empty()) heapLimit = std::max(heapLimit, e.table.capacities[1]);
-  for (auto address : e.functionAddresses)
-    if (address >= heap && address - heap < heapLimit)
-      fail("BD-E-COMPARISON-LAYOUT", "function address overlaps the heap", &e.f);
   if(parsed.empty())while((uint64_t(1)<<stack)<std::max(uint64_t(e.stack),e.table.capacities[2]))++stack;
+  if(heap>uint64_t(INT64_MAX) || heapLimit>uint64_t(INT64_MAX)-heap)
+    fail("BD-E-COMPARISON-LAYOUT", "heap leaves no comparison text address", &e.f);
   uint64_t endAddress=heap+heapLimit,memCount=0;
+  std::vector<std::pair<uint64_t,uint64_t>> deviceRanges{{heap,endAddress}};
+  for(auto &range:bases)deviceRanges.push_back({range.second,range.second+sizes.at(range.first)});
+  auto interfaces=placeInterfaceRegions(parsed,endAddress,memCount,deviceRanges);
+  // §19.5: data, heap and all oracle interfaces precede text. Resolve once,
+  // before writing any function pointer image, constant or dispatch key.
+  e.resolveFunctionAddresses(endAddress,deviceRanges);
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
     auto name=globalSymbols.at(scalarGlobalKey(g)),image=scalarGlobalImage(g,sourceBases);
     data[name]=image;dataSignatures[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"data\",\"size\":"+std::to_string(sizes.at(name))+",\"tier\":\"-\"}";
@@ -1988,15 +2043,6 @@ std::string linkReferences(Entry &e) {
         auto finish=body.find("\nlproc @",begin+1);
         auto text=StringRef(body).slice(begin,finish).rtrim().str();
         functions.push_back({rename.at(name),kind,replace(text),parse(jcs(*sym->get("signature")))});
-        if(kind=="oracle") {
-          json::Object regions;std::regex mem(R"(([A-Za-z_][A-Za-z_0-9]*):region\[([0-9]+),([0-9]+)\])");
-          auto header=StringRef(text).split('\n').first.str();
-          for(std::sregex_iterator it(header.begin(),header.end(),mem),end;it!=end;++it) {
-            uint64_t size=(uint64_t(1)<<std::stoul((*it)[2]))*std::stoul((*it)[3])/8;
-            endAddress=alignTo(endAddress,size);regions[(*it)[1].str()]=json::Object{{"base",int64_t(endAddress)}};endAddress+=size;++memCount;
-          }
-          interfaces[rename.at(name)]=std::move(regions);
-        }
       }
     }
   }
@@ -2076,8 +2122,8 @@ std::string launchObject(Entry &e, json::Object &record,
       if(sec["layout"]!=first["layout"] || !e.referenceGlobals.front().empty() || mapped) unified=true;
     }
   }
-  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty() || !e.functionAddresses.empty()) && !e.references.empty();
-  if(unified || (e.references.empty() && (!e.ccGlobals.empty() || !e.functionAddresses.empty()))) {
+  unified |= (e.ccHeapBytes>0 || !e.ccGlobals.empty() || !e.addressedFunctions.empty()) && !e.references.empty();
+  if(unified || (e.references.empty() && (!e.ccGlobals.empty() || !e.addressedFunctions.empty()))) {
     ref=linkReferences(e);
     if(e.references.empty()) ref=isaHeader(e.m.getDataLayout().getPointerSizeInBits())+ref;
   }
@@ -2861,7 +2907,7 @@ void lowerProduction(Module &m, Analysis &a, StringRef out, unsigned stack,
       e.referenceGlobals=std::move(callee.referenceGlobals);e.snapshotFunctions=std::move(callee.snapshotFunctions);
       e.budgets=std::move(callee.budgets);
       e.ccGlobals.insert(callee.ccGlobals.begin(),callee.ccGlobals.end());
-      e.functionAddresses.insert(callee.functionAddresses.begin(),callee.functionAddresses.end());
+      e.addressedFunctions.insert(callee.addressedFunctions.begin(),callee.addressedFunctions.end());
       e.trappedCalls.insert(callee.trappedCalls.begin(),callee.trappedCalls.end());
       for(auto &proof:callee.controlledIdentities)e.controlledIdentities.push_back(std::move(proof));
       e.usesSourceMemory|=callee.usesSourceMemory;

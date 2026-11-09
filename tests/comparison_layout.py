@@ -34,6 +34,9 @@ def main():
                                 text=not binary, timeout=guard)
         receipts.append(dict(argv=list(map(str, argv)), exit=result.returncode))
         (directory/'commands.json').write_text(json.dumps(receipts, indent=2)+'\n')
+        if code is None:
+            assert result.returncode != 0, (argv, result.stdout, result.stderr)
+            return result.stdout+result.stderr
         assert result.returncode == code, (argv, result.returncode, result.stdout, result.stderr)
         return result.stdout
 
@@ -208,6 +211,8 @@ __attribute__((naked,noreturn)) void _start(void) {
                for line in names.splitlines()), names
     assert run([exe], binary=True) == bytes([3, 1, 4, 1, 5, 9, 2, 6])*32
     run([reference, 'check', out/'ref.bennett'])
+    from comparison_layout_regions import check_regions
+    check_regions(directory/'regions', producer, tool, reference, run)
     print(json.dumps(dict(major=args.major, layout_cases=3, native_lookup_inputs=256)))
 
 
