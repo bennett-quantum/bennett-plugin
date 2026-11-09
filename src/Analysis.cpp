@@ -45,8 +45,11 @@ struct AnalysisWork {
   struct FunctionVisits {
     std::string name;
     uint64_t visits = 0;
+    uint64_t rounds = 0, dispatches = 0, transfers = 0;
+    uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
   };
   std::vector<FunctionVisits> functions;
+  FunctionVisits *currentFunction = nullptr;
 
   explicit AnalysisWork(const Module &module) {
     functions.reserve(module.size());
@@ -63,6 +66,11 @@ struct AnalysisWork {
       if (a->visits != b->visits) return a->visits > b->visits;
       return a->name < b->name;
     });
+    json::Object perFunction;
+    for (const auto &f : functions)
+      perFunction[f.name] = json::Object{{"rounds_completed", f.rounds},
+          {"worklist_pops", f.dispatches}, {"transfer_applications", f.transfers},
+          {"join_count", f.avMerges + f.fieldJoins + f.slotJoins}};
     json::Object top;
     for (size_t n = 0; n < std::min(TopFunctionLimit, ranked.size()); ++n)
       top[ranked[n]->name] = ranked[n]->visits;
@@ -80,7 +88,7 @@ struct AnalysisWork {
             {"slot_joins", slotJoins},
             {"function_visits", json::Object{{"total", functionVisits},
                 {"top_limit", TopFunctionLimit}, {"top", std::move(top)}}},
-            {"cpu_ms", std::move(cpu)}};
+            {"per_function", std::move(perFunction)}, {"cpu_ms", std::move(cpu)}};
   }
 };
 // The existing pass calls report() immediately after run(). Retain just that
@@ -95,6 +103,9 @@ thread_local AnalysisReceipt completedReceipt;
 struct AnalysisBudget {
   AnalysisBudgetClock clock{AnalysisMilliseconds};
   AnalysisWork work;
+  // PT6 images depend on one object's slots and the accessed representation.
+  // Every growing PT7 fact invalidates that object's cached images.
+  std::map<const Value *, std::map<std::pair<Atom, Type *>, AV>> loadImages;
   const Analysis *owner;
   std::string reportPath;
   const Instruction *at=nullptr;
@@ -252,7 +263,10 @@ static bool contains(const AV &outer, const AV &inner) {
   return true;
 }
 bool AV::merge(const AV &v) {
-  if (activeBudget) ++activeBudget->work.avMerges;
+  if (activeBudget) {
+    ++activeBudget->work.avMerges;
+    if (auto *f = activeBudget->work.currentFunction) ++f->avMerges;
+  }
   budgetTick();
   bool change = false;
   if (v.top && !top) {
@@ -261,16 +275,31 @@ bool AV::merge(const AV &v) {
   }
   if(&v==this)return change;
   bool insertedInteger=false;
+  SmallVector<Atom, 4> families;
+  bool indexedFamilies = false;
   for (auto a : v.atoms) {
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
       canonicalOffset(a.offset, a.stride);
-      if (llvm::any_of(atoms, [&](const Atom &b) { return pointerContains(b, a); }))
+      if (atoms.count(a)) continue;
+      // Distinct singleton addresses cannot contain one another. Index just
+      // the families once per union, instead of rescanning every exact member
+      // for every incoming pointer (large finite memcpy address products).
+      if (!indexedFamilies) {
+        for (const auto &b : atoms)
+          if (b.kind == Atom::Ptr && b.stride) families.push_back(b);
+        indexedFamilies = true;
+      }
+      if (llvm::any_of(families, [&](const Atom &b) { return pointerContains(b, a); }))
         continue;
       // A proven coset absorbs exactly its members, with provenance intact.
-      for (auto it = atoms.begin(); it != atoms.end();)
-        if (pointerContains(a, *it)) it = atoms.erase(it);
-        else ++it;
+      if (a.stride) {
+        for (auto it = atoms.begin(); it != atoms.end();)
+          if (pointerContains(a, *it)) it = atoms.erase(it);
+          else ++it;
+        llvm::erase_if(families, [&](const Atom &b) { return pointerContains(a, b); });
+        families.push_back(a);
+      }
     }
     bool inserted=atoms.insert(a).second;
     change |= inserted;
@@ -723,7 +752,10 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   bool compact = false;
   for (auto a : p.atoms)
     if (a.kind == Atom::Ptr) {
-      if (activeBudget) ++activeBudget->work.slotJoins;
+      if (activeBudget) {
+        ++activeBudget->work.slotJoins;
+        if (auto *f = activeBudget->work.currentFunction) ++f->slotJoins;
+      }
       canonicalOffset(a.offset, a.stride);
       // Initial zero images with the same start are nested intervals. Their
       // exact union is the largest extent, not a new slot for every loop round.
@@ -735,6 +767,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             if(size>s.bytes) {
               slotIndex.erase(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical});
               s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);changed=true;
+              if (activeBudget) activeBudget->loadImages.erase(a.object);
             }
             found=true;break;
           }
@@ -756,7 +789,11 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
         changed=true;
-      } else changed|=slots[it->second].value.merge(v);
+        if (activeBudget) activeBudget->loadImages.erase(a.object);
+      } else if (slots[it->second].value.merge(v)) {
+        changed = true;
+        if (activeBudget) activeBudget->loadImages.erase(a.object);
+      }
       compact |= !filled && a.stride != 0;
     }
   if (compact) {
@@ -863,77 +900,88 @@ AV Analysis::load(const AV &p, Type *t) {
         r.top = true;
         continue;
       }
-      bool partial = false;
-      for (size_t n:overlappingSlots(a,size)) {
-          auto &s=slots[n];
-          if (s.filled && a.stride == 0 && s.stride == 0 &&
-              a.offset >= s.offset &&
-              (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
-              (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
-            AV decoded;
-            decoded.top = s.value.top;
-            for (auto &x : s.value.atoms)
-              if (x.kind == Atom::Int) {
-                APInt bits(M.getDataLayout().getTypeSizeInBits(t).getKnownMinValue(), 0);
-                for (unsigned b = 0; b < size; ++b)
-                  bits |= x.integer.zextOrTrunc(bits.getBitWidth()).shl(b * 8);
-                decoded.merge(integer(bits));
-              }
-            r.merge(decoded);
-            continue;
-          }
-          // A family can have both identical-interval and partial-overlap
-          // members. PT6 retains the whole FN/ROOT/pointer alternatives from
-          // the former even when the latter also contribute non-handle TOP.
-          int64_t spacing = std::gcd(a.stride, s.stride);
-          __int128 difference = (__int128)a.offset - s.offset;
-          bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
-          bool whole = size == s.bytes && sameStart;
-          bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
-          if (whole) r.merge(s.value);
-          if (!onlyWhole) {
-            partial = true;
-            for (auto &b : s.value.atoms)
-              if (b.kind == Atom::Root)
-                r.atoms.insert(b);
-          }
-        }
-      // Immutable initialiser bytes reconstruct whole integer loads exactly.
-      if (auto *g = dyn_cast<GlobalVariable>(a.object);
-          g && g->isConstant() && t->isIntegerTy() && a.stride == 0) {
-        APInt bits(t->getIntegerBitWidth(), 0);
-        bool known = true;
-        for (unsigned b = 0; b < size; ++b) {
-          bool found = false;
-          for (auto &s : slots)
-            if (s.object == a.object && s.stride == 0 &&
-                s.offset <= a.offset + b &&
-                a.offset + b < s.offset + (int64_t)s.bytes &&
-                s.value.atoms.size() == 1) {
-              auto &x = *s.value.atoms.begin();
-              if (x.kind != Atom::Int)
-                continue;
-              unsigned bi = a.offset + b - s.offset;
-              unsigned shift = M.getDataLayout().isLittleEndian()
-                                   ? bi * 8
-                                   : (s.bytes - 1 - bi) * 8;
-              uint64_t byte = x.integer.lshr(shift).getLimitedValue() & 255;
-              unsigned dest = M.getDataLayout().isLittleEndian()
-                                  ? b * 8
-                                  : (size - 1 - b) * 8;
-              bits |= APInt(bits.getBitWidth(), byte).shl(dest);
-              found = true;
-              break;
+      auto image = [&]() {
+        AV r;
+        bool partial = false;
+        for (size_t n:overlappingSlots(a,size)) {
+            auto &s=slots[n];
+            if (s.filled && a.stride == 0 && s.stride == 0 &&
+                a.offset >= s.offset &&
+                (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
+                (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
+              AV decoded;
+              decoded.top = s.value.top;
+              for (auto &x : s.value.atoms)
+                if (x.kind == Atom::Int) {
+                  APInt bits(M.getDataLayout().getTypeSizeInBits(t).getKnownMinValue(), 0);
+                  for (unsigned b = 0; b < size; ++b)
+                    bits |= x.integer.zextOrTrunc(bits.getBitWidth()).shl(b * 8);
+                  decoded.merge(integer(bits));
+                }
+              r.merge(decoded);
+              continue;
             }
-          known &= found;
+            // A family can have both identical-interval and partial-overlap
+            // members. PT6 retains the whole FN/ROOT/pointer alternatives from
+            // the former even when the latter also contribute non-handle TOP.
+            int64_t spacing = std::gcd(a.stride, s.stride);
+            __int128 difference = (__int128)a.offset - s.offset;
+            bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
+            bool whole = size == s.bytes && sameStart;
+            bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
+            if (whole) r.merge(s.value);
+            if (!onlyWhole) {
+              partial = true;
+              for (auto &b : s.value.atoms)
+                if (b.kind == Atom::Root)
+                  r.atoms.insert(b);
+            }
+          }
+        // Immutable initialiser bytes reconstruct whole integer loads exactly.
+        if (auto *g = dyn_cast<GlobalVariable>(a.object);
+            g && g->isConstant() && t->isIntegerTy() && a.stride == 0) {
+          APInt bits(t->getIntegerBitWidth(), 0);
+          bool known = true;
+          for (unsigned b = 0; b < size; ++b) {
+            bool found = false;
+            for (auto &s : slots)
+              if (s.object == a.object && s.stride == 0 &&
+                  s.offset <= a.offset + b &&
+                  a.offset + b < s.offset + (int64_t)s.bytes &&
+                  s.value.atoms.size() == 1) {
+                auto &x = *s.value.atoms.begin();
+                if (x.kind != Atom::Int)
+                  continue;
+                unsigned bi = a.offset + b - s.offset;
+                unsigned shift = M.getDataLayout().isLittleEndian()
+                                     ? bi * 8
+                                     : (s.bytes - 1 - bi) * 8;
+                uint64_t byte = x.integer.lshr(shift).getLimitedValue() & 255;
+                unsigned dest = M.getDataLayout().isLittleEndian()
+                                    ? b * 8
+                                    : (size - 1 - b) * 8;
+                bits |= APInt(bits.getBitWidth(), byte).shl(dest);
+                found = true;
+                break;
+              }
+            known &= found;
+          }
+          if (known) {
+            r.merge(integer(bits));
+            partial = false;
+          }
         }
-        if (known) {
-          r.merge(integer(bits));
-          partial = false;
-        }
-      }
-      if (partial)
-        r.top = true;
+        if (partial)
+          r.top = true;
+        return r;
+      };
+      if (activeBudget) {
+        auto &images = activeBudget->loadImages[a.object];
+        auto key = std::make_pair(a, t);
+        auto found = images.find(key);
+        if (found == images.end()) found = images.emplace(key, image()).first;
+        r.merge(found->second);
+      } else r.merge(image());
     }
   return r;
 }
@@ -1103,7 +1151,10 @@ AV Analysis::field(const Value *v, const Path &path) {
   return fields[{v, path}];
 }
 void Analysis::setField(const Value *v, const Path &path, const AV &a) {
-  if (activeBudget) ++activeBudget->work.fieldJoins;
+  if (activeBudget) {
+    ++activeBudget->work.fieldJoins;
+    if (auto *f = activeBudget->work.currentFunction) ++f->fieldJoins;
+  }
   if (path.empty())
     changed |= values[v].merge(a);
   else
@@ -1470,9 +1521,12 @@ static bool longAdditiveCycle(Value *value, Value *source,
 static void closePointerOrbit(Value &source, ArrayRef<Value *> incoming,
                               const DataLayout &layout, AV &facts,
                               function_ref<AV(Value *, const Instruction *)> indices) {
-  if (!source.getType()->isPointerTy()) return;
-  unsigned width = layout.getPointerTypeSizeInBits(source.getType());
-  if (width != layout.getIndexTypeSizeInBits(source.getType()) || width > 64) return;
+  Type *type = source.getType();
+  if (!type->isPointerTy() && !type->isIntegerTy()) return;
+  unsigned width = type->isPointerTy() ? layout.getPointerTypeSizeInBits(type)
+                                      : type->getIntegerBitWidth();
+  if (width > 64 || (type->isPointerTy() &&
+                    width != layout.getIndexTypeSizeInBits(type))) return;
   unsigned zeros = width;
   std::set<Value *> path;
   std::function<void(Value *, APInt)> walk = [&](Value *value, APInt delta) {
@@ -1515,6 +1569,25 @@ static void closePointerOrbit(Value &source, ArrayRef<Value *> incoming,
           for (const auto &d : offsets) walk(gep->getPointerOperand(), delta + d);
         }
       }
+    } else if (auto *cast = dyn_cast<CastInst>(value)) {
+      // Full-width ptrtoint/inttoptr preserve the originating-object image.
+      // Truncation and integer extension are not translation edges.
+      if ((cast->getOpcode() == Instruction::PtrToInt ||
+           cast->getOpcode() == Instruction::IntToPtr) &&
+          layout.getTypeSizeInBits(cast->getType()) == width &&
+          layout.getTypeSizeInBits(cast->getOperand(0)->getType()) == width)
+        walk(cast->getOperand(0), delta);
+    } else if (auto *binary = dyn_cast<BinaryOperator>(value)) {
+      if (binary->getType()->isIntegerTy(width)) {
+        if (auto *constant = dyn_cast<ConstantInt>(binary->getOperand(1))) {
+          if (binary->getOpcode() == Instruction::Add)
+            walk(binary->getOperand(0), delta + constant->getValue());
+          else if (binary->getOpcode() == Instruction::Sub)
+            walk(binary->getOperand(0), delta - constant->getValue());
+        } else if (binary->getOpcode() == Instruction::Add)
+          if (auto *constant = dyn_cast<ConstantInt>(binary->getOperand(0)))
+            walk(binary->getOperand(1), delta + constant->getValue());
+      }
     } else if (auto *other = dyn_cast<PHINode>(value)) {
       for (Value *incoming : other->incoming_values()) walk(incoming, delta);
     } else if (auto *select = dyn_cast<SelectInst>(value)) {
@@ -1532,7 +1605,8 @@ static void closePointerOrbit(Value &source, ArrayRef<Value *> incoming,
   bool objectOrbit = false;
   int64_t stride = int64_t(1) << zeros;
   for (auto a : facts.atoms) {
-    if (a.kind == Atom::Ptr && a.object) {
+    if (a.kind == Atom::Ptr && a.object &&
+        layout.getPointerTypeSizeInBits(a.object->getType()) == width) {
       if (a.stride != -1) {
         a.stride = std::gcd(a.stride, stride);
         canonicalOffset(a.offset, a.stride);
@@ -1610,6 +1684,7 @@ static AV binaryPointers(Instruction &i, const AV &left, const AV &right,
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
     ++activeBudget->work.worklistPops;
+    if (auto *f = activeBudget->work.currentFunction) ++f->dispatches;
     activeBudget->at=&i;
     activeBudget->rule=isa<LoadInst>(i)?"PT6":isa<StoreInst>(i)?"PT7":isa<GetElementPtrInst>(i)?"PT2":isa<CallBase>(i)?"PT8/PT9/PT12":isa<PHINode>(i)||isa<SelectInst>(i)?"PT3":i.getType()->isAggregateType()?"PT10":"PT4/PT5";
     activeBudget->check(true);
@@ -1632,7 +1707,10 @@ void Analysis::step(Instruction &i) {
     if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),equal))return;
     old=std::move(inputs);
   }
-  if (activeBudget) ++activeBudget->work.transferApplications;
+  if (activeBudget) {
+    ++activeBudget->work.transferApplications;
+    if (auto *f = activeBudget->work.currentFunction) ++f->transfers;
+  }
   // S2 evaluates precisely the same N9/N32/N33 graph on private instructions.
   // Operands retain source identities; host IR and its attributes stay untouched.
   bool fp=false;
@@ -2244,14 +2322,17 @@ void Analysis::run() {
     for (Function &f : M) {
       if (f.isDeclaration()) continue;
       ++scope.budget.work.functionVisits;
-      ++scope.budget.work.functions[functionIndex++].visits;
+      scope.budget.work.currentFunction = &scope.budget.work.functions[functionIndex++];
+      ++scope.budget.work.currentFunction->visits;
       for (Instruction &i : instructions(f)) {
         bool prior=changed;changed=false;
         step(i);
         if(changed) {lastChanged=&i;lastRule=scope.budget.rule;}
         changed|=prior;
       }
+      ++scope.budget.work.currentFunction->rounds;
     }
+    scope.budget.work.currentFunction = nullptr;
     ++scope.budget.work.roundsCompleted;
     if (++rounds >= MaxAnalysisRounds && changed) {
       scope.budget.at=lastChanged;scope.budget.rule=lastRule?lastRule:"PT11 seeds";

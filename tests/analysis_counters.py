@@ -61,6 +61,12 @@ def main(argv=None):
         assert all(type(value) is int and value > 0 for value in visits["top"].values()), work
         assert sum(visits["top"].values()) <= visits["total"], work
         assert type(visits["top_limit"]) is int and len(visits["top"]) <= visits["top_limit"], work
+        functions = work["per_function"]
+        assert sum(f["worklist_pops"] for f in functions.values()) == work["worklist_pops"], work
+        assert sum(f["transfer_applications"] for f in functions.values()) == work["transfer_applications"], work
+        assert sum(f["join_count"] for f in functions.values()) <= work["join_count"], work
+        assert all(f["rounds_completed"] >= work["rounds_completed"]
+                   for f in functions.values()), work
         assert work["worklist_pops"] >= work["transfer_applications"], work
         assert work["cpu_ms"]["deterministic"] is False, work
         if cpu_clock_available:
