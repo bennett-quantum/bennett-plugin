@@ -157,7 +157,7 @@ define i64 @heap_only() {
     layout = json.loads(sections(obj)['layout'])
     assert (layout['heap_base'], layout['H'], layout['globals']) == (131072, 18, {}), layout
     run([reference, 'check', obj])
-    result = json.loads(run([reference, 'run-program', obj, 'heap_only', '--budget', '1000,4096,128,8']))
+    result = json.loads(run([reference, 'run-program', obj, 'heap_only', '--budget', '1000,4096,32,8']))
     assert result['status'] == 'COMPLETED' and not result['faults'], result
     assert result['results'] == [dict(type='i64', value='131072')], result
 

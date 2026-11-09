@@ -116,7 +116,7 @@ COMMAND_HANG_GUARDS_S = {
     "allocator_closure": 60,
     "native_comparison": 60,
     "native_layout": 60,
-    # tests/comparison_layout.py: max 0.47 s wall on Spiral, LLVM18/23,
+    # tests/comparison_layout.py: max 0.67 s wall on Spiral, LLVM18/23,
     # 2026-11-09; 10x is below the shared 60 s hang-guard floor.
     "comparison_layout": 60,
     "native_fixtures": 68,
