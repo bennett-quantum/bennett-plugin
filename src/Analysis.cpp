@@ -2087,9 +2087,10 @@ void Analysis::step(Instruction &i) {
       }
     }
   done:;
-    a.merge(binaryPointers(i, x, y, [&](const Atom &p, const APInt &delta) {
+    auto pointers = binaryPointers(i, x, y, [&](const Atom &p, const APInt &delta) {
       return displace(AV{{p}, false}, delta, delta.getBitWidth(), false);
-    }));
+    });
+    if (pointers.top || !pointers.atoms.empty()) a.merge(pointers);
     if (isa<ICmpInst>(i) && a.atoms.empty() &&
         (x.top || y.top || !x.atoms.empty() || !y.atoms.empty())) {
       a.top = false;

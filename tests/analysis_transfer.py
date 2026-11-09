@@ -70,6 +70,39 @@ define i64 @top() {{
                 expected = (True, [f"PTR(@cell,{displacement},0)", "PTR(EXT,0,-1)"])
             check(f"growth-{opcode}-{side}", stages["mixed"] == expected, stages)
 
+    for opcode in ("and", "urem", "add", "sub", "icmp eq"):
+        for side in ("left", "right"):
+            left, right = ("%address", "%unknown") if side == "left" else ("%unknown", "%address")
+            data, _ = analyse(f"opposing-top-{opcode.replace(' ', '-')}-{side}", f"""
+@cell = global i8 0
+declare i64 @external()
+define i64 @top() {{
+ %address = ptrtoint ptr @cell to i64
+ %unknown = call i64 @external()
+ %result = {opcode} i64 {left}, {right}
+ ret i64 0
+}}
+""")
+            check(f"opposing-top-{opcode}-{side}",
+                  value_domains(data)["top", "%result"] == pointer_image,
+                  value_domains(data)["top", "%result"])
+
+    # Bottom has no pairs even when the opposite factor has numeric TOP.
+    for side in ("left", "right"):
+        left, right = ("%empty", "%unknown") if side == "left" else ("%unknown", "%empty")
+        data, _ = analyse("bottom-top-" + side, f"""
+declare i64 @external()
+define internal i64 @empty() {{ unreachable }}
+define i64 @top() {{
+ %empty = call i64 @empty()
+ %unknown = call i64 @external()
+ %result = and i64 {left}, {right}
+ ret i64 %result
+}}
+""")
+        check("bottom-top-" + side, value_domains(data)["top", "%result"] == (False, []),
+              value_domains(data)["top", "%result"])
+
     # Reordering a backedge must preserve the complete AV map, including the
     # pointer contribution to an ICmp with a TOP-only opposing operand.
     blocks = {
