@@ -24,6 +24,7 @@
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 #include <numeric>
 #include <cstdlib>
+#include <memory>
 #include "llvm/Support/CommandLine.h"
 #include <tuple>
 using namespace llvm;
@@ -44,11 +45,14 @@ struct AnalysisWork {
   uint64_t functionVisits = 0;
   struct MemoryWork {
     uint64_t loadAddresses = 0, loadSlotTests = 0, loadImageHits = 0, loadImageMisses = 0;
+    uint64_t loadImageComputations = 0, loadSignatureHits = 0, loadImageUnionSkips = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
       return json::Object{{"load_addresses", loadAddresses}, {"load_slot_tests", loadSlotTests},
               {"load_image_hits", loadImageHits}, {"load_image_misses", loadImageMisses},
+              {"load_image_computations", loadImageComputations},
+              {"load_signature_hits", loadSignatureHits}, {"load_image_union_skips", loadImageUnionSkips},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -120,7 +124,15 @@ struct AnalysisBudget {
   AnalysisWork work;
   // PT6 images depend on one object's slots and the accessed representation.
   // Every growing PT7 fact invalidates that object's cached images.
-  std::map<const Value *, std::map<std::pair<Atom, Type *>, AV>> loadImages;
+  using LoadPartKey = std::tuple<int64_t, int64_t, uint64_t, bool, bool, unsigned>;
+  using LoadSignature = std::tuple<Type *, std::vector<LoadPartKey>, std::optional<int64_t>>;
+  using LoadImage = std::shared_ptr<const AV>;
+  std::map<const Value *, std::map<std::pair<Atom, Type *>, LoadImage>> loadImages;
+  std::map<const Value *, std::map<LoadSignature, LoadImage>> loadSignatures;
+  void invalidateLoadImages(const Value *object) {
+    loadImages.erase(object);
+    loadSignatures.erase(object);
+  }
   const Analysis *owner;
   std::string reportPath;
   const Instruction *at=nullptr;
@@ -914,7 +926,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             if(size>s.bytes) {
               slotIndex.erase(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical});
               s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);changed=true;
-              if (activeBudget) activeBudget->loadImages.erase(a.object);
+              if (activeBudget) activeBudget->invalidateLoadImages(a.object);
             }
             found=true;break;
           }
@@ -936,10 +948,10 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
         changed=true;
-        if (activeBudget) activeBudget->loadImages.erase(a.object);
+        if (activeBudget) activeBudget->invalidateLoadImages(a.object);
       } else if (slots[it->second].value.merge(v)) {
         changed = true;
-        if (activeBudget) activeBudget->loadImages.erase(a.object);
+        if (activeBudget) activeBudget->invalidateLoadImages(a.object);
       }
       if (!filled && a.stride) compactObjects.insert(a.object);
     }
@@ -1064,8 +1076,22 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
   }
   return read(base,offset,type);
 }
+enum LoadPart { WholeValue = 1, PartialValue = 2, RepeatedBytes = 4 };
+static unsigned classifyLoad(const Atom &a, const Slot &s, uint64_t size, Type *t) {
+  if (s.filled && !a.stride && !s.stride && a.offset >= s.offset &&
+      (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
+      (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy()))
+    return RepeatedBytes;
+  int64_t spacing = std::gcd(a.stride, s.stride);
+  __int128 difference = (__int128)a.offset - s.offset;
+  bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
+  bool whole = size == s.bytes && sameStart;
+  bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
+  return (whole ? WholeValue : 0) | (onlyWhole ? 0 : PartialValue);
+}
 AV Analysis::load(const AV &p, Type *t) {
   AV r;
+  std::set<const AV *> joinedImages;
   uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
   r.top = p.top;
   for (auto &a : p.atoms)
@@ -1075,15 +1101,19 @@ AV Analysis::load(const AV &p, Type *t) {
         r.top = true;
         continue;
       }
-      auto image = [&]() {
+      auto classify = [&]() {
+        std::vector<std::pair<size_t, unsigned>> parts;
+        for (auto n : overlappingSlots(a, size))
+          parts.emplace_back(n, classifyLoad(a, slots[n], size, t));
+        return parts;
+      };
+      auto image = [&](ArrayRef<std::pair<size_t, unsigned>> parts) {
+        memoryWork(&AnalysisWork::MemoryWork::loadImageComputations);
         AV r;
         bool partial = false;
-        for (size_t n:overlappingSlots(a,size)) {
+        for (auto [n, classification] : parts) {
             auto &s=slots[n];
-            if (s.filled && a.stride == 0 && s.stride == 0 &&
-                a.offset >= s.offset &&
-                (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
-                (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
+            if (classification == RepeatedBytes) {
               AV decoded;
               decoded.top = s.value.top;
               for (auto &x : s.value.atoms)
@@ -1099,13 +1129,8 @@ AV Analysis::load(const AV &p, Type *t) {
             // A family can have both identical-interval and partial-overlap
             // members. PT6 retains the whole FN/ROOT/pointer alternatives from
             // the former even when the latter also contribute non-handle TOP.
-            int64_t spacing = std::gcd(a.stride, s.stride);
-            __int128 difference = (__int128)a.offset - s.offset;
-            bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
-            bool whole = size == s.bytes && sameStart;
-            bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
-            if (whole) r.merge(s.value);
-            if (!onlyWhole) {
+            if (classification & WholeValue) r.merge(s.value);
+            if (classification & PartialValue) {
               partial = true;
               for (auto &b : s.value.atoms)
                 if (b.kind == Atom::Root)
@@ -1156,10 +1181,35 @@ AV Analysis::load(const AV &p, Type *t) {
         auto found = images.find(key);
         if (found == images.end()) {
           memoryWork(&AnalysisWork::MemoryWork::loadImageMisses);
-          found = images.emplace(key, image()).first;
+          auto parts = classify();
+          std::vector<AnalysisBudget::LoadPartKey> keys;
+          for (auto [n, classification] : parts) {
+            auto &s = slots[n];
+            keys.emplace_back(s.offset, s.stride, s.bytes, s.filled, s.numerical, classification);
+          }
+          llvm::sort(keys);
+          // PT6 depends on the slot facts and their interval classifications.
+          // Immutable integer reconstruction additionally reads exact bytes.
+          // Stable keys survive unrelated slot swaps; every growing write to
+          // this object invalidates both address and transfer-image caches.
+          std::optional<int64_t> byteOffset;
+          if (auto *g = dyn_cast<GlobalVariable>(a.object);
+              g && g->isConstant() && t->isIntegerTy() && !a.stride)
+            byteOffset = a.offset;
+          auto signature = std::make_tuple(t, std::move(keys), byteOffset);
+          auto &memo = activeBudget->loadSignatures[a.object];
+          auto prior = memo.find(signature);
+          if (prior == memo.end())
+            prior = memo.emplace(std::move(signature),
+                                 std::make_shared<const AV>(image(parts))).first;
+          else memoryWork(&AnalysisWork::MemoryWork::loadSignatureHits);
+          found = images.emplace(key, prior->second).first;
         } else memoryWork(&AnalysisWork::MemoryWork::loadImageHits);
-        r.merge(found->second);
-      } else r.merge(image());
+        // The immutable image already joined for another represented address
+        // contributes no new alternatives; retain the entire union once.
+        if (joinedImages.insert(found->second.get()).second) r.merge(*found->second);
+        else memoryWork(&AnalysisWork::MemoryWork::loadImageUnionSkips);
+      } else r.merge(image(classify()));
     }
   return r;
 }
