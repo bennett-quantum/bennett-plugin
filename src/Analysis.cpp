@@ -55,6 +55,7 @@ struct AnalysisWork {
     uint64_t loadByteSlotTests = 0;
     uint64_t loadImageInternHits = 0;
     uint64_t pointerContainmentTests = 0;
+    uint64_t pointerBinaryPairs = 0, pointerBinaryAtoms = 0, pointerBinarySkippedPairs = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
@@ -65,6 +66,8 @@ struct AnalysisWork {
               {"load_byte_slot_tests", loadByteSlotTests},
               {"load_image_intern_hits", loadImageInternHits},
               {"pointer_containment_tests", pointerContainmentTests},
+              {"pointer_binary_pairs", pointerBinaryPairs}, {"pointer_binary_atoms", pointerBinaryAtoms},
+              {"pointer_binary_skipped_pairs", pointerBinarySkippedPairs},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -2000,16 +2003,37 @@ static AV binaryPointers(Instruction &i, const AV &left, const AV &right,
                          function_ref<AV(const Atom &, const APInt &)> displace) {
   AV result;
   auto image = [&](const AV &pointers, const AV &other, bool rhs) {
+    memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+    if (pointers.atoms.empty() || pointers.atoms.begin()->kind != Atom::Ptr) return;
     bool displacement = i.getOpcode() == Instruction::Add ||
                         (i.getOpcode() == Instruction::Sub && !rhs);
-    for (const auto &pointer : pointers.atoms) {
-      if (pointer.kind != Atom::Ptr) continue;
-      bool conservative = !displacement || other.top;
+    // INT is the final atom kind. Classify the non-INT prefix once instead
+    // of pairing every pointer with alternatives that only request the same
+    // conservative image. Keep the complete Ptr x INT displacement product.
+    auto integers = other.atoms.end();
+    uint64_t integerCount = 0;
+    if (displacement)
+      while (integers != other.atoms.begin()) {
+        auto prior = std::prev(integers);
+        budgetTick();
+        memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+        if (prior->kind != Atom::Int) break;
+        integers = prior;
+        ++integerCount;
+      }
+    uint64_t nonIntegers = displacement ? other.atoms.size() - integerCount : 0;
+    bool conservative = !displacement || other.top || nonIntegers;
+    for (auto it = pointers.atoms.begin(); it != pointers.atoms.end() && it->kind == Atom::Ptr; ++it) {
+      const auto &pointer = *it;
+      budgetTick();
+      memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+      memoryWork(&AnalysisWork::MemoryWork::pointerBinarySkippedPairs, nonIntegers);
       if (displacement)
-        for (const auto &value : other.atoms) {
-          if (value.kind != Atom::Int) { conservative = true; continue; }
-          auto delta = i.getOpcode() == Instruction::Sub ? -value.integer
-                                                       : value.integer;
+        for (auto value = integers; value != other.atoms.end(); ++value) {
+          budgetTick();
+          memoryWork(&AnalysisWork::MemoryWork::pointerBinaryPairs);
+          auto delta = i.getOpcode() == Instruction::Sub ? -value->integer
+                                                       : value->integer;
           result.merge(displace(pointer, delta));
         }
       if (conservative) {
