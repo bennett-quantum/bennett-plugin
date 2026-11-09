@@ -307,6 +307,9 @@ static void numericalUnknown(AV &result) {
 AV Analysis::convert(const AV &source,Type *from,Type *to,unsigned opcode) {
   if(opcode==Instruction::AddrSpaceCast) return source; // PT3 copies, not PT4.
   AV result;result.top=source.top;
+  // Numeric TOP includes nonzero integers, whose inttoptr image carries EXT.
+  // Retain that same image when the finite INT alternatives are absorbed.
+  if (source.top && opcode == Instruction::IntToPtr) numericalUnknown(result);
   unsigned width=M.getDataLayout().getTypeSizeInBits(to).getKnownMinValue();
   unsigned input=M.getDataLayout().getTypeSizeInBits(from).getKnownMinValue();
   for(auto a:source.atoms) {

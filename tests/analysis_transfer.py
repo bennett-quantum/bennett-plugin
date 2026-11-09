@@ -123,6 +123,26 @@ define i64 @top() {{
         check("icmp-top-pointer", domains["top", "%c"] == pointer_image,
               domains["top", "%c"])
 
+    # PT4's image of numeric TOP must contain the images of its nonzero
+    # integers. Otherwise inttoptr forgets EXT when a finite seed becomes TOP.
+    converted = []
+    for name, order in (("forward", ("entry", "loop", "back")),
+                        ("back-first", ("entry", "back", "loop"))):
+        blocks = {
+            "entry": "br label %loop",
+            "loop": "%x = phi i64 [1, %entry], [%z, %back]\n %p = inttoptr i64 %x to ptr\n br label %back",
+            "back": "%z = call i64 @external()\n br label %loop",
+        }
+        body = "\n".join(b + ":\n " + blocks[b] for b in order)
+        data, _ = analyse("convert-" + name, "declare i64 @external()\n"
+                          + "define void @top() {\n" + body + "\n}\n")
+        converted.append(value_domains(data))
+        check("inttoptr-top-" + name,
+              value_domains(data)["top", "%p"] == (True, ["PTR(EXT,0,-1)"]),
+              value_domains(data)["top", "%p"])
+    check("inttoptr-block-order", converted[0] == converted[1],
+          [r["top", "%p"] for r in converted])
+
     # Numeric TOP masks/remainders stay exact; no coarsening to repair provenance.
     data, _ = analyse("numeric", """
 declare i64 @external()
