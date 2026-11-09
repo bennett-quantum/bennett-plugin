@@ -622,6 +622,7 @@ void Analysis::releaseTransferGraphs() {
 static AV gepImage(const GEPOperator &g, const DataLayout &dl, const AV &base,
                    function_ref<AV(Value *)> index,
                    function_ref<AV(const AV &, const APInt &, unsigned)> displace) {
+  if (!base.top && base.atoms.empty()) return {};
   unsigned bits = dl.getIndexTypeSizeInBits(g.getType());
   unsigned pointerBits = dl.getPointerTypeSizeInBits(g.getType());
 #if LLVM_VERSION_MAJOR >= 23

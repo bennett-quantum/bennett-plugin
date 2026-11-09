@@ -76,6 +76,21 @@ def main():
  %ix = select i1 true, <2 x i64> <i64 1, i64 3>, <2 x i64> <i64 2, i64 5>
  %p = getelementptr i32, ptr @buf, <2 x i64> %ix
 ''' + extract, {'%p0': ptr(4, 8), '%p1': ptr(12, 20)})
+    check('symbolic-stride', '''
+ %x = call i64 @external()
+ %ix = insertelement <2 x i64> <i64 0, i64 1>, i64 %x, i32 0
+ %p = getelementptr [56 x i8], ptr @buf, <2 x i64> %ix
+''' + extract, {'%p0': (True, {'PTR(@buf,0,8)', 'PTR(EXT,0,-1)'}), '%p1': ptr(56)},
+          GLOBAL + 'declare i64 @external()\n')
+    # An empty base has no address/index pairs, even with a TOP index.
+    check('empty-base', '''
+ %empty = call ptr @empty()
+ %x = call i64 @external()
+ %base = insertelement <2 x ptr> <ptr @buf, ptr @buf>, ptr %empty, i32 0
+ %ix = insertelement <2 x i64> zeroinitializer, i64 %x, i32 0
+ %p = getelementptr i8, <2 x ptr> %base, <2 x i64> %ix
+''' + extract, {'%p0': (False, set()), '%p1': ptr(0)},
+          GLOBAL + 'declare i64 @external()\ndefine internal ptr @empty() { unreachable }\n')
     # Lane 0 contains K or K+1 INTs; summary TOP must not erase lane 1.
     for extra in (False, True):
         body = '''
