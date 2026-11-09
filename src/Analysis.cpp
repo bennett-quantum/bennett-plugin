@@ -54,6 +54,7 @@ struct AnalysisWork {
     uint64_t loadImageComputations = 0, loadSignatureHits = 0, loadImageUnionSkips = 0;
     uint64_t loadByteSlotTests = 0;
     uint64_t loadImageInternHits = 0;
+    uint64_t pointerContainmentTests = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
@@ -63,6 +64,7 @@ struct AnalysisWork {
               {"load_signature_hits", loadSignatureHits}, {"load_image_union_skips", loadImageUnionSkips},
               {"load_byte_slot_tests", loadByteSlotTests},
               {"load_image_intern_hits", loadImageInternHits},
+              {"pointer_containment_tests", pointerContainmentTests},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -312,12 +314,15 @@ static void canonicalOffset(int64_t &offset, int64_t &stride) {
 }
 static bool offsetContains(int64_t outerOffset, int64_t outerStride,
                            int64_t innerOffset, int64_t innerStride) {
+  budgetTick();
   if (outerStride == -1) return true;
   if (!outerStride) return !innerStride && outerOffset == innerOffset;
   return innerStride != -1 && innerStride % outerStride == 0 &&
          residue(innerOffset, outerStride) == residue(outerOffset, outerStride);
 }
 static bool pointerContains(const Atom &outer, const Atom &inner) {
+  budgetTick();
+  memoryWork(&AnalysisWork::MemoryWork::pointerContainmentTests);
   return outer.kind == Atom::Ptr && inner.kind == Atom::Ptr &&
          outer.object == inner.object && outer.numerical == inner.numerical &&
          outer.integer == inner.integer &&
@@ -325,12 +330,55 @@ static bool pointerContains(const Atom &outer, const Atom &inner) {
 }
 static bool contains(const AV &outer, const AV &inner) {
   if (inner.top && !outer.top) return false;
+  // Reject missing explicit non-pointer alternatives before checking a large
+  // pointer set. TOP absorbs integers, never a missing ROOT or FN.
+  for (auto it = inner.atoms.rbegin(); it != inner.atoms.rend() && it->kind != Atom::Ptr; ++it) {
+    budgetTick();
+    if (it->kind == Atom::Int && outer.top) continue;
+    if (!outer.atoms.count(*it)) return false;
+  }
+  SmallVector<const Atom *, 4> families;
+  const Value *familyObject = nullptr;
+  bool indexed = false;
   for (const auto &a : inner.atoms) {
-    if ((a.kind == Atom::Int && outer.top) || outer.atoms.count(a)) continue;
-    if (!llvm::any_of(outer.atoms, [&](const Atom &b) { return pointerContains(b, a); }))
+    if (a.kind != Atom::Ptr) break;
+    budgetTick();
+    if (outer.atoms.count(a)) continue;
+    if (!indexed || familyObject != a.object) {
+      families.clear();
+      Atom first{Atom::Ptr,a.object,INT64_MIN,INT64_MIN,APInt(1,0)};
+      for (auto it = outer.atoms.lower_bound(first);
+           it != outer.atoms.end() && it->kind == Atom::Ptr && it->object == a.object;) {
+        budgetTick();
+        if (!it->stride) {
+          auto afterExact = first;
+          afterExact.stride = 1;
+          it = outer.atoms.lower_bound(afterExact);
+        } else families.push_back(&*it++);
+      }
+      familyObject = a.object;
+      indexed = true;
+    }
+    if (!llvm::any_of(families, [&](const Atom *b) { return pointerContains(*b, a); }))
       return false;
   }
   return true;
+}
+static std::optional<AV> coverageRequirement(const AV &value) {
+  auto sameOrigin = [](const Atom &a, const Atom &b) {
+    return a.kind == Atom::Ptr && b.kind == Atom::Ptr && a.object == b.object &&
+           a.numerical == b.numerical && a.integer.getBitWidth() == b.integer.getBitWidth() &&
+           a.integer == b.integer;
+  };
+  if (std::adjacent_find(value.atoms.begin(), value.atoms.end(), sameOrigin) == value.atoms.end())
+    return std::nullopt;
+  AV requirement; requirement.top = value.top;
+  for (auto a : value.atoms) {
+    budgetTick();
+    if (a.kind == Atom::Ptr) { a.offset = 0; a.stride = -1; }
+    requirement.atoms.insert(requirement.atoms.end(), std::move(a));
+  }
+  return requirement;
 }
 bool AV::merge(const AV &v) {
   if (activeBudget) {
@@ -944,6 +992,19 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
   std::set<const Value *> compactObjects;
+  std::optional<AV> coverage;
+  bool hasFamilies = !filled && llvm::any_of(p.atoms, [&](const Atom &a) {
+    if (a.kind != Atom::Ptr) return false;
+    auto found = otherSlots.find(a.object);
+    return found != otherSlots.end() && !found->second.empty();
+  });
+  if (hasFamilies) coverage = coverageRequirement(v);
+  auto coversWrittenValue = [&](const AV &prior) {
+    // Covering all offsets of each origin proves coverage of these offsets.
+    // This superset is only a proof requirement, never stored or propagated.
+    // A failed proof still uses the exact test (notably for stride families).
+    return (coverage && contains(prior, *coverage)) || contains(prior, v);
+  };
   for (auto a : p.atoms)
     if (a.kind == Atom::Ptr) {
       if (activeBudget) {
@@ -975,7 +1036,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             const auto &s = slots[n];
             return !s.filled && s.bytes == size && s.numerical == a.numerical &&
                    offsetContains(s.offset, s.stride, a.offset, a.stride) &&
-                   contains(s.value, v);
+                   coversWrittenValue(s.value);
           })) continue;
       SlotKey key{a.object,a.offset,a.stride,size,filled,a.numerical};
       auto [it,inserted]=slotIndex.emplace(key,slots.size());
