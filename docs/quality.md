@@ -383,6 +383,7 @@ The source keeps configured classes available; no replacement executor or privat
     "tests/analysis_integer_pointer_closure.py": {"complexity": 9, "functions": 1, "length_max": 101, "length_p50": 101, "length_p90": 101, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_monotone.py": {"complexity": 21, "functions": 4, "length_max": 206, "length_p50": 4, "length_p90": 206, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_pointer_closure.py": {"complexity": 25, "functions": 4, "length_max": 229, "length_p50": 16, "length_p90": 229, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_pt6_residue.py": {"complexity": 19, "functions": 1, "length_max": 53, "length_p50": 53, "length_p90": 53, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 69, "length_p50": 69, "length_p90": 69, "over_300": 0, "trivial_wrappers": 0},
     "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
