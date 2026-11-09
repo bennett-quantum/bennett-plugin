@@ -21,9 +21,15 @@ PYTHON
 export BENNETT_ARITH_PINNED_ROOT
 /usr/bin/time -f 'gate build: %e s' "$root/scripts/build"
 "$root/scripts/test"
-# Every bounded driver is in scripts/test; retain the measured slow checks here.
+# Keep measured slow checks outside scripts/test's shared allowance.
+# Measured 2026-11-07 on tobias-ThinkPad-X1-Carbon-Gen-11 (LLVM 18/23):
+# r_typed_faults: 46.490/87.298 s; recursive opt: 28.141/46.035 s with
+# its existing 60 s subprocess bound (other subprocesses: 120 s).
+# r_envelopes: 0.566/0.817 s total with existing 120 s subprocess bounds.
 for major in 18 23; do
   /usr/bin/time -f "gate mixed-native LLVM $major: %e s" python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
+  /usr/bin/time -f "gate r_typed_faults LLVM $major: %e s" python3 "$root/tests/r_typed_faults.py" --major "$major"
+  /usr/bin/time -f "gate r_envelopes LLVM $major: %e s" python3 "$root/tests/r_envelopes.py" --major "$major"
 done
 # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
 /usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &

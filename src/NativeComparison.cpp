@@ -219,13 +219,25 @@ public:
   }
 };
 
+SmallVector<std::pair<CallBase *, Function *>> markerCalls(Module &m) {
+  SmallVector<std::pair<CallBase *, Function *>> calls;
+  for (auto &f : m) for (auto &i : instructions(f)) if (auto *call = dyn_cast<CallBase>(&i))
+    if (auto *g = resolve(call->getCalledOperand()); g && markers().count(g->getName().str()))
+      calls.push_back({call, g});
+  return calls;
+}
+Function *nativeEffectImport(Module &m, const Function &marker) {
+  StringRef effect = marker.getName();
+  if (!effect.consume_front("__bennett_effect_")) return nullptr;
+  // §11.2 effect signatures match the syscall transports except console,
+  // whose existing native adapter supplies stdout's descriptor and return ABI.
+  StringRef prefix = effect == "console_write" ? "__bennett_rt_native_" : "__bennett_rt_transport_";
+  return cast<Function>(m.getOrInsertFunction((prefix + effect).str(), marker.getFunctionType()).getCallee());
+}
 std::string lowerNativeMarkers(Module &m, StringRef identity,
                               std::optional<uint64_t> shadowStack,
                               std::optional<uint64_t> sourceSteps) {
-  SmallVector<std::pair<CallBase *, Function *>> calls;
-  for (auto &f : m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
-    if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str()))
-      calls.push_back({call,g});
+  auto calls = markerCalls(m);
   Bridge bridge(m, identity,shadowStack,sourceSteps);
   DenseMap<Function *, Function *> replacements;
   for (auto [call, g] : calls) {
@@ -235,9 +247,8 @@ std::string lowerNativeMarkers(Module &m, StringRef identity,
         replacement = bridge.allocate(g->getFunctionType());
       else if (g->getName() == "__bennett_qfree")
         replacement = bridge.release(g->getFunctionType());
-      else if (g->getName() == "__bennett_effect_console_write")
-        replacement = cast<Function>(m.getOrInsertFunction("__bennett_rt_native_console_write",
-                                                          g->getFunctionType()).getCallee());
+      else if (auto *effect = nativeEffectImport(m, *g))
+        replacement = effect;
       else
         fail("BD-E-NATIVE-MARKERS", "native comparison lowering required", call);
       replacements[g] = replacement;
@@ -255,6 +266,80 @@ void writeReport(StringRef text) {
   out << text;
   out.flush();
   if(out.has_error())fail("BD-E-NATIVE-OUTPUT","cannot write comparison report");
+}
+
+bool isRuntimeTransport(const Function &f) {
+  StringRef name = f.getName();
+  return name.starts_with("__bennett_rt_transport_");
+}
+void importRuntimeTransports(Module &m) {
+  // §§17.7/19.5: the native support link supplies syscall transports. Their
+  // device wrappers must not be checked or published as native source bodies.
+  for (auto &f : m) if (isRuntimeTransport(f)) {
+    f.deleteBody(); f.setAttributes(AttributeList());
+  }
+}
+json::Array prepareSymbols(Module &m, StringRef identity) {
+  importRuntimeTransports(m);
+  // Stable aliases expose private/unnamed source definitions without copying
+  // them. Runtime imports have neither a definition alias nor source provenance.
+  json::Array symbols;
+  SmallVector<GlobalValue *> values;
+  for (auto &g : m.globals()) if (!g.isDeclaration()) values.push_back(&g);
+  for (auto &f : m) if (!f.isDeclaration()) values.push_back(&f);
+  for (unsigned i = 0; i < values.size(); ++i) {
+    auto *v = values[i];
+    auto name = "__bennett_comparison_" + identity.take_front(20).str() + "_" + std::to_string(i);
+    if (m.getNamedValue(name))
+      fail("BD-E-NATIVE-INPUT", "comparison symbol collision", v);
+    v->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
+    GlobalAlias::create(GlobalValue::ExternalLinkage, name, v);
+    json::Object row{{"llvm_name", v->getName()}, {"native_symbol", name}};
+    if (auto *g = dyn_cast<GlobalVariable>(v)) {
+      row["kind"] = "global";
+      row["source_key"] = scalarGlobalKey(*g);
+      row["size"] = int64_t(m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue());
+      row["alignment"] = int64_t(m.getDataLayout().getPreferredAlign(g).value());
+    } else {
+      row["kind"] = "function";
+      row["source_key"] = v->getName();
+      cast<Function>(v)->addFnAttr("bennett.native.materialised.sha256", identity);
+    }
+    symbols.push_back(std::move(row));
+  }
+  return symbols;
+}
+json::Array finaliseSymbols(Module &m, json::Array &symbols, StringRef identity) {
+  json::Array definitions;
+  for (auto &item : symbols) {
+    auto *row = item.getAsObject();
+    auto name = row ? row->getString("native_symbol") : std::nullopt;
+    auto *alias = name ? dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)) : nullptr;
+    if (!alias) fail("BD-E-NATIVE-INPUT", "prepared source symbol correspondence was lost");
+    if (row->getString("kind") != "function") {
+      definitions.push_back(std::move(item));
+      continue;
+    }
+    auto *f = dyn_cast_or_null<Function>(alias->getAliaseeObject());
+    if (!f) fail("BD-E-NATIVE-INPUT", "prepared source function provenance was lost", alias);
+    bool transport = isRuntimeTransport(*f) && row->getString("llvm_name") == f->getName();
+    auto provenance = f->getFnAttribute("bennett.native.materialised.sha256");
+    if (f->isDeclaration() ? !transport :
+        !provenance.isStringAttribute() || provenance.getValueAsString() != identity)
+      fail("BD-E-NATIVE-INPUT", "prepared source function provenance was lost", alias);
+    if (transport) {
+      // An importer may have left an alias to a declaration. LLVM requires
+      // aliases to name definitions, so publish only the real import name.
+      alias->replaceAllUsesWith(f);
+      alias->eraseFromParent();
+      continue;
+    }
+    definitions.push_back(std::move(item));
+  }
+  // A runtime closure link between prepare and finalise can reintroduce these
+  // wrappers; the final native-support link still owns their implementation.
+  importRuntimeTransports(m);
+  return definitions;
 }
 
 struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
@@ -309,33 +394,7 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
     }
 
     auto fingerprint = structure(m);
-    // Stable, collision-resistant aliases expose private/unnamed source
-    // definitions to the comparison linker without changing their bodies or
-    // making a second copy of any source global.
-    json::Array symbols;
-    SmallVector<GlobalValue *> values;
-    for (auto &g : m.globals()) if (!g.isDeclaration()) values.push_back(&g);
-    for (auto &f : m) if (!f.isDeclaration()) values.push_back(&f);
-    for (unsigned i = 0; i < values.size(); ++i) {
-      auto *v = values[i];
-      auto name = "__bennett_comparison_" + identity.substr(0, 20) + "_" + std::to_string(i);
-      if (m.getNamedValue(name))
-        fail("BD-E-NATIVE-INPUT", "comparison symbol collision", v);
-      v->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
-      GlobalAlias::create(GlobalValue::ExternalLinkage, name, v);
-      json::Object row{{"llvm_name", v->getName()}, {"native_symbol", name}};
-      if (auto *g = dyn_cast<GlobalVariable>(v)) {
-        row["kind"] = "global";
-        row["source_key"] = scalarGlobalKey(*g);
-        row["size"] = int64_t(m.getDataLayout().getTypeAllocSize(g->getValueType()).getFixedValue());
-        row["alignment"] = int64_t(m.getDataLayout().getPreferredAlign(g).value());
-      } else {
-        row["kind"] = "function";
-        row["source_key"] = v->getName();
-        cast<Function>(v)->addFnAttr("bennett.native.materialised.sha256", identity);
-      }
-      symbols.push_back(std::move(row));
-    }
+    auto symbols = prepareSymbols(m, identity);
     auto binding="__bennett_native_"+identity.substr(0,20)+"_bind";
     if(!NativePrepareOnly)binding=lowerNativeMarkers(m,identity,shadowStack,sourceSteps);
     json::Object report{{"schema", "bennett-native-comparison-1"},
@@ -374,18 +433,7 @@ struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
         !report->getArray("symbols"))
       fail("BD-E-NATIVE-INPUT","invalid prepared component metadata");
     auto identity=*report->getString("materialised_sha256");
-    for(auto &item:*report->getArray("symbols")) {
-      auto *row=item.getAsObject();
-      auto name=row?row->getString("native_symbol"):std::nullopt;
-      auto *alias=name?dyn_cast_or_null<GlobalAlias>(m.getNamedValue(*name)):nullptr;
-      if(!alias)fail("BD-E-NATIVE-INPUT","prepared source symbol correspondence was lost");
-      if(row->getString("kind")=="function") {
-        auto *f=dyn_cast_or_null<Function>(alias->getAliaseeObject());
-        if(!f || f->isDeclaration() || !f->hasFnAttribute("bennett.native.materialised.sha256") ||
-            f->getFnAttribute("bennett.native.materialised.sha256").getValueAsString()!=identity)
-          fail("BD-E-NATIVE-INPUT","prepared source function provenance was lost",alias);
-      }
-    }
+    (*report)["symbols"] = finaliseSymbols(m, *report->getArray("symbols"), identity);
     auto limit=[&](StringRef field)->std::optional<uint64_t> {
       auto text=report->getString(field);
       if(!text)return std::nullopt;
@@ -405,26 +453,19 @@ struct NativeFinalisePass : PassInfoMixin<NativeFinalisePass> {
   static bool isRequired() { return true; }
 };
 // H modules can be linked after marked-module materialisation. Their runtime
-// console transport must be adapted without normalising them as device code or
+// effect transports must be adapted without normalising them as device code or
 // replacing any protected materialised body with another runtime publication.
 struct NativeHostImportsPass : PassInfoMixin<NativeHostImportsPass> {
   PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
     bool component=false;
     for(auto &f:m)component |= f.hasFnAttribute("bennett.native.materialised.sha256");
     if(!component)fail("BD-E-NATIVE-INPUT","host import adaptation requires a materialised native component");
-    SmallVector<CallBase *> calls;
-    for(auto &f:m)for(auto &i:instructions(f))if(auto *call=dyn_cast<CallBase>(&i))
-      if(auto *g=resolve(call->getCalledOperand());g && markers().count(g->getName().str())) {
-        if(f.hasFnAttribute("bennett.native.materialised.sha256"))
-          fail("BD-E-NATIVE-INPUT","host linking introduced markers into a protected materialised body",call);
-        if(g->getName()!="__bennett_effect_console_write")
-          fail("BD-E-NATIVE-MARKERS","native host import needs backend lowering",call);
-        calls.push_back(call);
-      }
-    for(auto *call:calls) {
-      auto *old=resolve(call->getCalledOperand());
-      auto replacement=m.getOrInsertFunction("__bennett_rt_native_console_write",old->getFunctionType());
-      call->setCalledFunction(cast<Function>(replacement.getCallee()));
+    for (auto [call, old] : markerCalls(m)) {
+      if (call->getFunction()->hasFnAttribute("bennett.native.materialised.sha256"))
+        fail("BD-E-NATIVE-INPUT", "host linking introduced markers into a protected materialised body", call);
+      auto *replacement = nativeEffectImport(m, *old);
+      if (!replacement) fail("BD-E-NATIVE-MARKERS", "native host import needs backend lowering", call);
+      call->setCalledFunction(replacement);
       if(old->use_empty())old->eraseFromParent();
     }
     return PreservedAnalyses::none();

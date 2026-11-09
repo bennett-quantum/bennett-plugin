@@ -264,7 +264,22 @@ void normaliseWideFP(Function &f) {
 namespace bennett {
 static Function *normaliseWideIntegerABI(Module &m,Function *root) {
   auto &ctx=m.getContext();
+  unsigned normalisationVScale(Module &);
+  const unsigned vscale=normalisationVScale(m);
+  auto laneCount=[&](VectorType *t) {
+    auto count=t->getElementCount();
+    return count.getKnownMinValue()*(count.isScalable()?vscale:1);
+  };
+  // Scalar closure pruning deletes H bodies and their attached metadata. Keep
+  // the source A(F) across that operation for device-side address comparisons.
+  for(auto &f:m)if(f.hasFnAttribute("bennett.n21.address") && !f.getMetadata("bennett.address")) {
+    uint64_t address;
+    if(f.getFnAttribute("bennett.n21.address").getValueAsString().getAsInteger(10,address))
+      fail("input","§12 N21 invalid boundary address",&f);
+    f.setMetadata("bennett.address",MDNode::get(ctx,ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(ctx),address))));
+  }
   std::function<Type *(Type *)> shape=[&](Type *t)->Type * {
+    if(auto *v=dyn_cast<VectorType>(t)) {SmallVector<Type *> fields(laneCount(v),shape(v->getElementType()));return StructType::get(ctx,fields);}
     if(wide(t)) {SmallVector<Type *> fields;unsigned n=t->getIntegerBitWidth();for(unsigned k=0;k<(n+63)/64;++k)fields.push_back(IntegerType::get(ctx,std::min(64u,n-64*k)));return StructType::get(ctx,fields);}
     if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque()) {SmallVector<Type *> fields;bool change=false;for(auto *e:s->elements()){auto *v=shape(e);change|=v!=e;fields.push_back(v);}if(change)return StructType::get(ctx,fields,s->isPacked());}
     if(auto *a=dyn_cast<ArrayType>(t)) {auto *e=shape(a->getElementType());if(e!=a->getElementType())return ArrayType::get(e,a->getNumElements());}
@@ -276,9 +291,32 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     return t->isVoidTy()?0:m.getDataLayout().getTypeSizeInBits(t).getKnownMinValue();
   };
   auto demoted=[&](Type *t) {return shape(t)->isAggregateType() && payload(shape(t))>128;};
-  // Temporary adapter expressions are consumed by N22, not left at the ABI.
+  auto flattened=[](Type *t) {return wide(t) || t->isVectorTy();};
+  auto arity=[&](Type *t) {return cast<StructType>(shape(t))->getNumElements();};
+  std::function<bool(Type *)> hasVector=[&](Type *t) {
+    if(t->isVectorTy())return true;
+    if(auto *s=dyn_cast<StructType>(t);s && !s->isOpaque())for(auto *e:s->elements())if(hasVector(e))return true;
+    if(auto *a=dyn_cast<ArrayType>(t))return hasVector(a->getElementType());
+    return false;
+  };
+  std::set<Function *> boundaries;
+  for(auto &f:m)if(!f.hasLocalLinkage() || f.hasAddressTaken()) {
+    bool vector=hasVector(f.getReturnType());for(auto &a:f.args())vector|=hasVector(a.getType());
+    if(vector)boundaries.insert(&f);
+  }
+  auto boundary=[&](Function *f) {return boundaries.count(f);};
+  // Temporary adapter expressions are consumed by N21/N22, not left at the ABI.
   std::function<Value *(IRBuilder<> &,Value *,Type *,bool)> adapt=[&](IRBuilder<> &b,Value *v,Type *old,bool unpack)->Value * {
     Type *to=unpack?old:shape(old);if(shape(old)==old)return v;
+    if(auto *vector=dyn_cast<VectorType>(old)) {
+      Value *out=Constant::getNullValue(to);
+      for(unsigned k=0;k<laneCount(vector);++k) {
+        Value *lane=unpack?b.CreateExtractValue(v,{k}):b.CreateExtractElement(v,b.getInt32(k));
+        lane=adapt(b,lane,vector->getElementType(),unpack);
+        out=unpack?b.CreateInsertElement(out,lane,b.getInt32(k)):b.CreateInsertValue(out,lane,{k});
+      }
+      return out;
+    }
     if(wide(old)) {
       unsigned n=old->getIntegerBitWidth();Value *out=Constant::getNullValue(to);
       for(unsigned k=0;k<(n+63)/64;++k) {
@@ -290,19 +328,22 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     unsigned n=old->isStructTy()?cast<StructType>(old)->getNumElements():cast<ArrayType>(old)->getNumElements();Value *out=Constant::getNullValue(to);
     for(unsigned k=0;k<n;++k) {auto *et=old->isStructTy()?cast<StructType>(old)->getElementType(k):cast<ArrayType>(old)->getElementType();out=b.CreateInsertValue(out,adapt(b,b.CreateExtractValue(v,{k}),et,unpack),{k});}return out;
   };
-  SmallVector<Function *> work;for(auto &f:m)if(!f.isIntrinsic())work.push_back(&f);
+  SmallVector<Function *> work;for(auto &f:m)if(!f.isIntrinsic() && !f.hasFnAttribute("bennett.n21.boundary"))work.push_back(&f);
   std::map<Function *,Function *> changed;
   for(auto *f:work) {
     SmallVector<Type *> params;bool hidden=demoted(f->getReturnType());bool change=hidden || shape(f->getReturnType())!=f->getReturnType();
     if(hidden)params.push_back(PointerType::get(ctx,0));
-    for(auto &a:f->args()) {auto *t=a.getType();change|=shape(t)!=t;if(wide(t))for(auto *e:cast<StructType>(shape(t))->elements())params.push_back(e);else params.push_back(shape(t));}
+    for(auto &a:f->args()) {auto *t=a.getType();change|=shape(t)!=t;if(flattened(t))for(auto *e:cast<StructType>(shape(t))->elements())params.push_back(e);else params.push_back(shape(t));}
     if(!change)continue;
-    auto *nf=Function::Create(FunctionType::get(hidden?Type::getVoidTy(ctx):shape(f->getReturnType()),params,f->isVarArg()),f->getLinkage(),f->getAddressSpace(),"",&m);nf->takeName(f);f->setName(nf->getName()+".n22.old");nf->setCallingConv(f->getCallingConv());
-    nf->copyAttributesFrom(f);nf->copyMetadata(f,0);
+    auto *nf=Function::Create(FunctionType::get(hidden?Type::getVoidTy(ctx):shape(f->getReturnType()),params,f->isVarArg()),f->getLinkage(),f->getAddressSpace(),"",&m);
+    if(boundary(f)) {nf->setName(f->getName()+".nz");nf->setLinkage(GlobalValue::InternalLinkage);}
+    else {nf->takeName(f);f->setName(nf->getName()+".n22.old");}
+    nf->setCallingConv(f->getCallingConv());
+    nf->copyAttributesFrom(f);nf->copyMetadata(f,0);if(nf->hasLocalLinkage())nf->setDSOLocal(true);
     SmallVector<AttributeSet> attrs;
     if(hidden)attrs.push_back(AttributeSet());
     for(auto &a:f->args()) {
-      if(wide(a.getType()))attrs.append((a.getType()->getIntegerBitWidth()+63)/64,AttributeSet());
+      if(flattened(a.getType()))attrs.append(arity(a.getType()),AttributeSet());
       else attrs.push_back(shape(a.getType())==a.getType()?f->getAttributes().getParamAttrs(a.getArgNo()):AttributeSet());
     }
     nf->setAttributes(AttributeList::get(ctx,f->getAttributes().getFnAttrs(),!hidden && shape(f->getReturnType())==f->getReturnType()?f->getAttributes().getRetAttrs():AttributeSet(),attrs));changed[f]=nf;
@@ -315,7 +356,7 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     if(hidden)nf->getArg(0)->setName("nz.ret");
     for(auto &a:f->args()) {
       Value *v;
-      if(wide(a.getType())) {Value *tuple=Constant::getNullValue(shape(a.getType()));unsigned n=(a.getType()->getIntegerBitWidth()+63)/64;for(unsigned k=0;k<n;++k){auto *e=nf->getArg(index++);e->setName("nz.m"+std::to_string(k)+"."+a.getName());tuple=b.CreateInsertValue(tuple,e,{k});}v=adapt(b,tuple,a.getType(),true);}
+      if(flattened(a.getType())) {Value *tuple=Constant::getNullValue(shape(a.getType()));unsigned n=arity(a.getType());for(unsigned k=0;k<n;++k){auto *e=nf->getArg(index++);e->setName("nz.m"+std::to_string(k)+"."+a.getName());tuple=b.CreateInsertValue(tuple,e,{k});}v=adapt(b,tuple,a.getType(),true);}
       else {auto *e=nf->getArg(index++);e->setName(a.getName());v=adapt(b,e,a.getType(),true);}
       a.replaceAllUsesWith(v);
     }
@@ -327,7 +368,7 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
     }
   }
   // Calls use their original FunctionType even for aliases/indirect pointers.
-  SmallVector<CallInst *> calls;for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallInst>(&i))calls.push_back(c);
+  SmallVector<CallInst *> calls;for(auto &f:m)for(auto &i:instructions(f))if(auto *c=dyn_cast<CallInst>(&i);c && !f.hasFnAttribute("bennett.n21.boundary"))calls.push_back(c);
   for(auto *c:calls) {
     auto *ft=c->getFunctionType();bool hidden=demoted(ft->getReturnType());bool change=hidden || shape(ft->getReturnType())!=ft->getReturnType();for(auto *t:ft->params())change|=shape(t)!=t;if(!change || (c->getCalledFunction() && c->getCalledFunction()->isIntrinsic()))continue;
     touched.insert(c->getFunction());
@@ -338,20 +379,67 @@ static Function *normaliseWideIntegerABI(Module &m,Function *root) {
       returnSlot=entry.CreateAlloca(shape(ft->getReturnType()),nullptr,"nz.ret."+c->getName());
       args.push_back(returnSlot);
     }
-    for(auto &u:c->args()) {auto *v=u.get();auto *t=v->getType();auto *e=adapt(b,v,t,false);if(wide(t))for(unsigned k=0;k<(t->getIntegerBitWidth()+63)/64;++k)args.push_back(b.CreateExtractValue(e,{k}));else args.push_back(e);}
-    for(auto *v:args)types.push_back(v->getType());auto *callee=c->getCalledOperand();if(auto *g=dyn_cast<Function>(callee);changed.count(g))callee=changed[g];
+    for(auto &u:c->args()) {auto *v=u.get();auto *t=v->getType();auto *e=adapt(b,v,t,false);if(flattened(t))for(unsigned k=0;k<arity(t);++k)args.push_back(b.CreateExtractValue(e,{k}));else args.push_back(e);}
+    for(auto *v:args)types.push_back(v->getType());auto *callee=c->getCalledOperand();
+    if(auto *g=dyn_cast<Function>(callee);changed.count(g))callee=changed[g];
+    else {
+      // Native addresses stay in source data. Translate only this device call's
+      // candidates; a missing candidate keeps the existing typed-dispatch fault.
+      Value *address=callee;bool mapped=false;
+      for(auto [source,device]:changed)
+        if(boundary(source) && source->getFunctionType()==ft && source->getType()==address->getType()) {
+          if(!mapped) {callee=Constant::getNullValue(address->getType());mapped=true;}
+          callee=b.CreateSelect(b.CreateICmpEQ(address,source),device,callee,"nz.callee");
+        }
+    }
     auto *nc=b.CreateCall(FunctionType::get(hidden?Type::getVoidTy(ctx):shape(ft->getReturnType()),types,ft->isVarArg()),callee,args);nc->setCallingConv(c->getCallingConv());nc->copyMetadata(*c);
     SmallVector<AttributeSet> attrs;
     if(hidden)attrs.push_back(AttributeSet());
     for(unsigned j=0;j<c->arg_size();++j) {
       auto *t=c->getArgOperand(j)->getType();
-      if(wide(t))attrs.append((t->getIntegerBitWidth()+63)/64,AttributeSet());
+      if(flattened(t))attrs.append(arity(t),AttributeSet());
       else attrs.push_back(shape(t)==t?c->getAttributes().getParamAttrs(j):AttributeSet());
     }
     nc->setAttributes(AttributeList::get(ctx,c->getAttributes().getFnAttrs(),!hidden && shape(c->getType())==c->getType()?c->getAttributes().getRetAttrs():AttributeSet(),attrs));
     if(!c->getType()->isVoidTy()) {auto *result=hidden?b.CreateLoad(shape(c->getType()),returnSlot):static_cast<Value *>(nc);auto *v=adapt(b,result,c->getType(),true);v->takeName(c);c->replaceAllUsesWith(v);}c->eraseFromParent();
   }
-  for(auto [f,nf]:changed) {if(root==f)root=nf;f->replaceAllUsesWith(nf);f->eraseFromParent();}
+  // Remap device candidates before creating host adapters, so their boundary
+  // call keeps the original native symbol and comparison builds keep its ABI.
+  for(auto [f,nf]:changed) {if(root==f)root=nf;if(!boundary(f))f->replaceAllUsesWith(nf);}
+  for(auto [f,nf]:changed) {
+    if(!boundary(f)) {f->eraseFromParent();continue;}
+    bool hidden=demoted(f->getReturnType());
+    bool external=nf->isDeclaration();auto *adapter=external?nf:f;
+    f->addFnAttr("bennett.n21.boundary");
+    if(auto *address=f->getMetadata("bennett.address"))
+      f->addFnAttr("bennett.n21.address",std::to_string(cast<ConstantInt>(cast<ConstantAsMetadata>(address->getOperand(0))->getValue())->getZExtValue()));
+    adapter->addFnAttr("bennett.n21.boundary");
+    adapter->addFnAttr("bennett.native.comparison.runtime");
+    auto *entry=BasicBlock::Create(ctx,"entry",adapter);IRBuilder<> b(entry);
+    SmallVector<Value *> args;unsigned index=hidden?1:0;AllocaInst *slot=nullptr;
+    if(!external && hidden) {slot=b.CreateAlloca(shape(f->getReturnType()));args.push_back(slot);}
+    for(auto &a:f->args()) {
+      auto *t=a.getType();Value *v;
+      if(external) {
+        if(flattened(t)) {
+          Value *tuple=Constant::getNullValue(shape(t));
+          for(unsigned k=0;k<arity(t);++k)tuple=b.CreateInsertValue(tuple,nf->getArg(index++),{k});
+          v=adapt(b,tuple,t,true);
+        } else v=adapt(b,nf->getArg(index++),t,true);
+        args.push_back(v);
+      } else {
+        v=adapt(b,&a,t,false);
+        if(flattened(t))for(unsigned k=0;k<arity(t);++k)args.push_back(b.CreateExtractValue(v,{k}));
+        else args.push_back(v);
+      }
+    }
+    auto *call=b.CreateCall(external?f:nf,args);call->setCallingConv(f->getCallingConv());
+    if(f->getReturnType()->isVoidTy())b.CreateRetVoid();
+    else if(external) {
+      auto *value=adapt(b,call,f->getReturnType(),false);
+      if(hidden) {b.CreateStore(value,nf->getArg(0));b.CreateRetVoid();}else b.CreateRet(value);
+    } else b.CreateRet(adapt(b,hidden?b.CreateLoad(shape(f->getReturnType()),slot):static_cast<Value *>(call),f->getReturnType(),true));
+  }
   // Fold adapter insert/extract chains without optimising source arithmetic.
   for(auto &f:m)if(touched.count(&f) && !f.isDeclaration()) {
     SmallVector<ExtractValueInst *> extracts;for(auto &i:instructions(f))if(auto *e=dyn_cast<ExtractValueInst>(&i))extracts.push_back(e);
