@@ -475,5 +475,32 @@ for module, path in expected.items():
         self.assertIn(self.sha, result.stderr)
 
 
+class ArithmeticPublication(unittest.TestCase):
+    def test_pin_records_match_publication(self):
+        from arith_pin import check_pin
+        from pinned_siblings import sibling
+        import tomllib
+
+        gate = tomllib.loads((ROOT / "gate.toml").read_text())["siblings"]["bennett-arith"]
+        publication = sibling("bennett-arith")
+        check_pin(ROOT, publication, gate["sha"])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            spec_text = (ROOT / "SPEC_VERSIONS.toml").read_text()
+            gate_text = (ROOT / "gate.toml").read_text()
+            for name, text, old, new, diagnostic in (
+                ("gate.toml", gate_text, gate["files"]["dist/llvm18/bennett-arith.bc"], "0" * 64, "gate file hash"),
+                ("SPEC_VERSIONS.toml", spec_text, gate["sha"][:12] + "/", "0" * 12 + "/", "cache path"),
+                ("gate.toml", gate_text, gate["sha"], "0" * 40, "commits differ"),
+            ):
+                with self.subTest(diagnostic=diagnostic):
+                    (root / "SPEC_VERSIONS.toml").write_text(spec_text)
+                    (root / "gate.toml").write_text(gate_text)
+                    self.assertIn(old, text)
+                    (root / name).write_text(text.replace(old, new))
+                    with self.assertRaisesRegex(AssertionError, diagnostic):
+                        check_pin(root, publication, gate["sha"])
+
+
 if __name__ == "__main__":
     unittest.main()
