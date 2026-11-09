@@ -342,105 +342,925 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
-    "scripts/build": {"complexity": 9, "functions": 1, "length_max": 19, "length_p50": 19, "length_p90": 19, "over_300": 0, "trivial_wrappers": 0},
-    "scripts/coverage": {"complexity": 14, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
-    "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
-    "scripts/record-verification.py": {"complexity": 62, "functions": 10, "length_max": 100, "length_p50": 9, "length_p90": 41, "over_300": 0, "trivial_wrappers": 1},
-    "scripts/test": {"complexity": 8, "functions": 2, "length_max": 34, "length_p50": 23, "length_p90": 34, "over_300": 0, "trivial_wrappers": 0},
-    "src/Analysis.cpp": {"complexity": 6407, "functions": 81, "length_max": 515, "length_p50": 15, "length_p90": 66, "over_300": 1, "trivial_wrappers": 6},
-    "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
-    "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
-    "src/BennettPlugin.cpp": {"complexity": 909, "functions": 20, "length_max": 138, "length_p50": 15, "length_p90": 45, "over_300": 0, "trivial_wrappers": 2},
-    "src/ByteOrder.h": {"complexity": 15, "functions": 1, "length_max": 15, "length_p50": 15, "length_p90": 15, "over_300": 0, "trivial_wrappers": 0},
-    "src/CCCalls.inc": {"complexity": 171, "functions": 3, "length_max": 81, "length_p50": 36, "length_p90": 81, "over_300": 0, "trivial_wrappers": 0},
-    "src/ComparisonLayout.h": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "src/Integer.cpp": {"complexity": 614, "functions": 3, "length_max": 72, "length_p50": 54, "length_p90": 72, "over_300": 0, "trivial_wrappers": 0},
-    "src/Memory.cpp": {"complexity": 34, "functions": 1, "length_max": 14, "length_p50": 14, "length_p90": 14, "over_300": 0, "trivial_wrappers": 0},
-    "src/NativeComparison.cpp": {"complexity": 720, "functions": 31, "length_max": 101, "length_p50": 7, "length_p90": 40, "over_300": 0, "trivial_wrappers": 5},
-    "src/NativeComparison.h": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "src/Normalise.cpp": {"complexity": 1947, "functions": 14, "length_max": 500, "length_p50": 10, "length_p90": 77, "over_300": 1, "trivial_wrappers": 0},
-    "src/Production.cpp": {"complexity": 7736, "functions": 117, "length_max": 295, "length_p50": 9, "length_p90": 41, "over_300": 0, "trivial_wrappers": 7},
-    "src/Residual.cpp": {"complexity": 591, "functions": 4, "length_max": 93, "length_p50": 7, "length_p90": 93, "over_300": 0, "trivial_wrappers": 0},
-    "src/ResidualIntrinsics.inc": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "src/Reversible.inc": {"complexity": 195, "functions": 4, "length_max": 132, "length_p50": 6, "length_p90": 132, "over_300": 0, "trivial_wrappers": 0},
-    "src/Scalar.cpp": {"complexity": 2485, "functions": 48, "length_max": 296, "length_p50": 10, "length_p90": 65, "over_300": 0, "trivial_wrappers": 7},
-    "src/Snapshot.cpp": {"complexity": 18, "functions": 6, "length_max": 56, "length_p50": 1, "length_p90": 56, "over_300": 0, "trivial_wrappers": 1},
-    "src/SoftFloat.cpp": {"complexity": 1112, "functions": 9, "length_max": 197, "length_p50": 10, "length_p90": 197, "over_300": 0, "trivial_wrappers": 2},
-    "src/Varargs.inc": {"complexity": 223, "functions": 8, "length_max": 84, "length_p50": 6, "length_p90": 84, "over_300": 0, "trivial_wrappers": 0},
-    "src/Wide.cpp": {"complexity": 1396, "functions": 15, "length_max": 226, "length_p50": 5, "length_p90": 100, "over_300": 0, "trivial_wrappers": 0},
-    "src/WideRuntime.inc": {"complexity": 126, "functions": 1, "length_max": 55, "length_p50": 55, "length_p90": 55, "over_300": 0, "trivial_wrappers": 0},
-    "src/runtime/CallerSnapshot.inc": {"complexity": 316, "functions": 26, "length_max": 67, "length_p50": 5, "length_p90": 16, "over_300": 0, "trivial_wrappers": 1},
-    "src/runtime/NativeComparison.inc": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "src/runtime/ShadowStack.inc": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "src/runtime/SingleFrame.inc": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/address_spaces.py": {"complexity": 8, "functions": 1, "length_max": 67, "length_p50": 67, "length_p90": 67, "over_300": 0, "trivial_wrappers": 0},
-    "tests/aggregate_rows.py": {"complexity": 26, "functions": 1, "length_max": 179, "length_p50": 179, "length_p90": 179, "over_300": 0, "trivial_wrappers": 0},
-    "tests/allocator_closure.py": {"complexity": 27, "functions": 2, "length_max": 153, "length_p50": 2, "length_p90": 153, "over_300": 0, "trivial_wrappers": 1},
-    "tests/analysis_clock.py": {"complexity": 1, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_counters.py": {"complexity": 19, "functions": 3, "length_max": 218, "length_p50": 46, "length_p90": 218, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_convergence.py": {"complexity": 9, "functions": 2, "length_max": 40, "length_p50": 17, "length_p90": 40, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_monotone.py": {"complexity": 21, "functions": 4, "length_max": 206, "length_p50": 4, "length_p90": 206, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_pointer_closure.py": {"complexity": 25, "functions": 4, "length_max": 229, "length_p50": 16, "length_p90": 229, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_edges.py": {"complexity": 23, "functions": 1, "length_max": 74, "length_p50": 74, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
-    "tests/analysis_performance.py": {"complexity": 5, "functions": 1, "length_max": 68, "length_p50": 68, "length_p90": 68, "over_300": 0, "trivial_wrappers": 0},
-    "tests/budget_stage.py": {"complexity": 28, "functions": 4, "length_max": 205, "length_p50": 4, "length_p90": 205, "over_300": 0, "trivial_wrappers": 0},
-    "tests/build_defaults.py": {"complexity": 4, "functions": 1, "length_max": 57, "length_p50": 57, "length_p90": 57, "over_300": 0, "trivial_wrappers": 0},
-    "tests/build_fallback.py": {"complexity": 10, "functions": 1, "length_max": 120, "length_p50": 120, "length_p90": 120, "over_300": 0, "trivial_wrappers": 0},
-    "tests/cc_calls.py": {"complexity": 16, "functions": 3, "length_max": 90, "length_p50": 12, "length_p90": 90, "over_300": 0, "trivial_wrappers": 1},
-    "tests/cc_switch.py": {"complexity": 16, "functions": 3, "length_max": 100, "length_p50": 10, "length_p90": 100, "over_300": 0, "trivial_wrappers": 1},
-    "tests/contract_policy.py": {"complexity": 7, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/contracts.py": {"complexity": 9, "functions": 10, "length_max": 17, "length_p50": 9, "length_p90": 14, "over_300": 0, "trivial_wrappers": 2},
-    "tests/corpus_gate.py": {"complexity": 91, "functions": 11, "length_max": 187, "length_p50": 18, "length_p90": 101, "over_300": 0, "trivial_wrappers": 1},
-    "tests/descriptors.py": {"complexity": 8, "functions": 1, "length_max": 96, "length_p50": 96, "length_p90": 96, "over_300": 0, "trivial_wrappers": 0},
-    "tests/dialect_version.py": {"complexity": 7, "functions": 2, "length_max": 118, "length_p50": 5, "length_p90": 118, "over_300": 0, "trivial_wrappers": 0},
-    "tests/entry_runtime.py": {"complexity": 4, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
-    "tests/entry_snapshot.py": {"complexity": 35, "functions": 4, "length_max": 119, "length_p50": 52, "length_p90": 119, "over_300": 0, "trivial_wrappers": 0},
-    "tests/gate_policy.py": {"complexity": 2, "functions": 1, "length_max": 8, "length_p50": 8, "length_p90": 8, "over_300": 0, "trivial_wrappers": 1},
-    "tests/general_dispatch.py": {"complexity": 28, "functions": 3, "length_max": 233, "length_p50": 72, "length_p90": 233, "over_300": 0, "trivial_wrappers": 0},
-    "tests/integer_intrinsics.py": {"complexity": 506, "functions": 3, "length_max": 4, "length_p50": 2, "length_p90": 4, "over_300": 0, "trivial_wrappers": 1},
-    "tests/key_audit.py": {"complexity": 20, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/launch_runtime.c": {"complexity": 76, "functions": 14, "length_max": 11, "length_p50": 6, "length_p90": 11, "over_300": 0, "trivial_wrappers": 2},
-    "tests/materialisation.py": {"complexity": 27, "functions": 2, "length_max": 135, "length_p50": 13, "length_p90": 135, "over_300": 0, "trivial_wrappers": 0},
-    "tests/memory_runtime.py": {"complexity": 58, "functions": 2, "length_max": 22, "length_p50": 20, "length_p90": 22, "over_300": 0, "trivial_wrappers": 0},
-    "tests/native_checked.py": {"complexity": 20, "functions": 2, "length_max": 188, "length_p50": 28, "length_p90": 188, "over_300": 0, "trivial_wrappers": 0},
-    "tests/native_comparison.py": {"complexity": 5, "functions": 3, "length_max": 182, "length_p50": 2, "length_p90": 182, "over_300": 0, "trivial_wrappers": 1},
-    "tests/native_fixtures.py": {"complexity": 8, "functions": 1, "length_max": 146, "length_p50": 146, "length_p90": 146, "over_300": 0, "trivial_wrappers": 0},
-    "tests/native_hello.py": {"complexity": 3, "functions": 2, "length_max": 122, "length_p50": 18, "length_p90": 122, "over_300": 0, "trivial_wrappers": 0},
-    "tests/native_layout.py": {"complexity": 20, "functions": 1, "length_max": 163, "length_p50": 163, "length_p90": 163, "over_300": 0, "trivial_wrappers": 0},
-    "tests/native_link.py": {"complexity": 16, "functions": 5, "length_max": 222, "length_p50": 16, "length_p90": 222, "over_300": 0, "trivial_wrappers": 0},
-    "tests/normalisation_check.cpp": {"complexity": 56, "functions": 3, "length_max": 26, "length_p50": 13, "length_p90": 26, "over_300": 0, "trivial_wrappers": 0},
-    "tests/normalisation_scope.py": {"complexity": 16, "functions": 4, "length_max": 35, "length_p50": 12, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
-    "tests/pin_policy.py": {"complexity": 31, "functions": 26, "length_max": 88, "length_p50": 10, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
-    "tests/pinned_siblings.py": {"complexity": 6, "functions": 2, "length_max": 19, "length_p50": 13, "length_p90": 19, "over_300": 0, "trivial_wrappers": 0},
-    "tests/prior_objects.py": {"complexity": 3, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/probes/r-hello.c": {"complexity": 0, "functions": 1, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
-    "tests/probes/varargs-mixed.c": {"complexity": 35, "functions": 7, "length_max": 34, "length_p50": 6, "length_p90": 34, "over_300": 0, "trivial_wrappers": 1},
-    "tests/production.py": {"complexity": 32, "functions": 1, "length_max": 252, "length_p50": 252, "length_p90": 252, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_budgets.py": {"complexity": 23, "functions": 2, "length_max": 124, "length_p50": 51, "length_p90": 124, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_cross_major.py": {"complexity": 6, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_dispatch.py": {"complexity": 29, "functions": 2, "length_max": 155, "length_p50": 20, "length_p90": 155, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_environments.py": {"complexity": 58, "functions": 4, "length_max": 191, "length_p50": 56, "length_p90": 191, "over_300": 0, "trivial_wrappers": 1},
-    "tests/production_lifts.py": {"complexity": 43, "functions": 2, "length_max": 160, "length_p50": 18, "length_p90": 160, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_records.py": {"complexity": 19, "functions": 1, "length_max": 60, "length_p50": 60, "length_p90": 60, "over_300": 0, "trivial_wrappers": 0},
-    "tests/production_shapes.py": {"complexity": 57, "functions": 1, "length_max": 319, "length_p50": 319, "length_p90": 319, "over_300": 1, "trivial_wrappers": 0},
-    "tests/quality_ratchet.py": {"complexity": 2, "functions": 2, "length_max": 35, "length_p50": 17, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
-    "tests/recognition.py": {"complexity": 62, "functions": 1, "length_max": 129, "length_p50": 129, "length_p90": 129, "over_300": 0, "trivial_wrappers": 0},
-    "tests/reference_images.py": {"complexity": 8, "functions": 1, "length_max": 60, "length_p50": 60, "length_p90": 60, "over_300": 0, "trivial_wrappers": 0},
-    "tests/region_keys.py": {"complexity": 28, "functions": 1, "length_max": 24, "length_p50": 24, "length_p90": 24, "over_300": 0, "trivial_wrappers": 0},
-    "tests/register_classes.py": {"complexity": 11, "functions": 1, "length_max": 121, "length_p50": 121, "length_p90": 121, "over_300": 0, "trivial_wrappers": 0},
-    "tests/reversible.py": {"complexity": 23, "functions": 2, "length_max": 301, "length_p50": 2, "length_p90": 301, "over_300": 1, "trivial_wrappers": 1},
-    "tests/review_regressions.py": {"complexity": 205, "functions": 6, "length_max": 849, "length_p50": 37, "length_p90": 849, "over_300": 1, "trivial_wrappers": 0},
-    "tests/scalars.py": {"complexity": 53, "functions": 5, "length_max": 154, "length_p50": 30, "length_p90": 154, "over_300": 0, "trivial_wrappers": 0},
-    "tests/shadow_stack.py": {"complexity": 15, "functions": 1, "length_max": 68, "length_p50": 68, "length_p90": 68, "over_300": 0, "trivial_wrappers": 0},
-    "tests/smoke.py": {"complexity": 18, "functions": 1, "length_max": 4, "length_p50": 4, "length_p90": 4, "over_300": 0, "trivial_wrappers": 0},
-    "tests/softfloat.py": {"complexity": 108, "functions": 13, "length_max": 780, "length_p50": 11, "length_p90": 75, "over_300": 1, "trivial_wrappers": 3},
-    "tests/validation.py": {"complexity": 20, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
-    "tests/varargs.py": {"complexity": 33, "functions": 10, "length_max": 76, "length_p50": 11, "length_p90": 65, "over_300": 0, "trivial_wrappers": 0},
-    "tests/varargs_musl.py": {"complexity": 2, "functions": 1, "length_max": 43, "length_p50": 43, "length_p90": 43, "over_300": 0, "trivial_wrappers": 0},
-    "tests/wide.py": {"complexity": 249, "functions": 2, "length_max": 4, "length_p50": 2, "length_p90": 4, "over_300": 0, "trivial_wrappers": 1}
+    "scripts/build": {
+      "complexity": 9,
+      "functions": 1,
+      "length_max": 19,
+      "length_p50": 19,
+      "length_p90": 19,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "scripts/coverage": {
+      "complexity": 14,
+      "functions": 1,
+      "length_max": 51,
+      "length_p50": 51,
+      "length_p90": 51,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "scripts/quality.py": {
+      "complexity": 68,
+      "functions": 6,
+      "length_max": 46,
+      "length_p50": 24,
+      "length_p90": 46,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "scripts/record-verification.py": {
+      "complexity": 62,
+      "functions": 10,
+      "length_max": 100,
+      "length_p50": 9,
+      "length_p90": 41,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "scripts/test": {
+      "complexity": 8,
+      "functions": 2,
+      "length_max": 34,
+      "length_p50": 23,
+      "length_p90": 34,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Analysis.cpp": {
+      "complexity": 6370,
+      "functions": 85,
+      "length_max": 495,
+      "length_p50": 15,
+      "length_p90": 67,
+      "over_300": 1,
+      "trivial_wrappers": 6
+    },
+    "src/AnalysisBudgetClock.h": {
+      "complexity": 24,
+      "functions": 4,
+      "length_max": 6,
+      "length_p50": 5,
+      "length_p90": 6,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Bennett.h": {
+      "complexity": 0,
+      "functions": 1,
+      "length_max": 1,
+      "length_p50": 1,
+      "length_p90": 1,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/BennettPlugin.cpp": {
+      "complexity": 909,
+      "functions": 20,
+      "length_max": 138,
+      "length_p50": 15,
+      "length_p90": 45,
+      "over_300": 0,
+      "trivial_wrappers": 2
+    },
+    "src/ByteOrder.h": {
+      "complexity": 15,
+      "functions": 1,
+      "length_max": 15,
+      "length_p50": 15,
+      "length_p90": 15,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/CCCalls.inc": {
+      "complexity": 171,
+      "functions": 3,
+      "length_max": 81,
+      "length_p50": 36,
+      "length_p90": 81,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/ComparisonLayout.h": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Integer.cpp": {
+      "complexity": 614,
+      "functions": 3,
+      "length_max": 72,
+      "length_p50": 54,
+      "length_p90": 72,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Memory.cpp": {
+      "complexity": 34,
+      "functions": 1,
+      "length_max": 14,
+      "length_p50": 14,
+      "length_p90": 14,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/NativeComparison.cpp": {
+      "complexity": 720,
+      "functions": 31,
+      "length_max": 101,
+      "length_p50": 7,
+      "length_p90": 40,
+      "over_300": 0,
+      "trivial_wrappers": 5
+    },
+    "src/NativeComparison.h": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Normalise.cpp": {
+      "complexity": 1947,
+      "functions": 14,
+      "length_max": 500,
+      "length_p50": 10,
+      "length_p90": 77,
+      "over_300": 1,
+      "trivial_wrappers": 0
+    },
+    "src/Production.cpp": {
+      "complexity": 7736,
+      "functions": 117,
+      "length_max": 295,
+      "length_p50": 9,
+      "length_p90": 41,
+      "over_300": 0,
+      "trivial_wrappers": 7
+    },
+    "src/Residual.cpp": {
+      "complexity": 591,
+      "functions": 4,
+      "length_max": 93,
+      "length_p50": 7,
+      "length_p90": 93,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/ResidualIntrinsics.inc": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Reversible.inc": {
+      "complexity": 195,
+      "functions": 4,
+      "length_max": 132,
+      "length_p50": 6,
+      "length_p90": 132,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Scalar.cpp": {
+      "complexity": 2485,
+      "functions": 48,
+      "length_max": 296,
+      "length_p50": 10,
+      "length_p90": 65,
+      "over_300": 0,
+      "trivial_wrappers": 7
+    },
+    "src/Snapshot.cpp": {
+      "complexity": 18,
+      "functions": 6,
+      "length_max": 56,
+      "length_p50": 1,
+      "length_p90": 56,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "src/SoftFloat.cpp": {
+      "complexity": 1112,
+      "functions": 9,
+      "length_max": 197,
+      "length_p50": 10,
+      "length_p90": 197,
+      "over_300": 0,
+      "trivial_wrappers": 2
+    },
+    "src/Varargs.inc": {
+      "complexity": 223,
+      "functions": 8,
+      "length_max": 84,
+      "length_p50": 6,
+      "length_p90": 84,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/Wide.cpp": {
+      "complexity": 1396,
+      "functions": 15,
+      "length_max": 226,
+      "length_p50": 5,
+      "length_p90": 100,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/WideRuntime.inc": {
+      "complexity": 126,
+      "functions": 1,
+      "length_max": 55,
+      "length_p50": 55,
+      "length_p90": 55,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/runtime/CallerSnapshot.inc": {
+      "complexity": 316,
+      "functions": 26,
+      "length_max": 67,
+      "length_p50": 5,
+      "length_p90": 16,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "src/runtime/NativeComparison.inc": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/runtime/ShadowStack.inc": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "src/runtime/SingleFrame.inc": {
+      "complexity": 0,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/address_spaces.py": {
+      "complexity": 8,
+      "functions": 1,
+      "length_max": 67,
+      "length_p50": 67,
+      "length_p90": 67,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/aggregate_rows.py": {
+      "complexity": 26,
+      "functions": 1,
+      "length_max": 179,
+      "length_p50": 179,
+      "length_p90": 179,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/allocator_closure.py": {
+      "complexity": 27,
+      "functions": 2,
+      "length_max": 153,
+      "length_p50": 2,
+      "length_p90": 153,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/analysis_clock.py": {
+      "complexity": 1,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_convergence.py": {
+      "complexity": 9,
+      "functions": 2,
+      "length_max": 40,
+      "length_p50": 17,
+      "length_p90": 40,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_counters.py": {
+      "complexity": 19,
+      "functions": 3,
+      "length_max": 218,
+      "length_p50": 46,
+      "length_p90": 218,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_edges.py": {
+      "complexity": 23,
+      "functions": 1,
+      "length_max": 74,
+      "length_p50": 74,
+      "length_p90": 74,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_monotone.py": {
+      "complexity": 21,
+      "functions": 4,
+      "length_max": 206,
+      "length_p50": 4,
+      "length_p90": 206,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_performance.py": {
+      "complexity": 5,
+      "functions": 1,
+      "length_max": 68,
+      "length_p50": 68,
+      "length_p90": 68,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_pointer_closure.py": {
+      "complexity": 25,
+      "functions": 4,
+      "length_max": 229,
+      "length_p50": 16,
+      "length_p90": 229,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/analysis_transfer.py": {
+      "complexity": 34,
+      "functions": 3,
+      "length_max": 149,
+      "length_p50": 12,
+      "length_p90": 149,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/budget_stage.py": {
+      "complexity": 28,
+      "functions": 4,
+      "length_max": 205,
+      "length_p50": 4,
+      "length_p90": 205,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/build_defaults.py": {
+      "complexity": 4,
+      "functions": 1,
+      "length_max": 57,
+      "length_p50": 57,
+      "length_p90": 57,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/build_fallback.py": {
+      "complexity": 10,
+      "functions": 1,
+      "length_max": 120,
+      "length_p50": 120,
+      "length_p90": 120,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/cc_calls.py": {
+      "complexity": 16,
+      "functions": 3,
+      "length_max": 90,
+      "length_p50": 12,
+      "length_p90": 90,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/cc_switch.py": {
+      "complexity": 16,
+      "functions": 3,
+      "length_max": 100,
+      "length_p50": 10,
+      "length_p90": 100,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/contract_policy.py": {
+      "complexity": 7,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/contracts.py": {
+      "complexity": 9,
+      "functions": 10,
+      "length_max": 17,
+      "length_p50": 9,
+      "length_p90": 14,
+      "over_300": 0,
+      "trivial_wrappers": 2
+    },
+    "tests/corpus_gate.py": {
+      "complexity": 91,
+      "functions": 11,
+      "length_max": 187,
+      "length_p50": 18,
+      "length_p90": 101,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/descriptors.py": {
+      "complexity": 8,
+      "functions": 1,
+      "length_max": 96,
+      "length_p50": 96,
+      "length_p90": 96,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/dialect_version.py": {
+      "complexity": 7,
+      "functions": 2,
+      "length_max": 118,
+      "length_p50": 5,
+      "length_p90": 118,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/entry_runtime.py": {
+      "complexity": 4,
+      "functions": 1,
+      "length_max": 51,
+      "length_p50": 51,
+      "length_p90": 51,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/entry_snapshot.py": {
+      "complexity": 35,
+      "functions": 4,
+      "length_max": 119,
+      "length_p50": 52,
+      "length_p90": 119,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/gate_policy.py": {
+      "complexity": 2,
+      "functions": 1,
+      "length_max": 8,
+      "length_p50": 8,
+      "length_p90": 8,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/general_dispatch.py": {
+      "complexity": 28,
+      "functions": 3,
+      "length_max": 233,
+      "length_p50": 72,
+      "length_p90": 233,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/integer_intrinsics.py": {
+      "complexity": 506,
+      "functions": 3,
+      "length_max": 4,
+      "length_p50": 2,
+      "length_p90": 4,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/key_audit.py": {
+      "complexity": 20,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/launch_runtime.c": {
+      "complexity": 76,
+      "functions": 14,
+      "length_max": 11,
+      "length_p50": 6,
+      "length_p90": 11,
+      "over_300": 0,
+      "trivial_wrappers": 2
+    },
+    "tests/materialisation.py": {
+      "complexity": 27,
+      "functions": 2,
+      "length_max": 135,
+      "length_p50": 13,
+      "length_p90": 135,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/memory_runtime.py": {
+      "complexity": 58,
+      "functions": 2,
+      "length_max": 22,
+      "length_p50": 20,
+      "length_p90": 22,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/native_checked.py": {
+      "complexity": 20,
+      "functions": 2,
+      "length_max": 188,
+      "length_p50": 28,
+      "length_p90": 188,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/native_comparison.py": {
+      "complexity": 5,
+      "functions": 3,
+      "length_max": 182,
+      "length_p50": 2,
+      "length_p90": 182,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/native_fixtures.py": {
+      "complexity": 8,
+      "functions": 1,
+      "length_max": 146,
+      "length_p50": 146,
+      "length_p90": 146,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/native_hello.py": {
+      "complexity": 3,
+      "functions": 2,
+      "length_max": 122,
+      "length_p50": 18,
+      "length_p90": 122,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/native_layout.py": {
+      "complexity": 20,
+      "functions": 1,
+      "length_max": 163,
+      "length_p50": 163,
+      "length_p90": 163,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/native_link.py": {
+      "complexity": 16,
+      "functions": 5,
+      "length_max": 222,
+      "length_p50": 16,
+      "length_p90": 222,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/normalisation_check.cpp": {
+      "complexity": 56,
+      "functions": 3,
+      "length_max": 26,
+      "length_p50": 13,
+      "length_p90": 26,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/normalisation_scope.py": {
+      "complexity": 16,
+      "functions": 4,
+      "length_max": 35,
+      "length_p50": 12,
+      "length_p90": 35,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/pin_policy.py": {
+      "complexity": 31,
+      "functions": 26,
+      "length_max": 88,
+      "length_p50": 10,
+      "length_p90": 32,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/pinned_siblings.py": {
+      "complexity": 6,
+      "functions": 2,
+      "length_max": 19,
+      "length_p50": 13,
+      "length_p90": 19,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/prior_objects.py": {
+      "complexity": 3,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/probes/r-hello.c": {
+      "complexity": 0,
+      "functions": 1,
+      "length_max": 5,
+      "length_p50": 5,
+      "length_p90": 5,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/probes/varargs-mixed.c": {
+      "complexity": 35,
+      "functions": 7,
+      "length_max": 34,
+      "length_p50": 6,
+      "length_p90": 34,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/production.py": {
+      "complexity": 32,
+      "functions": 1,
+      "length_max": 252,
+      "length_p50": 252,
+      "length_p90": 252,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_budgets.py": {
+      "complexity": 23,
+      "functions": 2,
+      "length_max": 124,
+      "length_p50": 51,
+      "length_p90": 124,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_cross_major.py": {
+      "complexity": 6,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_dispatch.py": {
+      "complexity": 29,
+      "functions": 2,
+      "length_max": 155,
+      "length_p50": 20,
+      "length_p90": 155,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_environments.py": {
+      "complexity": 58,
+      "functions": 4,
+      "length_max": 191,
+      "length_p50": 56,
+      "length_p90": 191,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    },
+    "tests/production_lifts.py": {
+      "complexity": 43,
+      "functions": 2,
+      "length_max": 160,
+      "length_p50": 18,
+      "length_p90": 160,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_records.py": {
+      "complexity": 19,
+      "functions": 1,
+      "length_max": 60,
+      "length_p50": 60,
+      "length_p90": 60,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/production_shapes.py": {
+      "complexity": 57,
+      "functions": 1,
+      "length_max": 319,
+      "length_p50": 319,
+      "length_p90": 319,
+      "over_300": 1,
+      "trivial_wrappers": 0
+    },
+    "tests/quality_ratchet.py": {
+      "complexity": 2,
+      "functions": 2,
+      "length_max": 35,
+      "length_p50": 17,
+      "length_p90": 35,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/recognition.py": {
+      "complexity": 62,
+      "functions": 1,
+      "length_max": 129,
+      "length_p50": 129,
+      "length_p90": 129,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/reference_images.py": {
+      "complexity": 8,
+      "functions": 1,
+      "length_max": 60,
+      "length_p50": 60,
+      "length_p90": 60,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/region_keys.py": {
+      "complexity": 28,
+      "functions": 1,
+      "length_max": 24,
+      "length_p50": 24,
+      "length_p90": 24,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/register_classes.py": {
+      "complexity": 11,
+      "functions": 1,
+      "length_max": 121,
+      "length_p50": 121,
+      "length_p90": 121,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/reversible.py": {
+      "complexity": 23,
+      "functions": 2,
+      "length_max": 301,
+      "length_p50": 2,
+      "length_p90": 301,
+      "over_300": 1,
+      "trivial_wrappers": 1
+    },
+    "tests/review_regressions.py": {
+      "complexity": 205,
+      "functions": 6,
+      "length_max": 849,
+      "length_p50": 37,
+      "length_p90": 849,
+      "over_300": 1,
+      "trivial_wrappers": 0
+    },
+    "tests/scalars.py": {
+      "complexity": 53,
+      "functions": 5,
+      "length_max": 154,
+      "length_p50": 30,
+      "length_p90": 154,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/shadow_stack.py": {
+      "complexity": 15,
+      "functions": 1,
+      "length_max": 68,
+      "length_p50": 68,
+      "length_p90": 68,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/smoke.py": {
+      "complexity": 18,
+      "functions": 1,
+      "length_max": 4,
+      "length_p50": 4,
+      "length_p90": 4,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/softfloat.py": {
+      "complexity": 108,
+      "functions": 13,
+      "length_max": 780,
+      "length_p50": 11,
+      "length_p90": 75,
+      "over_300": 1,
+      "trivial_wrappers": 3
+    },
+    "tests/validation.py": {
+      "complexity": 20,
+      "functions": 0,
+      "length_max": 0,
+      "length_p50": 0,
+      "length_p90": 0,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/varargs.py": {
+      "complexity": 33,
+      "functions": 10,
+      "length_max": 76,
+      "length_p50": 11,
+      "length_p90": 65,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/varargs_musl.py": {
+      "complexity": 2,
+      "functions": 1,
+      "length_max": 43,
+      "length_p50": 43,
+      "length_p90": 43,
+      "over_300": 0,
+      "trivial_wrappers": 0
+    },
+    "tests/wide.py": {
+      "complexity": 249,
+      "functions": 2,
+      "length_max": 4,
+      "length_p50": 2,
+      "length_p90": 4,
+      "over_300": 0,
+      "trivial_wrappers": 1
+    }
   },
   "litter": [],
-  "long_functions": [{"file": "src/Analysis.cpp", "length": 515, "line": 1576, "name": "step", "trivial": false}, {"file": "src/Normalise.cpp", "length": 500, "line": 14, "name": "normaliseScalar", "trivial": false}, {"file": "tests/production_shapes.py", "length": 319, "line": 9, "name": "main", "trivial": false}, {"file": "tests/reversible.py", "length": 301, "line": 18, "name": "main", "trivial": false}, {"file": "tests/review_regressions.py", "length": 849, "line": 230, "name": "main", "trivial": false}, {"file": "tests/softfloat.py", "length": 780, "line": 63, "name": "main", "trivial": false}],
+  "long_functions": [
+    {
+      "file": "src/Analysis.cpp",
+      "length": 515,
+      "line": 1576,
+      "name": "step",
+      "trivial": false
+    },
+    {
+      "file": "src/Normalise.cpp",
+      "length": 500,
+      "line": 14,
+      "name": "normaliseScalar",
+      "trivial": false
+    },
+    {
+      "file": "tests/production_shapes.py",
+      "length": 319,
+      "line": 9,
+      "name": "main",
+      "trivial": false
+    },
+    {
+      "file": "tests/reversible.py",
+      "length": 301,
+      "line": 18,
+      "name": "main",
+      "trivial": false
+    },
+    {
+      "file": "tests/review_regressions.py",
+      "length": 849,
+      "line": 230,
+      "name": "main",
+      "trivial": false
+    },
+    {
+      "file": "tests/softfloat.py",
+      "length": 780,
+      "line": 63,
+      "name": "main",
+      "trivial": false
+    }
+  ],
   "process_identifiers": 2
 }
 ```

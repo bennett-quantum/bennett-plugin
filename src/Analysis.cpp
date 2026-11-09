@@ -1573,6 +1573,37 @@ static void closeStoredPointerOrbit(StoreInst &store, const DataLayout &layout,
   };
   visit(store.getValueOperand());
 }
+// PT5 is a union of numerical and originating-object images. Numeric TOP
+// fast paths must not suppress the independent conservative pointer image.
+static AV binaryPointers(Instruction &i, const AV &left, const AV &right,
+                         function_ref<AV(const Atom &, const APInt &)> displace) {
+  AV result;
+  auto image = [&](const AV &pointers, const AV &other, bool rhs) {
+    bool displacement = i.getOpcode() == Instruction::Add ||
+                        (i.getOpcode() == Instruction::Sub && !rhs);
+    for (const auto &pointer : pointers.atoms) {
+      if (pointer.kind != Atom::Ptr) continue;
+      bool conservative = !displacement || other.top;
+      if (displacement)
+        for (const auto &value : other.atoms) {
+          if (value.kind != Atom::Int) { conservative = true; continue; }
+          auto delta = i.getOpcode() == Instruction::Sub ? -value.integer
+                                                       : value.integer;
+          result.merge(displace(pointer, delta));
+        }
+      if (conservative) {
+        auto p = pointer;
+        p.offset = 0;
+        p.stride = -1;
+        result.atoms.insert(p);
+        numericalUnknown(result);
+      }
+    }
+  };
+  image(left, right, false);
+  image(right, left, true);
+  return result;
+}
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
     ++activeBudget->work.worklistPops;
@@ -1954,12 +1985,9 @@ void Analysis::step(Instruction &i) {
       }
   } else if (isa<BinaryOperator>(i) || isa<ICmpInst>(i)) {
     AV x = get(i.getOperand(0)), y = get(i.getOperand(1));
-    // PT5's elementwise comparison has an empty Cartesian image if either
-    // operand is bottom. In particular bottom is not an unknown Boolean: that
-    // alternative would survive the outer join after a finite operand arrives.
-    if (isa<ICmpInst>(i) && ((!x.top && x.atoms.empty()) ||
-                            (!y.top && y.atoms.empty())))
-      return;
+    // Every PT5 Cartesian image is empty when either factor is bottom.
+    // TOP is a nonempty numeric factor even when it has no explicit atoms.
+    if ((!x.top && x.atoms.empty()) || (!y.top && y.atoms.empty())) return;
     bool dense=!x.top && !y.top && (i.getOpcode()==Instruction::And || i.getOpcode()==Instruction::Or || i.getOpcode()==Instruction::Xor);
     for(auto &v:x.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
     for(auto &v:y.atoms)dense &= v.kind==Atom::Int && v.integer.getActiveBits()<=12;
@@ -1995,14 +2023,6 @@ void Analysis::step(Instruction &i) {
     } else {
       a.top = x.top || y.top;
       for (auto &v : x.atoms) {
-        // For these operations the pointer transfer is independent of the
-        // right atom. Emit its identical conservative image once, rather than
-        // a Cartesian product of logical-stack address histories. Keep the
-        // empty-domain behaviour and all INT/INT finite transfers unchanged.
-        if(v.kind==Atom::Ptr && i.getOpcode()!=Instruction::Add && i.getOpcode()!=Instruction::Sub) {
-          if(!y.atoms.empty()) {auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);}
-          continue;
-        }
         for (auto &w : y.atoms) {
           if (v.kind == Atom::Int && w.kind == Atom::Int &&
               v.integer.getBitWidth() == w.integer.getBitWidth()) {
@@ -2062,23 +2082,14 @@ void Analysis::step(Instruction &i) {
               a.merge(integer(r));
             if (a.top)
               goto done;
-          } else if (v.kind == Atom::Ptr) {
-            if (w.kind == Atom::Int && (i.getOpcode() == Instruction::Add ||
-                                        i.getOpcode() == Instruction::Sub)) {
-              auto delta=i.getOpcode()==Instruction::Add?w.integer:-w.integer;
-              a.merge(displace(atom(Atom::Ptr,v.object,v.offset,v.stride),delta,
-                               delta.getBitWidth(),false));
-            } else {
-              auto p=v;p.offset=0;p.stride=-1;a.atoms.insert(p);numericalUnknown(a);
-            }
-          } else if(v.kind==Atom::Int && w.kind==Atom::Ptr && i.getOpcode()==Instruction::Add) {
-            a.merge(displace(atom(Atom::Ptr,w.object,w.offset,w.stride),v.integer,
-                             v.integer.getBitWidth(),false));
           }
         }
       }
     }
   done:;
+    a.merge(binaryPointers(i, x, y, [&](const Atom &p, const APInt &delta) {
+      return displace(AV{{p}, false}, delta, delta.getBitWidth(), false);
+    }));
     if (isa<ICmpInst>(i) && a.atoms.empty() &&
         (x.top || y.top || !x.atoms.empty() || !y.atoms.empty())) {
       a.top = false;
@@ -2496,6 +2507,42 @@ static std::string label(const Value *v) {
   v->printAsOperand(o, false);
   return s;
 }
+static json::Object valuePremise(Analysis &analysis, Module &module) {
+  json::Array globals, calls;
+  for (const GlobalVariable &g : module.globals())
+    if (!g.hasInitializer()) globals.push_back(label(&g));
+  for (Function &f : module)
+    for (Instruction &i : instructions(f))
+      if (auto *call = dyn_cast<CallBase>(&i); call && !call->getCalledFunction()) {
+        std::set<std::string> names;
+        for (auto *candidate : analysis.candidates(call->getCalledOperand(),
+                                                   call->getFunctionType()))
+          names.insert(candidate->getName().str());
+        json::Array candidates;
+        for (const auto &name : names) candidates.push_back(name);
+        calls.push_back(json::Object{{"function", f.getName().str()},
+                                     {"value", label(&i)},
+                                     {"candidates", std::move(candidates)}});
+      }
+  return json::Object{
+      {"status", "conditional"},
+      {"applies_to", "all values"},
+      {"concrete_unreachability", "not-established"},
+      {"requires", json::Array{
+          "All concrete entry arguments, initial memory bytes and subsequent "
+          "external writes must be included in the PT1-PT12 seeds and effects. "
+          "An external global without an initializer has no initial-byte seed; "
+          "later stores do not establish its entry contents.",
+          "Every concrete call target must be included in the reported candidate "
+          "set, with arguments, returns and memory effects covered by PT9/PT12. "
+          "Standalone units do not establish this for external callbacks.",
+          "Link and analyse the complete materialised program and its boundary "
+          "state before using excluded values as concrete unreachability. "
+          "Bottom denotes no derivation from these module seeds, not proof "
+          "that an instruction cannot execute in a completed external context."}},
+      {"external_globals", std::move(globals)},
+      {"indirect_calls", std::move(calls)}};
+}
 json::Object Analysis::report() {
   if (completedReceipt.owner != this)
     fail("analysis-resource", "report must follow this analysis run");
@@ -2556,9 +2603,12 @@ json::Object Analysis::report() {
                       {"mode", "analysis-only"},
                       {"analysis_rounds", analysisRounds},
                       {"analysis_work", std::move(*work)},
+                      {"value_premise", valuePremise(*this, M)},
                       {"functions", std::move(funcs)},
                       {"regions", std::move(regions)},
                       {"values", std::move(vals)}};
+  errs() << "bennett: conditional AVs: concrete unreachability is not established; "
+            "see report value_premise for required boundary coverage\n";
   completedReceipt.document = json::Value(json::Object(result));
   return result;
 }
