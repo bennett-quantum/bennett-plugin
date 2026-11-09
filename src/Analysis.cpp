@@ -42,11 +42,24 @@ struct AnalysisWork {
   uint64_t roundsCompleted = 0;
   uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
   uint64_t functionVisits = 0;
+  struct MemoryWork {
+    uint64_t loadAddresses = 0, loadSlotTests = 0, loadImageHits = 0, loadImageMisses = 0;
+    uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
+    uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
+    json::Object report() const {
+      return json::Object{{"load_addresses", loadAddresses}, {"load_slot_tests", loadSlotTests},
+              {"load_image_hits", loadImageHits}, {"load_image_misses", loadImageMisses},
+              {"compactions", compactions}, {"compact_slots", compactSlots},
+              {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
+              {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
+    }
+  } memory;
   struct FunctionVisits {
     std::string name;
     uint64_t visits = 0;
     uint64_t rounds = 0, dispatches = 0, transfers = 0;
     uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
+    MemoryWork memory;
   };
   std::vector<FunctionVisits> functions;
   FunctionVisits *currentFunction = nullptr;
@@ -70,7 +83,8 @@ struct AnalysisWork {
     for (const auto &f : functions)
       perFunction[f.name] = json::Object{{"rounds_completed", f.rounds},
           {"worklist_pops", f.dispatches}, {"transfer_applications", f.transfers},
-          {"join_count", f.avMerges + f.fieldJoins + f.slotJoins}};
+          {"join_count", f.avMerges + f.fieldJoins + f.slotJoins},
+          {"memory", f.memory.report()}};
     json::Object top;
     for (size_t n = 0; n < std::min(TopFunctionLimit, ranked.size()); ++n)
       top[ranked[n]->name] = ranked[n]->visits;
@@ -86,6 +100,7 @@ struct AnalysisWork {
             {"join_count", avMerges + fieldJoins + slotJoins},
             {"av_merges", avMerges}, {"field_joins", fieldJoins},
             {"slot_joins", slotJoins},
+            {"memory", memory.report()},
             {"function_visits", json::Object{{"total", functionVisits},
                 {"top_limit", TopFunctionLimit}, {"top", std::move(top)}}},
             {"per_function", std::move(perFunction)}, {"cpu_ms", std::move(cpu)}};
@@ -191,6 +206,11 @@ struct AnalysisBudget {
 };
 thread_local AnalysisBudget *activeBudget=nullptr;
 void budgetTick() {if(activeBudget)activeBudget->check();}
+void memoryWork(uint64_t AnalysisWork::MemoryWork::*counter, uint64_t count = 1) {
+  if (!activeBudget) return;
+  activeBudget->work.memory.*counter += count;
+  if (auto *f = activeBudget->work.currentFunction) f->memory.*counter += count;
+}
 struct BudgetScope {
   AnalysisBudget budget;
   AnalysisBudget *previous=activeBudget;
@@ -286,8 +306,10 @@ bool AV::merge(const AV &v) {
       // the families once per union, instead of rescanning every exact member
       // for every incoming pointer (large finite memcpy address products).
       if (!indexedFamilies) {
-        for (const auto &b : atoms)
+        for (const auto &b : atoms) {
+          memoryWork(&AnalysisWork::MemoryWork::mergeFamilyVisits);
           if (b.kind == Atom::Ptr && b.stride) families.push_back(b);
+        }
         indexedFamilies = true;
       }
       if (llvm::any_of(families, [&](const Atom &b) { return pointerContains(b, a); }))
@@ -314,11 +336,13 @@ bool AV::merge(const AV &v) {
     change = true;
   }
   if (top)
-    for (auto i = atoms.begin(); i != atoms.end();)
+    for (auto i = atoms.begin(); i != atoms.end();) {
+      memoryWork(&AnalysisWork::MemoryWork::mergeTopVisits);
       if (i->kind == Atom::Int)
         i = atoms.erase(i);
       else
         ++i;
+    }
   return change;
 }
 bool AV::roots() const {
@@ -840,7 +864,7 @@ void Analysis::indexSlot(size_t n) {
 }
 std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   std::vector<size_t> result;
-  auto test=[&](size_t n) {budgetTick();if(overlaps(a,slots[n],bytes))result.push_back(n);};
+  auto test=[&](size_t n) {budgetTick();memoryWork(&AnalysisWork::MemoryWork::loadSlotTests);if(overlaps(a,slots[n],bytes))result.push_back(n);};
   if(auto it=otherSlots.find(a.object);it!=otherSlots.end())for(auto n:it->second)test(n);
   if(auto it=exactSlots.find(a.object);it!=exactSlots.end()) {
     auto &byOffset=it->second;
@@ -854,7 +878,7 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   return result;
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
-  bool compact = false;
+  std::set<const Value *> compactObjects;
   for (auto a : p.atoms)
     if (a.kind == Atom::Ptr) {
       if (activeBudget) {
@@ -899,14 +923,50 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         changed = true;
         if (activeBudget) activeBudget->loadImages.erase(a.object);
       }
-      compact |= !filled && a.stride != 0;
+      if (!filled && a.stride) compactObjects.insert(a.object);
     }
-  if (compact) {
+  // Delete a redundant fact by moving the last slot into its place. Repair
+  // only those two index entries; unrelated objects and their AVs stay put.
+  auto positions = [&](const Slot &s) -> std::vector<size_t> & {
+    return !s.stride && !s.filled ? exactSlots.at(s.object).at(s.offset)
+                                 : otherSlots.at(s.object);
+  };
+  auto key = [](const Slot &s) {
+    return SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical};
+  };
+  auto eraseSlot = [&](size_t n) {
+    auto &s = slots[n];
+    slotIndex.erase(key(s));
+    auto &old = positions(s);
+    auto entry = llvm::find(old, n);
+    assert(entry != old.end());
+    old.erase(entry);
+    size_t last = slots.size() - 1;
+    if (n != last) {
+      auto &moved = slots[last];
+      auto &indices = positions(moved);
+      auto entry = llvm::find(indices, last);
+      assert(entry != indices.end());
+      *entry = n;
+      slotIndex.at(key(moved)) = n;
+      slots[n] = std::move(moved);
+      memoryWork(&AnalysisWork::MemoryWork::reindexedSlots);
+    }
+    slots.pop_back();
+  };
+  for (auto *object : compactObjects) {
+    memoryWork(&AnalysisWork::MemoryWork::compactions);
     // Keep initial byte images and representation widths separate. Remove an
     // old slot only when the whole interval/value fact is represented by a
-    // family, then rebuild the positional indices after the vector compacts.
-    std::vector<Slot> retained;
-    for (size_t n = 0; n < slots.size(); ++n) {
+    // family. Snapshot keys, since swap removal changes positional indices.
+    std::vector<SlotKey> candidates;
+    for (auto n : otherSlots[object]) candidates.push_back(key(slots[n]));
+    for (auto &entry : exactSlots[object])
+      for (auto n : entry.second) candidates.push_back(key(slots[n]));
+    for (auto &candidate : candidates) {
+      budgetTick();
+      memoryWork(&AnalysisWork::MemoryWork::compactSlots);
+      size_t n = slotIndex.at(candidate);
       const auto &s = slots[n];
       bool covered = !s.filled && llvm::any_of(otherSlots[s.object], [&](size_t m) {
         const auto &family = slots[m];
@@ -915,16 +975,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
                offsetContains(family.offset, family.stride, s.offset, s.stride) &&
                contains(family.value, s.value);
       });
-      if (!covered) retained.push_back(s);
-    }
-    if (retained.size() != slots.size()) {
-      slots = std::move(retained);
-      slotIndex.clear(); exactSlots.clear(); otherSlots.clear(); maxSlotBytes.clear();
-      for (size_t n = 0; n < slots.size(); ++n) {
-        const auto &s = slots[n];
-        slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);
-        indexSlot(n);
-      }
+      if (covered) eraseSlot(n);
     }
   }
 }
@@ -1001,6 +1052,7 @@ AV Analysis::load(const AV &p, Type *t) {
   r.top = p.top;
   for (auto &a : p.atoms)
     if (a.kind == Atom::Ptr) {
+      memoryWork(&AnalysisWork::MemoryWork::loadAddresses);
       if (!a.object) {
         r.top = true;
         continue;
@@ -1084,7 +1136,10 @@ AV Analysis::load(const AV &p, Type *t) {
         auto &images = activeBudget->loadImages[a.object];
         auto key = std::make_pair(a, t);
         auto found = images.find(key);
-        if (found == images.end()) found = images.emplace(key, image()).first;
+        if (found == images.end()) {
+          memoryWork(&AnalysisWork::MemoryWork::loadImageMisses);
+          found = images.emplace(key, image()).first;
+        } else memoryWork(&AnalysisWork::MemoryWork::loadImageHits);
         r.merge(found->second);
       } else r.merge(image());
     }
