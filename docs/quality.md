@@ -218,7 +218,10 @@ with `llvm-nm` and `llvm-dis`. Fresh builds and the full soft-float drivers pass
 (112/112 on LLVM 18, 116/116 on LLVM 23), as do allocator, CC and native consumers.
 Numerical L acceptance remains blocked: the unchanged LLVM 18 mixed-native driver
 exhausts its 120000 ms S2 thread-CPU allowance in `bennett_sf_eval` before emitting
-the device-FP object. The arithmetic pin and compiler allowance remain unchanged
+the device-FP object. LLVM 23 emits an LLVM-verified L closure with the new
+publication digest and no unresolved arithmetic helper, but its ISA checker
+exceeds the unchanged 120-second subprocess cap. Neither numerical L run completes.
+The arithmetic pin and compiler allowance remain unchanged
 by this observation; no full-gate or rung-3 acceptance is claimed.
 Shared native/device globals remain promised and pending the published native-sharing contract;
 the approved native adapter interim prints that fact and exits 125 before state can reset.
