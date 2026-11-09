@@ -9,11 +9,11 @@ dialect_sha256 = "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda
 [commits]
 "bennett-dialect-spec" = "1c29c8d731228b67902c3fa72e410e1bb71d16b4"
 [arith]
-commit = "5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab"
-llvm18_path = ".tmp/gate/cache/bennett-arith@5e9b4509f3ee/bennett-arith/dist/llvm18/bennett-arith.bc"
-llvm18_sha256 = "a027f16991c06f39eb1305f28da0b1504651791bdd3533888171aa54e704f7ff"
-llvm23_path = ".tmp/gate/cache/bennett-arith@5e9b4509f3ee/bennett-arith/dist/llvm23/bennett-arith.bc"
-llvm23_sha256 = "8216b27231c36d750c326bbaef384011a1bdf7f7dbb717b8b8f5167551163f79"
+commit = "19fb8b55d28f22f8cfe191082f2b16d4d890f9da"
+llvm18_path = ".tmp/gate/cache/bennett-arith@19fb8b55d28f/bennett-arith/dist/llvm18/bennett-arith.bc"
+llvm18_sha256 = "053d820087cdb91f851d2505c6eb37d117ec3041a614f1c53d23d47a93423d92"
+llvm23_path = ".tmp/gate/cache/bennett-arith@19fb8b55d28f/bennett-arith/dist/llvm23/bennett-arith.bc"
+llvm23_sha256 = "b08ca7c535aa4475452b7a82e4d82847c667fef8dc019affb914a327ade590c5"
 
 # Native-only transports/tools; production runtime remains the separate allocator pin.
 [native_comparison]
