@@ -616,6 +616,105 @@ void Analysis::releaseTransferGraphs() {
   for(auto &entry:fpTransfers)entry.second->dropAllReferences();
   fpTransfers.clear();
 }
+// PT2 is the same finite-width address image for scalar and vector lanes.
+// Callers bind source operands (and source-keyed bounds), never joined vectors
+// or temporary scalar instructions that would discard lane identity.
+static AV gepImage(const GEPOperator &g, const DataLayout &dl, const AV &base,
+                   function_ref<AV(Value *)> index,
+                   function_ref<AV(const AV &, const APInt &, unsigned)> displace) {
+  unsigned bits = dl.getIndexTypeSizeInBits(g.getType());
+  unsigned pointerBits = dl.getPointerTypeSizeInBits(g.getType());
+#if LLVM_VERSION_MAJOR >= 23
+  SmallMapVector<Value *, APInt, 4> vars;
+#else
+  MapVector<Value *, APInt> vars;
+#endif
+  APInt off(bits, 0);
+  if (!g.collectOffset(dl, bits, vars, off))
+    unimplemented("§5 PT2 GEP offset", 2, &g);
+  if (vars.empty()) return displace(base, off, pointerBits);
+
+  std::vector<AV> domains;
+  bool finite = true;
+  for (const auto &entry : vars) {
+    budgetTick();
+    AV domain = index(entry.first);
+    unsigned width = entry.first->getType()->getScalarSizeInBits();
+    // Enumerate the complete small signed source domain, before truncation
+    // or sign extension to I(a). K is the dialect's INT-set limit.
+    constexpr unsigned SmallIndexBits = 12; // §5.1: K = 4096
+    if (domain.top && width <= SmallIndexBits) {
+      domain = {};
+      for (unsigned n = 0; n < (1u << width); ++n)
+        domain.merge(integer(APInt(width, n)));
+    }
+    if (!domain.top && domain.atoms.empty()) return {};
+    finite &= !domain.top && llvm::all_of(domain.atoms,
+        [](const Atom &a) { return a.kind == Atom::Int; });
+    domains.push_back(std::move(domain));
+  }
+  if (finite) {
+    std::set<APInt, bool(*)(const APInt &, const APInt &)> offsets(
+        [](const APInt &a, const APInt &b) { return a.ult(b); });
+    offsets.insert(off);
+    unsigned n = 0;
+    for (const auto &entry : vars) {
+      auto old = std::move(offsets);
+      offsets.clear();
+      for (const auto &delta : old) for (const auto &v : domains[n].atoms) {
+        budgetTick();
+        offsets.insert(delta + v.integer.sextOrTrunc(bits) * entry.second);
+      }
+      ++n;
+    }
+    AV result;
+    for (const auto &delta : offsets) {
+      budgetTick();
+      result.merge(displace(base, delta, pointerBits));
+    }
+    return result;
+  }
+
+  // A full-width unknown index generates a modular residue family. For a
+  // partial-width address, preserved high bits can split that family; retain
+  // every originating object with * when its image is not representable.
+  AV result = base;
+  unsigned n = 0;
+  for (const auto &entry : vars) {
+    const AV &domain = domains[n++];
+    AV next;
+    next.top = result.top;
+    for (const auto &v : domain.atoms)
+      if (v.kind == Atom::Root) next.atoms.insert(v);
+    bool unknown = domain.top || llvm::any_of(domain.atoms,
+        [](const Atom &a) { return a.kind != Atom::Int; });
+    for (auto p : result.atoms) {
+      budgetTick();
+      if (p.kind != Atom::Ptr || !p.object) {
+        next.atoms.insert(p);
+        continue;
+      }
+      if (unknown) {
+        auto q = p;
+        unsigned zeros = entry.second.countr_zero();
+        if (bits != pointerBits || zeros >= 63 || q.stride == -1)
+          q.stride = -1;
+        else q.stride = std::gcd(q.stride, int64_t(1) << zeros);
+        canonicalOffset(q.offset, q.stride);
+        next.atoms.insert(q);
+      }
+      for (const auto &v : domain.atoms) if (v.kind == Atom::Int) {
+        budgetTick();
+        next.merge(displace(AV{{p}, false},
+            v.integer.sextOrTrunc(bits) * entry.second, pointerBits));
+      }
+    }
+    result = std::move(next);
+  }
+  result = displace(result, off, pointerBits);
+  numericalUnknown(result);
+  return result;
+}
 AV Analysis::get(const Value *v) {
   if (auto *c = dyn_cast<ConstantInt>(v))
     return integer(c->getValue());
@@ -635,12 +734,17 @@ AV Analysis::get(const Value *v) {
       return convert(get(c->getOperand(0)),c->getOperand(0)->getType(),c->getType(),c->getOpcode());
     }
     if (c->getOpcode() == Instruction::GetElementPtr) {
-      auto *g = cast<GEPOperator>(c);
-      APInt off(M.getDataLayout().getIndexTypeSizeInBits(g->getType()), 0);
-      auto a = get(c->getOperand(0));
-      if (g->accumulateConstantOffset(M.getDataLayout(), off)) {
-        return displace(a,off,M.getDataLayout().getPointerTypeSizeInBits(c->getType()));
+      if (c->getType()->isVectorTy()) {
+        AV result;
+        unsigned lanes = cast<VectorType>(c->getType())->getElementCount().getKnownMinValue();
+        for (unsigned k = 0; k < lanes; ++k) result.merge(field(c, {k}));
+        return result;
       }
+      return gepImage(*cast<GEPOperator>(c), M.getDataLayout(), get(c->getOperand(0)),
+          [&](Value *v) { return get(v); },
+          [&](const AV &base, const APInt &delta, unsigned width) {
+            return displace(base, delta, width);
+          });
     }
     AV a;
     a.top = true;
@@ -1136,6 +1240,15 @@ AV Analysis::field(const Value *v, const Path &path) {
     return get(v);
   if (auto *expr=dyn_cast<ConstantExpr>(v);expr && expr->getOpcode()==Instruction::BitCast)
     return bitcast(expr->getOperand(0),expr->getType(),path);
+  if (auto *g = dyn_cast<GEPOperator>(v); g && isa<ConstantExpr>(v)) {
+    auto operand = [&](const Value *value) {
+      return value->getType()->isVectorTy() ? field(value, path) : get(value);
+    };
+    return gepImage(*g, M.getDataLayout(), operand(g->getPointerOperand()), operand,
+        [&](const AV &base, const APInt &delta, unsigned width) {
+          return displace(base, delta, width);
+        });
+  }
   if (auto *c = dyn_cast<Constant>(v)) {
     Constant *cur = const_cast<Constant *>(c);
     for (unsigned n : path) {
@@ -1749,6 +1862,25 @@ void Analysis::step(Instruction &i) {
     }
     return domain;
   };
+  if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
+    auto evaluate = [&](const Path &path) {
+      auto operand = [&](Value *v) {
+        return v->getType()->isVectorTy() ? field(v, path) : gepIndex(v, g);
+      };
+      return gepImage(*cast<GEPOperator>(g), M.getDataLayout(),
+          operand(g->getPointerOperand()), operand,
+          [&](const AV &base, const APInt &delta, unsigned width) {
+            return displace(base, delta, width);
+          });
+    };
+    if (i.getType()->isVectorTy()) {
+      for (const auto &leaf : leaves(i.getType(), M.getDataLayout())) {
+        budgetTick();
+        setField(&i, leaf.path, evaluate(leaf.path));
+      }
+    } else changed |= values[&i].merge(evaluate({}));
+    return;
+  }
   AV a;
   if (composite(i))
     return;
@@ -1806,94 +1938,7 @@ void Analysis::step(Instruction &i) {
     if (counts.top) bytes = UINT64_MAX; // symbolic possible allocated bytes
     if (bytes) store(integer(APInt(8,0)), a, bytes, true);
   }
-  else if (auto *g = dyn_cast<GetElementPtrInst>(&i)) {
-    auto base = get(g->getPointerOperand());
-    unsigned bits = M.getDataLayout().getIndexTypeSizeInBits(g->getType());
-#if LLVM_VERSION_MAJOR >= 23
-    SmallMapVector<Value *, APInt, 4> vars;
-#else
-    MapVector<Value *, APInt> vars;
-#endif
-    APInt off(bits, 0);
-    if (!g->collectOffset(M.getDataLayout(), bits, vars, off))
-      unimplemented("§5 PT2 GEP offset", 2, g);
-    if(vars.empty()) {
-      changed|=values[&i].merge(displace(base,off,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
-      return;
-    }
-    // Accumulate the complete Cartesian index image at I(a), and only then
-    // add it to the represented base. Sequential host int64_t additions lose
-    // both index wrap and GEP's preserved high address bits.
-    std::set<APInt, bool(*)(const APInt &,const APInt &)> offsets(
-      [](const APInt &x,const APInt &y){return x.ult(y);});
-    offsets.insert(off);bool finite=true;
-    for(auto &entry:vars) {
-      AV indices=get(entry.first);
-      if(auto it=indexBounds.find({g,entry.first});it!=indexBounds.end()) {
-        if(indices.top)indices=it->second;
-        else for(auto at=indices.atoms.begin();at!=indices.atoms.end();)
-          if(at->kind==Atom::Int && !it->second.atoms.count(*at))at=indices.atoms.erase(at);else ++at;
-      }
-      if(indices.top && entry.first->getType()->isIntegerTy() && entry.first->getType()->getIntegerBitWidth()<=12) {
-        // The entire finite-width index domain is small. Enumerate exactly,
-        // including negative signed indices, before modulo-I accumulation.
-        unsigned width=entry.first->getType()->getIntegerBitWidth();indices={};
-        for(unsigned n=0;n<(1u<<width);++n)indices.merge(integer(APInt(width,n)));
-      }
-      if(indices.top) {finite=false;break;}
-      auto old=offsets;offsets.clear();
-      for(auto &offset:old)for(auto &index:indices.atoms)
-        if(index.kind==Atom::Int)offsets.insert(offset+index.integer.sextOrTrunc(bits)*entry.second);
-        else finite=false;
-      if(!finite)break;
-    }
-    if(finite) {
-      for(auto &offset:offsets)a.merge(displace(base,offset,M.getDataLayout().getPointerTypeSizeInBits(g->getType())));
-      changed|=values[&i].merge(a);return;
-    }
-    a = base;
-    for (auto &entry : vars) {
-      AV r;
-      auto indices = get(entry.first);
-      if (auto it = indexBounds.find({g, entry.first}); it != indexBounds.end()) {
-        if(indices.top)indices=it->second;
-        else for(auto at=indices.atoms.begin();at!=indices.atoms.end();)
-          if(at->kind==Atom::Int && !it->second.atoms.count(*at))at=indices.atoms.erase(at);else ++at;
-      }
-      for (auto p : a.atoms)
-        if (p.kind == Atom::Ptr) {
-          if (indices.top) {
-            p.stride =
-                p.stride == -1
-                    ? -1
-                    : std::gcd(p.stride, std::abs(entry.second.getSExtValue()));
-            if (p.stride == 1)
-              p.stride = -1;
-            r.atoms.insert(p);
-          }
-          for (auto &v : indices.atoms)
-            if (v.kind == Atom::Int) {
-              auto q = p;
-              q.offset +=
-                  (v.integer.sextOrTrunc(bits) * entry.second).getSExtValue();
-              r.atoms.insert(q);
-            }
-        }
-      r.top = a.top;
-      a = r;
-    }
-    AV r;
-    for (auto p : a.atoms) {
-      if (p.kind == Atom::Ptr)
-        p.offset += off.getSExtValue();
-      r.atoms.insert(p);
-    }
-    r.top = a.top;
-    // Symbolic residue extents beyond the finite implementation still need
-    // the unknown-address alternative; it is numerical, not host provenance.
-    numericalUnknown(r);
-    a = r;
-  } else if (auto *l = dyn_cast<LoadInst>(&i))
+  else if (auto *l = dyn_cast<LoadInst>(&i))
     a = load(get(l->getPointerOperand()), l->getType());
   else if (auto *s = dyn_cast<StoreInst>(&i)) {
 

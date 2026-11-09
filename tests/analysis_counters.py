@@ -151,9 +151,9 @@ define i8 @top() {
     work = check("external-import", imported)
     assert work["transfer_applications"] > 0 and work["rounds_completed"] > 0, work
 
-    vector = fixture("vector-gep", """define <2 x ptr> @top(ptr %p) {
- %v = getelementptr i8, ptr %p, <2 x i64> <i64 0, i64 1>
- ret <2 x ptr> %v
+    vector = fixture("vector-vaarg", """define <2 x i32> @top(ptr %p) {
+ %v = va_arg ptr %p, <2 x i32>
+ ret <2 x i32> %v
 }""")
     work = check("unimplemented-composite", vector, diagnostic="§5 PT10")
     assert work["transfer_applications"] == work["worklist_pops"] == 1, work
