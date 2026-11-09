@@ -488,12 +488,13 @@ struct Scalar {
           // layout order. Comparison layout must provide the backing object.
           auto *object=m.getGlobalVariable("__bennett_rt_blk."+f.getName().str(),true);
           if(!object || !globals.count(object)) unimplemented("§14.9 blockaddress comparison layout",2,br);
-          uint64_t base=4096;
+          uint64_t base=comparisonDataBase();
           for(GlobalVariable &g:m.globals()) if(globals.count(&g)) {
             base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));
             if(&g==object) break;
             base+=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
           }
+          base=comparisonGlobalAddress(*object).value_or(base);
           std::vector<std::pair<uint64_t,BasicBlock *>> candidates;
           uint64_t ordinal=0;
           for(BasicBlock &b:f) if(&b!=&f.getEntryBlock() && b.hasAddressTaken()) {
@@ -830,11 +831,11 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
     ++sc;
   unsigned pw = m.getDataLayout().getPointerSizeInBits();
   std::string prefix = "isa=0.8\nptr_width=" + std::to_string(pw) + "\n";
-  // M1 standalone comparison layout: globals in link/module order, data at
-  // 4096, heap at the next page, no heap allocations. Driver-supplied layouts M4.
+  // Standalone comparison globals use the selected data base, with heap at
+  // the next page. A resolved comparison link supplies exact addresses.
   std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
   uint64_t nullSize=scalarModuleFlag(m, "bennett.null_size",4096);
-  uint64_t base=nullSize;std::map<const GlobalVariable *,uint64_t> globalBases;
+  uint64_t base=comparisonDataBase(nullSize);std::map<const GlobalVariable *,uint64_t> globalBases;
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {base=alignTo(base,m.getDataLayout().getPreferredAlign(&g));globalBases[&g]=comparisonGlobalAddress(g).value_or(base);base=std::max(base,globalBases[&g]+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue());}
   for(GlobalVariable &g:m.globals())if(s.globals.count(&g)) {
     auto size=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
@@ -844,8 +845,9 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
     dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
     globalLeaves[name]="{\"base\":"+std::to_string(globalBases[&g])+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
   }
-  uint64_t heap=comparisonHeapBase().value_or(scalarModuleFlag(m, "bennett.heap_base",alignTo(base,uint64_t(4096))));unsigned h=0,at=0;
-  uint64_t endAddress = scalarModuleFlag(m, "bennett.region_base",heap + heapLimit);
+  uint64_t defaultHeap=alignTo(base,uint64_t(4096));
+  uint64_t heap=comparisonHeapBase().value_or(hasComparisonDataBaseOverride()?defaultHeap:scalarModuleFlag(m, "bennett.heap_base",defaultHeap));unsigned h=0,at=0;
+  uint64_t endAddress = hasComparisonDataBaseOverride()?heap+heapLimit:scalarModuleFlag(m, "bennett.region_base",heap + heapLimit);
   std::string regionLayout, regionHashLeaves;
   for (auto &d : devices) if (d.first == "BLOCK") {
     uint64_t size = uint64_t(1) << (d.second + 9);

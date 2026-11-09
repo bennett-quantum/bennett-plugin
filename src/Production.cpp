@@ -704,9 +704,10 @@ struct Entry {
       fail("BD-E-COMPARISON-LAYOUT", "missing function address", fn);
     // Standalone comparison link, matching the module-order convention used
     // for data by the scalar linker. The production driver owns §19.5 layout.
-    uint64_t address=4096;
+    uint64_t address=comparisonDataBase();
     for(auto &g:m.globals())address=alignTo(address,m.getDataLayout().getPreferredAlign(&g))+m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
     address=alignTo(address,uint64_t(4096));
+    address=comparisonTextBase(address+std::max(table.capacities[1],ccHeapBytes));
     for(auto &g:m) {
       if(&g==fn) {
         functionAddresses.insert(address);
@@ -1920,7 +1921,7 @@ std::string linkReferences(Entry &e) {
       f.setMetadata("bennett.address",MDNode::get(e.m.getContext(),ConstantAsMetadata::get(ConstantInt::get(e.m.getDataLayout().getIntPtrType(e.m.getContext()),address))));
     }
   }
-  uint64_t base=4096;
+  uint64_t base=comparisonDataBase();
   for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
     auto key=scalarGlobalKey(g),name="G"+std::to_string(globalSymbols.size()+1);
     globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=comparisonGlobalAddress(g).value_or(base);
@@ -1937,10 +1938,6 @@ std::string linkReferences(Entry &e) {
   std::map<const GlobalVariable *,uint64_t> sourceBases;
   for(auto &g:e.m.globals()) if(globalSymbols.count(scalarGlobalKey(g)))sourceBases[&g]=bases.at(globalSymbols.at(scalarGlobalKey(g)));
   json::Object globals,interfaces;
-  // Function identities occupy their own address range before the standalone
-  // heap. Include even unreferenced source data used to place those identities.
-  if (!hasComparisonLayout() && !e.functionAddresses.empty())
-    base = std::max(base, *e.functionAddresses.rbegin() + 1);
   uint64_t heap=comparisonHeapBase().value_or(alignTo(base,uint64_t(4096))),heapLimit=0,stack=0;
   std::vector<std::map<std::string,std::string>> parsed;
   for(auto &ref:e.references) {
@@ -2102,11 +2099,12 @@ std::string launchObject(Entry &e, json::Object &record,
   if(sections.count("functions") && sections["functions"].empty())sections.erase("functions");
   if (!sections.count("layout") && (!e.localMemory.empty() || e.ccHeapBytes || e.usesCCCalls || e.usesSourceMemory)) {
     uint64_t heap = std::max(e.table.capacities[1],e.ccHeapBytes); unsigned h = 0, tab = 0, sc = 0;
-    while ((uint64_t(1)<<h) < 4096 + heap) ++h;
+    uint64_t heapBase=comparisonHeapBase().value_or(alignTo(comparisonDataBase(),uint64_t(4096)));
+    while ((uint64_t(1)<<h) < heapBase + heap) ++h;
     while ((uint64_t(1)<<tab) < ((e.f.hasFnAttribute("bennett.cc.allocator") || e.usesCCCalls) ? heap : e.localMemory.size())) ++tab;
     while ((uint64_t(1)<<sc) < ((e.f.hasFnAttribute("bennett.cc.allocator") || e.usesCCCalls) ? std::max(uint64_t(e.stack),e.table.capacities[2]) : e.stack)) ++sc;
     sections["layout"] = jcs(json::Value(json::Object{{"A_tab",tab},{"H",h},{"S_cells",sc},
-      {"globals",json::Object{}},{"heap_base",4096},{"heap_limit_max",int64_t(heap)},
+      {"globals",json::Object{}},{"heap_base",int64_t(heapBase)},{"heap_limit_max",int64_t(heap)},
       {"interface_regions",json::Object{}},{"null_size",4096},{"ptr_width",e.m.getDataLayout().getPointerSizeInBits()}}));
   }
   if(e.allocatorFaultService || e.argvService) {
