@@ -297,26 +297,33 @@ bool AV::merge(const AV &v) {
   bool insertedInteger=false;
   SmallVector<Atom, 4> families;
   bool indexedFamilies = false;
+  const Value *familyObject = nullptr;
   for (auto a : v.atoms) {
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
       canonicalOffset(a.offset, a.stride);
       if (atoms.count(a)) continue;
-      // Distinct singleton addresses cannot contain one another. Index just
-      // the families once per union, instead of rescanning every exact member
-      // for every incoming pointer (large finite memcpy address products).
-      if (!indexedFamilies) {
-        for (const auto &b : atoms) {
+      Atom first{Atom::Ptr,a.object,INT64_MIN,INT64_MIN,APInt(1,0)};
+      // Only families of this object can contain this pointer. Incoming atoms
+      // are grouped by object, so reuse that object's index throughout the
+      // union instead of rescanning pointers of every other object.
+      if (!indexedFamilies || familyObject != a.object) {
+        families.clear();
+        for (auto it = atoms.lower_bound(first);
+             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object; ++it) {
           memoryWork(&AnalysisWork::MemoryWork::mergeFamilyVisits);
-          if (b.kind == Atom::Ptr && b.stride) families.push_back(b);
+          const auto &b = *it;
+          if (b.stride) families.push_back(b);
         }
+        familyObject = a.object;
         indexedFamilies = true;
       }
       if (llvm::any_of(families, [&](const Atom &b) { return pointerContains(b, a); }))
         continue;
       // A proven coset absorbs exactly its members, with provenance intact.
       if (a.stride) {
-        for (auto it = atoms.begin(); it != atoms.end();)
+        for (auto it = atoms.lower_bound(first);
+             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object;)
           if (pointerContains(a, *it)) it = atoms.erase(it);
           else ++it;
         llvm::erase_if(families, [&](const Atom &b) { return pointerContains(a, b); });
@@ -336,12 +343,13 @@ bool AV::merge(const AV &v) {
     change = true;
   }
   if (top)
-    for (auto i = atoms.begin(); i != atoms.end();) {
+    while (!atoms.empty()) {
+      auto i = std::prev(atoms.end());
       memoryWork(&AnalysisWork::MemoryWork::mergeTopVisits);
-      if (i->kind == Atom::Int)
-        i = atoms.erase(i);
-      else
-        ++i;
+      // Atom kinds are ordered and INT is last. TOP absorbs just this suffix,
+      // retaining every explicit pointer, function and ROOT alternative.
+      if (i->kind != Atom::Int) break;
+      atoms.erase(i);
     }
   return change;
 }
