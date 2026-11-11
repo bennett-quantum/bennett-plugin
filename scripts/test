@@ -164,6 +164,8 @@ COMMAND_HANG_GUARDS_S = {
     # Complete process import + musl cleanup: 86.27/88.69 s LLVM18/23,
     # 2026-11-11; 10x the larger measured command, rounded up.
     "r_process_arguments": 900,
+    # Full frozen init/fini driver probe; keep its replay's 600 s allowance.
+    "cc_marker_dispatch": 600,
     "softfloat": 83,
     "wide": 60,
     "varargs": 60,
@@ -173,6 +175,7 @@ COMMAND_HANG_GUARDS_S = {
     "region_keys": 60,
     "descriptors": 60,
     "production": 60,
+    "production_multi_gates": 60,
     "production_environments": 150,
     "production_dispatch": 60,
     "production_shapes": 60,
