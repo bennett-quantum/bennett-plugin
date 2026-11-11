@@ -372,7 +372,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
            "legality-audit requires analysis-only; never production");
     recognise(m);
     checkVersion(m);
-    initialiseComparisonLayout(m, AnalysisOnly || ValidateOnly || (NormaliseOnly && !Comparison));
+    initialiseComparisonLayout(m);
     if (ValidateOnly) {
       validateResidual(m,ValidateClassical);
       return PreservedAnalyses::all();

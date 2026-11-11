@@ -474,12 +474,9 @@ void addNativeComparisonPass(ModulePassManager &pm) {
 }
 void addNativeHostImportsPass(ModulePassManager &pm) { pm.addPass(NativeHostImportsPass()); }
 void addNativeFinalisePass(ModulePassManager &pm) { pm.addPass(NativeFinalisePass()); }
-void initialiseComparisonLayout(Module &m, bool sourceOnly) {
+void initialiseComparisonLayout(Module &m) {
   layout.reset();
   layoutHash.clear();
-  // Analysis, source validation and ordinary normalisation do not place
-  // native addresses unless an explicit comparison map was requested.
-  if (sourceOnly && LayoutFile.empty()) return;
   auto pointerBits=m.getDataLayout().getPointerSizeInBits();
   auto addressLimit=pointerBits<64?(uint64_t(1)<<pointerBits)-1:uint64_t(INT64_MAX);
   if (comparisonDataBase()<4096 || comparisonDataBase()>addressLimit ||

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from analysis_convergence import frozen_clock
 from analysis_monotone import value_domains
-from analysis_pointer_closure import least_fixpoint, represented_offsets
+from analysis_pointer_closure import least_fixpoint, represented_offsets, small_pointer_module
 from contracts import ROOT, run
 
 
@@ -82,14 +82,13 @@ def main(argv=None):
     # Independently enumerate a complete small bit-vector orbit through both
     # PT4 casts. This checks the subgroup's members, not just its printed stride.
     source = directory / "small-orbit.ll"
-    source.write_text('target datalayout = "e-p:8:8"\n'
-                      + "@data = internal global [4 x i8] zeroinitializer\n"
+    source.write_text(small_pointer_module("@data = internal global [4 x i8] zeroinitializer\n"
                       + "define ptr @top(i1 %condition) {\nentry:\n"
                       + " %seed = getelementptr i8, ptr @data, i8 3\n br label %loop\nloop:\n"
                       + " %p = phi ptr [ %seed, %entry ], [ %back, %loop ]\n"
                       + " %bits = ptrtoint ptr %p to i8\n %next = sub i8 %bits, 16\n"
                       + " %back = inttoptr i8 %next to ptr\n"
-                      + " br i1 %condition, label %loop, label %done\ndone: ret ptr %p\n}\n")
+                      + " br i1 %condition, label %loop, label %done\ndone: ret ptr %p\n}\n"))
     report = directory / "small-orbit.json"
     result = run([f"/usr/lib/llvm-{args.major}/bin/opt", f"-load-pass-plugin={plugin}",
                   "-passes=bennett", "-bennett-dialect=0.2.13", "-bennett-analysis-only",
