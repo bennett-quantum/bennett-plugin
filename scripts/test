@@ -20,6 +20,8 @@ DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
     "analysis_pt6_residue": (),
+    "analysis_product_budget": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                "--artifacts", ".tmp/tests/analysis_product_budget"),
     "analysis_atom_sharing": ("--plugin", "build/libbennett-plugin-{major}.so",
                               "--artifacts", ".tmp/tests/analysis_atom_sharing"),
     "analysis_input_snapshots": ("--plugin", "build/libbennett-plugin-{major}.so",
@@ -127,6 +129,7 @@ COMMAND_HANG_GUARDS_S = {
     # (pointer_products); 10x is below the 60 s floor.
     # Input snapshots: max0.373s both majors, this host2026-11-11;60s floor.
     # Atom-sharing probe: max5.472s both majors, this host;60s floor.
+    "analysis_product_budget": 60,
     "analysis_atom_sharing": 60,
     "analysis_input_snapshots": 60,
     "analysis_slot_compaction": 60,
