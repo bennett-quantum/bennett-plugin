@@ -20,6 +20,8 @@ DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
     "analysis_pt6_residue": (),
+    "analysis_input_snapshots": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_input_snapshots"),
     "analysis_slot_compaction": ("--plugin", "build/libbennett-plugin-{major}.so",
                                  "--artifacts", ".tmp/tests/analysis_slot_compaction"),
     "analysis_load_union": ("--plugin", "build/libbennett-plugin-{major}.so",
@@ -117,6 +119,8 @@ COMMAND_HANG_GUARDS_S = {
     "analysis_pt6_residue": 60,
     # Exact-work regressions, LLVM18/23, this host, 2026-11-11: max 2.758 s
     # (pointer_products); 10x is below the 60 s floor.
+    # Input snapshots: max0.250s both majors, this host2026-11-11;60s floor.
+    "analysis_input_snapshots": 60,
     "analysis_slot_compaction": 60,
     "analysis_load_union": 60,
     "analysis_load_images": 60,
