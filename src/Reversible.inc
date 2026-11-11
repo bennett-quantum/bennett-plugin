@@ -1,3 +1,4 @@
+#include "ProductionGlobals.inc"
 void prepareVarargsStack(Module &m,Function *&root,uint64_t capacity);
 // §15.2 rows without an IR replacement trap only when reached.
 static void normaliseRAsm(Function &f, json::Array &coverage) {
@@ -121,7 +122,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
   json::Object cert{{"versions",json::Object{{"isa",producerISA()},{"cert",producerISA()}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
-  auto object=launchObject(e,record,cert);write(dir+"/launch.bennett",object);
+  auto object=launchObject(e,record,cert);record["native_global_mapping"]=nativeGlobalMapping(e,record);write(dir+"/launch.bennett",object);
   auto build=jcs(json::Value(std::move(record)));write(dir+"/build.json",build+"\n");
   cert["producer"]=json::Object{{"name","bennett-plugin"},{"version",producerDialect()+"+build."+hash(build)},
     {"materialisation",json::Object{{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},{"normaliser_version","0.2.8"}}}};

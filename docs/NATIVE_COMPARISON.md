@@ -139,3 +139,25 @@ alias for native-only runtime support/tools, the actual VM C library, target
 data and public C fixtures. `BENNETT_NATIVE_SUPPORT_PINNED_ROOT`,
 `BENNETT_NATIVE_TOOL_ROOT` and `BENNETT_VM_NATIVE_LIBRARY` select those
 publications. The native support/tool digests are in `SPEC_VERSIONS.toml`.
+
+## R device-global correspondence
+
+R production publishes `build.json.native_global_mapping` with schema
+`bennett-device-native-globals-1` and a `globals` object keyed by the exact
+ISA device-global ID. Each value contains `source_key` (the same identity as
+native report global rows), `base` and `size` (the fixed ISA layout values).
+The producer records this association when assigning device IDs, including
+pointer-initializer dependencies. It is adapter metadata, outside ISA `layout`.
+The selected entry's launch record authenticates the build file, device bitcode
+and launch object by SHA-256; consumers must verify those artifact bindings.
+
+For R entries, both preparation and finalisation reports additionally retain
+`device_globals`, keyed by those device IDs, with the same three fields plus
+`native_symbol` from the explicitly matching `symbols` row. `launch_sha256`,
+`record_sha256`, `materialised_sha256` and `entries` bind the mapping to the
+selected immutable publication. The adapter checks completeness, unique source
+identities, sizes and fixed bases against the authenticated build layout before
+publishing aliases. Additional native/library symbols have no implied device ID.
+Consumers must use these explicit associations to reserve their native addresses;
+row order, object numbering and byte/size matching are not correspondence rules.
+This report does not by itself resolve a native link or certify address equality.

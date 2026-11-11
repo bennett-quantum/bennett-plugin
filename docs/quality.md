@@ -342,6 +342,9 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "src/NativeGlobals.inc": {"complexity": 73, "functions": 4, "length_max": 29, "length_p50": 11, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},
+    "src/ProductionGlobals.inc": {"complexity": 5, "functions": 1, "length_max": 12, "length_p50": 12, "length_p90": 12, "over_300": 0, "trivial_wrappers": 0},
+    "tests/r_native_globals.py": {"complexity": 4, "functions": 2, "length_max": 88, "length_p50": 2, "length_p90": 88, "over_300": 0, "trivial_wrappers": 1},
     "scripts/build": {"complexity": 9, "functions": 1, "length_max": 19, "length_p50": 19, "length_p90": 19, "over_300": 0, "trivial_wrappers": 0},
     "scripts/coverage": {"complexity": 14, "functions": 1, "length_max": 51, "length_p50": 51, "length_p90": 51, "over_300": 0, "trivial_wrappers": 0},
     "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
