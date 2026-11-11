@@ -274,3 +274,90 @@ distinct ROOT atoms and the parameters they come from. That shows whether C3 is 
 everywhere (cheap to factor out) or real handle flow. Then a `.tmp` prototype of hash-consed slot values on
 SetTextEncoding −crawl 100, checking that the AV maps come out identical and measuring the change in load-slot tests
 and RSS.
+
+## Finding 4 — C3 is about 2,000 candidate ROOTs copied everywhere; sharing identical sets is exact and halves CPU
+
+### Part 1: what the C3 ROOT atoms are
+
+**Run.** I added a ROOT census to the probe and re-ran both 1,000-function −crawl sub-closures (finding 3):
+120 s each, `systemd-run` MemoryMax=4G, after an `admit.py` ADMIT. **[measured]**
+
+| sub-closure | distinct ROOTs | from parameters of | real `qalloc`/`qborrow` site ROOTs | ROOT occurrences | values and slots carrying any ROOT |
+|---|---|---|---|---|---|
+| SetTextEncoding −crawl 1,000 | 2,060 | 981 functions | **0** | 1,405,321 | 23,134 |
+| BusyCallback −crawl 1,000 | 2,066 | 987 functions | **0** | 1,401,179 | 22,957 |
+
+The most frequent ROOT, `sqlite3_close %0`, sits in 14,238 values and slots. The next fourteen (sqlite3Close,
+deleteTable `%1`, sqlite3ExprDeleteNN `%1`, …) each sit in about 13,900. **[measured]**
+
+**Reading.**
+
+- Every ROOT is a §6.6 candidate on a pointer parameter. None comes from a handle allocation.
+- The source is `Analysis::run`: `seedParameters(f, entries.count(f) || !f->hasLocalLinkage())` gives every
+  non-local defined function the boundary seed. That covers about 980 SQLite functions here.
+- PT11's text says "for a pointer parameter i of a **device entry** E, also the candidate atom ROOT(E, i)". The code
+  comment calls a non-local function a "launch boundary [that] may only stash its handle for a later entry".
+- Whether every non-local function counts as a device entry under PT11 / §6.6 is a spec-reading question. I name
+  the clause and stop; this note proposes no spec change.
+
+Either way, these candidates are pruned after the fixpoint unless they reach a handle operand. They are ideal for
+a factored representation: about 2,000 symbols, each carried by thousands of values.
+**[measured, source; spec reading open]**
+
+### Part 2: prototype of shared atom sets
+
+**What I built (throwaway, in `.tmp`).** `AV::atoms` becomes a copy-on-write `shared_ptr<const std::set<Atom>>`
+behind the same `std::set` interface:
+
+- copying an AV shares the set;
+- a mutation clones it only when it is shared;
+- a slot value is interned by content hash after each changed PT7 merge.
+
+No transfer rule, ordering or fixpoint logic changes. Every source file is rebuilt against the new `Bennett.h`.
+
+**Exactness. [measured]**
+
+| input | comparison | result |
+|---|---|---|
+| musl, 1,306 passing units | reports at set level (atoms and callees compared as sets) | **identical**. Raw text differs in 3 units, by atom/callee print order only, which follows pointer addresses; a re-run of the baseline shows the same order variance. |
+| SetTextEncoding −crawl 30 (1,341 values) | full report | identical |
+| BusyCallback −crawl 100 (8,986 values) | full report | identical |
+| SetTextEncoding −crawl 100 (12,270 values) | final report, plus a stable content digest of every value, field and slot at each of the 6 round ends | identical; all 6 round digests equal |
+
+**Cost on SetTextEncoding −crawl 100, run to completion. [measured]**
+
+| | baseline (main-equivalent) | shared sets | ratio |
+|---|---|---|---|
+| finishes? | yes, with a 600 s cap (fails the 120 s cap) | **yes, inside 120 s** | |
+| analysis CPU | 209.6 s | **108.6 s** | 1.93× |
+| peak RSS | 1,057 MB | **230 MB** | 4.6× |
+| CPU at end of round 2 / round 3 | 18 s / 169 s | 8 s / 94 s | |
+| rounds / worklist pops / transfers / joins | 6 / 108,222 / 66,084 / 10,257,877 | same | |
+| load-slot tests (C1) | 206,394,064 | same | 1× |
+
+On the small musl units the prototype costs about 26% more total CPU (5.1 s → 6.5 s over 1,306 units) under the
+same 24-way host load. That is the per-AV allocation of the shared set. **[measured]**
+
+**What it suggests.**
+
+1. Sharing identical sets is exact by construction: the same AVs in the same order, and equal digests every
+   round. It removes most of the memory (4.6×) and half the CPU on the first sub-closure that shows the
+   whole-program shape.
+2. The CPU gain comes from no longer deep-copying sets. The code passes AVs by value everywhere (`get`, load
+   images, snapshots), not from doing less analysis work.
+3. Its scope is narrow: one header type plus one interning call. That makes it the cheapest candidate for the
+   memory wall j3l keeps hitting at 9 GiB in round 0.
+4. It does nothing for C1. The 206M load-slot tests remain and are now the dominant CPU cost here. Nor does it
+   help A/A2 or C3's per-atom transfer work.
+5. **[conjecture]** At full scale the same ratios would put round 0 of 18/N16 well under the 9 GiB cap. Only a
+   full run can show that.
+
+**Next.** Run the shared-set build on the original full LLVM 18 / N16 cell: one run under the shared heavy lock,
+admitted, MemoryMax 9 GiB to match j3l2's cap, probe on. Compare against j3l2's census2:
+
+- heap and RSS against round-0 progress (worklist pops at 9 GiB);
+- whether round 0 completes;
+- which of C1 / A2 / C3 then dominates CPU.
+
+That settles whether this one change moves the full-SQLite memory wall. If the maintainer prefers, the
+alternative is to hand the prototype to j3l as a measured, exact candidate.
