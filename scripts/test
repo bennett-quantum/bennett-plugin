@@ -46,7 +46,6 @@ DRIVERS = {
     "integer_intrinsics": (),
     "memory_runtime": (),
     "region_keys": (),
-    "key_audit": (),
     "descriptors": (),
     "production": (),
     "production_environments": tuple(
@@ -128,7 +127,6 @@ COMMAND_HANG_GUARDS_S = {
     "integer_intrinsics": 60,
     "memory_runtime": 60,
     "region_keys": 60,
-    "key_audit": 60,
     "descriptors": 60,
     "production": 60,
     "production_environments": 150,
