@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ConstantOperands.h"
 #include "ByteOrder.h"
 #include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
@@ -781,6 +782,7 @@ bool prepareScalarModule(Module &m, Function &f, uint64_t &sstack, unsigned auto
   normaliseWideABI(m);
   // Materialise every linked member before computing candidates and read dependencies.
   for (Function &g:m) if(!g.isDeclaration()) {normaliseScalar(g);materialiseFPBits(g);}
+  ScalarConstantOperands().run(m);
   return singleFrame;
 }
 void collectScalarFunction(Function *g, Analysis &analysis,

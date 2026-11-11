@@ -1,5 +1,7 @@
 #include "Bennett.h"
 #include "NormalisationMetadata.h"
+#include "llvm/IR/ValueHandle.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -663,6 +665,8 @@ static void normaliseMemoryIntrinsics(Function &f) {
   }
 }
 
+#include "ConstantOperands.inc"
+
 void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   if(f.hasFnAttribute("bennett.n21.boundary"))return;
   unsigned vscale;
@@ -670,6 +674,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
     auto frozen=frozenLinkVScale(*f.getParent());
     vscale=frozen?*frozen:selectLinkVScale(*f.getParent(),&f);
   } else vscale=normalisationVScale(*f.getParent());
+  ConstantOperands().run(f);
   normalisePrelude(f,privateTransfer,vscale);
   ScalarLanes(f,vscale).run();
   normaliseMemoryIntrinsics(f);
