@@ -361,3 +361,72 @@ admitted, MemoryMax 9 GiB to match j3l2's cap, probe on. Compare against j3l2's 
 
 That settles whether this one change moves the full-SQLite memory wall. If the maintainer prefers, the
 alternative is to hand the prototype to j3l as a measured, exact candidate.
+
+## Finding 5 — full 18/N16 cell: the memory is about 300 copies of one 157k-atom "points-to-everything" set; slot sharing does not move the wall
+
+**Run.** Both runs used the original full input (sha `cc12e9a2…`) and the unchanged production argv: 1,500,000 ms
+analysis allowance, `-bennett-budget-default=1000000,524288,4194304,64,65536`, dialect 0.2.13, ISA 0.8. Each run
+held the shared heavy lock, was ADMITted by `admit.py`, and ran under `systemd-run --user` with MemoryMax=9G and
+MemorySwapMax=0. The probe sampled every 1 GiB of heap. The baseline is the main-equivalent analysis, the same
+source as j3l2's published `feb12a9`. **[measured]**
+
+| build | result | CPU | worklist pops when killed (round 0) |
+|---|---|---|---|
+| j3l2 census2 at `6f1d93c` (before its snapshot fix), for reference | OOM at 9 GiB | 274 s | 159,486 |
+| baseline (main-equivalent) + probe | OOM at 9 GiB (systemd `oom-kill`, peak 9.0G) | 401 s | **159,608** |
+| shared-set prototype (finding 4) + probe | OOM at 9 GiB (systemd `oom-kill`, peak 9.0G) | 448 s | **159,713** |
+
+Slot sharing exactly as prototyped moves the round-0 frontier by about 100 instructions out of about 285k. On the
+full cell it **does not move the memory wall**. **[measured]**
+
+**What fills the memory.** Probe sample from the prototype run at 8.3 GB heap, worklist pop 159,713. **[measured]**
+
+- **Totals:** 161,594 SSA values hold 52.4M value atoms; slots hold 7.2M atoms; pure snapshots 13.3M.
+- **Where the value atoms are:** **308 values hold 47.96M of the 52.4M value atoms (91.5%)**, about 157,640 atoms
+  each. Every one is the same shape, which I call **U**:
+  - 157,504 pointer atoms over 418 objects: 207 objects × 513 offsets, 15 × 512, 43 × 258, …;
+  - 1,024 distinct offsets in −40..10,250, **not dense**;
+  - plus 125 FN atoms, 7–10 ROOT atoms, and the top flag.
+- **Who holds U.** By opcode: argument 28.0M atoms, GEP 12.5M, load 9.4M, phi 1.4M. Examples:
+  - pointer parameter `%0` of `sqlite3_free`, `measureAllocationSize`, `sqlite3_errmsg` and `sqlite3LockAndPrepare`;
+  - the context parameter of every SQL-function callback (`jsonObjectValue`, `cume_distValueFunc`, `dateFunc`,
+    `strftimeFunc`, …);
+  - field GEPs `sqlite3_exec %27`, `%28`, `%198`, … holding U shifted by 8, 440, 352, ….
+- **How U is created.** With the worklist frozen at pop 158,839, one instruction raised value atoms from 7.0M to
+  28.4M. That instruction is the indirect call in `sqliteDefaultBusyCallback` (PT8/PT9/PT12). The +21.4M is about
+  136 × 157k: PT9 binds U to the pointer parameter of every candidate callee in a single step. Both runs show the
+  same jump. This is the blob bp-fj1 named on 2026-11-02, now measured. **[measured; "136 candidates" is inferred
+  from the atom count]**
+- **How much is duplicated.** Values of ≥ 64 atoms: 10,075 sets, of which **885 are distinct**; 52.0M atoms →
+  **9.99M distinct (5.2×)**. Slots: 8,656 large sets → 32 distinct. My prototype interned only slot values.
+  Parameter AVs are built by PT9 merges into separate sets, so they stayed unshared. The GEP-shifted copies of U
+  are genuinely different sets, so content interning cannot share them.
+- **C3 is small here.** In the full cell there are 453 distinct ROOTs (449 parameter candidates from 246 functions,
+  4 real sites) with 182k occurrences, against 1.4M in the 1,000-function sub-closure. The full module's entry and
+  host seeding differ from my extracted closures. **[measured]**
+
+**What it suggests.**
+
+1. The full-cell memory wall is **one universal set U times its number of holders**. It is not the counter crawl
+   (A), not C1's load scans, and not candidate ROOTs (C3).
+2. U grows by indirect-call binding. Each additional holder costs about 157k atoms, roughly 20–25 MB.
+3. Two exact remedies follow, neither of which changes the fixpoint:
+   - **intern value AVs as well as slots**, at PT9 binding and after merges. Measured ceiling about 5×: 52M → 10M
+     distinct atoms;
+   - **represent field-offset translates of U symbolically** as U + d over one shared U. This is a factored
+     object × offset representation, the core of the shelved factored-points-to design. It also removes the
+     remaining distinct copies.
+4. Even so, 136 holders appear in one step. Without the second remedy, or a smaller U, round 0 would probably still
+   run out of memory soon after. **[conjecture]**
+5. A **smaller U** would need a more precise pointer analysis. §5's preamble allows that "to shrink dispatch domains
+   or arena placement … never to change a verdict". Whether a context-sensitive U changes any verdict is a
+   spec-level question; I name the clause and stop there.
+
+**Next.** The smallest test that tells remedy (a) from (b):
+
+- extend the `.tmp` prototype to intern value AVs after every changed merge in `setField` and PT9 `bind`;
+- check exactness on the musl corpus and the SetTextEncoding −crawl 100 digests, as in finding 4;
+- re-run the full 18/N16 cell at 9 GiB (lock, admit) and compare worklist pops at the kill.
+
+If round 0 still stops near pop 159.7k, interning is not enough and the factored U + d representation is the
+required change.
