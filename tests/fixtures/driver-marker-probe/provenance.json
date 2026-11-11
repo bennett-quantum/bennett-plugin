@@ -1,0 +1,12 @@
+{
+  "driver": "aeb01e1872df12689890598398e49f72851424c2",
+  "runtimes": "7559e3bb40e824352ba6afaa5ed37e6a9860faf3",
+  "arith": "5e9b4509f3ee3f95ac9f7d22b43359e72cf9fdab",
+  "regressed_plugin": "512236eef94117aca09c03067fbaaded1fee713a",
+  "passing_control_plugin": "f6e6f9340bd57de33a2896be88a1d984ac7176c0",
+  "scope": "Exact post-link driver probe bitcode; real runtime init/fini and callback paths retained.",
+  "sha256": {
+    "18": "e41c0650920d47240fac4888cd6d44b0cb3fc9309b1229b4d48dc56fd8bc3645",
+    "23": "0889ccc154d822b36a3e58d51f23fdfce5fadf3e22da0b8df7bd7e1eaa639cff"
+  }
+}
