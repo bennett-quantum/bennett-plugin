@@ -12,6 +12,7 @@
 #include <regex>
 using namespace llvm;
 namespace bennett {
+std::string producerISA();
 static std::string sha(StringRef s) {
   return toHex(SHA256::hash(arrayRefFromStringRef(s)), true);
 }
@@ -816,13 +817,12 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
   auto &[ins, mems, args, wrapperRegs, wrapperRows, argTypes, insWidths, memSigs,
          tgt, stackCells, heapLimit, devices, bodies, signatures, lproc, closure] = publication;
   auto &m = s.m;
-  auto &f = s.f;
   std::string wrapper = "oracle @ref (" + join(ins) + ") (tgt:wire[" +
                         std::to_string(tgt) + "]) (fault:wire[4]) (" + join(mems) + ") (" +
                         join(args) + ")\nregs { " + join(wrapperRegs) +
                         " }\n^entry():\n" + join(wrapperRows, "\n");
   std::string osig =
-      "{\"abi\":\"0.8\",\"args\":[" + join(argTypes, ",") +
+      "{\"abi\":\""+producerISA()+"\",\"args\":[" + join(argTypes, ",") +
       "],\"fault\":4,\"in\":[" + join(insWidths, ",") +
       "],\"kind\":\"oracle\",\"mem\":[" + join(memSigs, ",") + "],\"tgt\":" + std::to_string(tgt) +
       ",\"tier\":\"q\"}";
@@ -830,7 +830,7 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
   while ((uint64_t(1) << sc) < stackCells)
     ++sc;
   unsigned pw = m.getDataLayout().getPointerSizeInBits();
-  std::string prefix = "isa=0.8\nptr_width=" + std::to_string(pw) + "\n";
+  std::string prefix = "isa=" + producerISA() + "\nptr_width=" + std::to_string(pw) + "\n";
   // Standalone comparison globals use the selected data base, with heap at
   // the next page. A resolved comparison link supplies exact addresses.
   std::map<std::string,std::string> data, globalLeaves, dataSigs, dataHashes;
@@ -841,7 +841,7 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
     auto size=m.getDataLayout().getTypeAllocSize(g.getValueType()).getFixedValue();
     auto hex=scalarGlobalImage(g,globalBases),name=s.globals[&g];
     data[name]=hex;
-    dataSigs[name]="{\"abi\":\"0.8\",\"kind\":\"data\",\"size\":"+std::to_string(size)+",\"tier\":\"-\"}";
+    dataSigs[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"data\",\"size\":"+std::to_string(size)+",\"tier\":\"-\"}";
     dataHashes[name]=sha(prefix+dataSigs[name]+"\n"+name+" "+hex+"\n");
     globalLeaves[name]="{\"base\":"+std::to_string(globalBases[&g])+",\"image\":\""+name+"\",\"size\":"+std::to_string(size)+"}";
   }
@@ -949,8 +949,9 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
   raw_fd_ostream o(path, ec);
   if (ec)
     fail("output", ec.message());
-  o << "bennett-object isa=0.8 object=0.8 launch=0.8 sched=0.8 cert=0.8 "
-       "coverage=0.8 target=0.8 ptr_width="
+  o << "bennett-object isa=" << producerISA() << " object=" << producerISA()
+    << " launch=" << producerISA() << " sched=" << producerISA() << " cert=" << producerISA()
+    << " coverage=" << producerISA() << " target=" << producerISA() << " ptr_width="
     << pw << "\n\nsection symbols\n"
     << symbols << "\n\nsection functions\n"
     << wrapper << "\n"
@@ -991,7 +992,7 @@ ScalarMembers scalarMembers(Scalar &s, const std::vector<Function *> &closure,
     Scalar member{m,*g};member.globals=s.globals;member.functions=functions;member.analysis=&analysis;
     auto name=functions.at(g);members.bodies[name]=member.body();
     std::vector<std::string> widths;for(auto &a:g->args())for(auto &field:member.fields(a.getType()))widths.push_back(std::to_string(member.width(field.type)));
-    members.signatures[name]="{\"abi\":\"0.8\",\"kind\":\"lproc\",\"params\":["+join(widths,",")+"],\"result\":"+std::to_string(member.width(g->getReturnType()))+",\"tier\":\"q\"}";
+    members.signatures[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"lproc\",\"params\":["+join(widths,",")+"],\"result\":"+std::to_string(member.width(g->getReturnType()))+",\"tier\":\"q\"}";
     if(!members.text.empty())members.text+="\n";members.text+=members.bodies[name];
   }
   return members;
