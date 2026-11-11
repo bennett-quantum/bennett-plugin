@@ -237,6 +237,15 @@ constant-shift checks execute the same generated function; pointer round trips c
 The helper/global-key check supplements its original comparisons with executions of the same
 linked bodies and globals. Remaining removed subprocess assertions live in the shared harness.
 
+## Resolved call dispatch regression
+
+The driver marker-dispatch regression retains the exact post-link bitcode for
+both LLVM majors, including runtime initialization, finalization and callbacks.
+It verifies the frozen module hashes, reversible publication and independent
+reference admission. The extracted marker dispatcher receives the resolved
+callee name already established by its caller; a typed call may resolve to a
+function while `getCalledFunction()` is null. This registers the new driver.
+
 ## Multiwire marker lowering
 
 The multiwire marker driver checks CX, CZ, SWAP and exact CCX on both LLVM
@@ -351,6 +360,7 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "tests/cc_marker_dispatch.py": {"complexity": 5, "functions": 1, "length_max": 35, "length_p50": 35, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_atom_sharing.py": {"complexity": 2, "functions": 1, "length_max": 32, "length_p50": 32, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
     "src/AnalysisAtomSet.h": {"complexity": 89, "functions": 21, "length_max": 19, "length_p50": 1, "length_p90": 6, "over_300": 0, "trivial_wrappers": 12},
     "tests/production_multi_gates.py": {"complexity": 120, "functions": 3, "length_max": 72, "length_p50": 50, "length_p90": 72, "over_300": 0, "trivial_wrappers": 0},
