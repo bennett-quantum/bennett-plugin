@@ -173,3 +173,104 @@ whole-program run. **[measured]**
 
 Look for the size at which heap jumps from MB to GB, which value or slot carries the blob, its density, and whether it
 enters via PT9 parameter binding or via memory.
+
+## Finding 3 — growing sub-closures: the early CPU wall is a pulled-in crawler; past ~100 functions three connected-program costs appear
+
+**Run.** I dumped a call graph from the LLVM 18 / N16 input:
+
+- 1,473 functions; 305 have their address taken; 2,414 indirect call sites.
+- Each indirect site is joined to every address-taken function of the same type, as a §14.2 worst case.
+
+Sub-closures grow by BFS on that undirected graph from sqlite3SetTextEncoding and from sqliteDefaultBusyCallback. Each
+sub-closure is extracted with every global and initialiser and keeps its original linkage.
+
+Two series:
+
+- **"all"**: the plain BFS.
+- **"−crawl"**: the same BFS with the 16 functions that exhaust 30 s alone (finding 2) left as declarations.
+  Diagnostic only: those calls take PT12 host-call semantics.
+
+Every run: `systemd-run --user -p MemoryMax=4G` after `admit.py` ADMIT, 120 s CPU allowance (two points at 600 s),
+probe on. **[measured]**
+
+| root | series | functions / instructions | result (wall s) | RSS MB | rounds at stop | carrier at stop (probe) |
+|---|---|---|---|---|---|---|
+| SetTextEncoding | all | 10 / 6,189 | cap 120 | 87 | 172 | sqlite3Pragma `%2769` INT crawl (A) |
+| SetTextEncoding | all | 10 / 6,189 | **cap 600** | 88 | 435 | same `%2769`: 1,385 → 3,481 INTs, about +8 per round; still about 75 rounds short of K |
+| SetTextEncoding | all | 30 / 7,164 | cap 120 | 89 | 162 | same (A) |
+| SetTextEncoding | −crawl | 10 / 975 | pass 1.3 | 84 | — | — |
+| SetTextEncoding | −crawl | 30 / 1,991 | pass 1.7 | 90 | 4 | — |
+| SetTextEncoding | −crawl | 100 / 17,974 | cap 120 | 608 | 2 | address blob + load scans (C1) |
+| SetTextEncoding | −crawl | 300 / 83,783 | cap 120 | 585 | 2 | C1 + C2 |
+| SetTextEncoding | −crawl | 1,000 / 205,587 | cap 120 | 638 | 0 (120k pops) | candidate ROOTs (C3) |
+| BusyCallback | all | 10 / 911 | pass 0.34 | 82 | — | — |
+| BusyCallback | all | 30 / 20,698 | cap 120 | 98 | 34 | sqlite3VdbeExec, pager_end_transaction 4,096-INT `and`/`or` (A2) |
+| BusyCallback | all | 30 / 20,698 | **cap 600** | 98 | 148 | same; value atoms still +37 per round |
+| BusyCallback | −crawl | 30 / 6,695 | pass 8.6 | 122 | — | — |
+| BusyCallback | −crawl | 100 / 12,844 | pass 5.0 | 167 | 5 | — |
+| BusyCallback | −crawl | 300 / 83,529 | cap 120 | 240 | 2 | A2 + C3 |
+| BusyCallback | −crawl | 1,000 / 207,855 | cap 120 | 630 | 0 (120k pops) | C3 |
+
+Without crawlers, earlier "all" runs at 100 and 300 functions match the −crawl rows at the same sizes.
+**[measured]**
+
+**Reading the table.**
+
+1. **The wall at 10–30 functions is mechanism A or A2, inherited from one member.**
+   - sqlite3SetTextEncoding's 10-function closure contains sqlite3Pragma. At 600 s it is still crawling: one call
+     result has 3,481 INTs, about +8 per round. It ends only at K = 4,096, which needs about 510 rounds.
+   - BusyCallback's 30-function closure contains sqlite3VdbeExec, sqlite3VdbeHalt and sqlite3WalCheckpoint.
+   - Remove the 16 crawlers and the same neighbourhoods finish in 0.5–9 s up to 30 functions (SetTextEncoding) or
+     100 functions (BusyCallback).
+   - The stop sites in the messages (createCollation's indirect call `%222`, and so on) are only where the clock ran
+     out. **[measured]**
+
+2. **Past that point, the program's connectivity adds three costs. None is mechanism A or B.**
+   - **C1, blob addresses × slots.** SetTextEncoding −crawl at 100 functions, round 2:
+     - pointers such as `deleteTable %122` and `createCollation %92` hold about 2,060 pointer atoms over 15–17
+       objects, plus 15–25 FN and 22 ROOT atoms;
+     - @nofs_vfs and @memdb_vfs each carry the same 1,024 exact offsets, spanning −40..10,163 with gcd 1. The set is
+       **not dense**, and the objects are 168-byte `sqlite3_vfs` structs;
+     - PT6 loads through such pointers test every slot of each object: **49.1M load-slot tests in 37,181 worklist
+       steps**. PT7 stores write every (object, offset) pair: 26,834 slots, 4.58M slot atoms;
+     - so per-instruction cost is about |addresses| × |slots per object|. This is indirect-call / merged-pointer
+       fan-in. Field offsets of larger structs reach the VFS objects; PT2/PT5 keep out-of-bounds modular
+       alternatives. **[measured; cause of the merge is conjecture]**
+   - **C2, identical sets copied, not distinct sets.** By 64-bit content hash, over sets of 64 atoms or more:
+
+     | closure | large slot sets | slot atoms | large value sets | value atoms |
+     |---|---|---|---|---|
+     | SetTextEncoding −crawl 100 | 4,441 → **13** distinct | 4,529,213 → 8,518 (**532×**) | 613 → 211 | 2.3× |
+     | SetTextEncoding −crawl 1,000 | 3,765 → 51 | **107×** | 9,848 → 1,249 | 5.6× |
+     | BusyCallback −crawl 300 | 613 → 16 | 38× | 3,068 → 255 | 8.7× |
+
+     **[measured]**
+   - **C3, candidate ROOT atoms.** At 1,000 functions, round 0 is still unfinished at 120 s (120k of about 206k
+     worklist steps). There, **ROOT atoms are 57–58% of all value atoms**: 1.02M of 1.79M from SetTextEncoding and
+     1.04M of 1.80M from BusyCallback. At BusyCallback-300 they are 37%. These are the §6.6 candidate ROOTs.
+     `run()` seeds ROOT(arg) on every pointer parameter of every non-local function, through
+     `seedParameters(f, … || !f->hasLocalLinkage())`. They propagate through the whole fixpoint and are pruned only
+     after it unless they reach a handle operand. **[measured, source]**
+
+3. **Memory stays small in every sub-closure: at most 640 MB RSS.** Within 120 s, CPU is always the wall, as the
+   orchestrator noted. The 9 GiB of the full run therefore comes from running these costs long enough on about
+   285k instructions, not from a different mechanism. **[measured; the extrapolation is conjecture]**
+
+**What it suggests.** Divide and conquer separates four costs that can be fixed independently, all without changing
+the reference fixpoint:
+
+| cost | fix | gain |
+|---|---|---|
+| A / A2 (local) | exact acceleration of integer recurrences; cheaper elementwise transfers on near-K INT sets | — |
+| C1 | load and store over an address set by object and offset range, not slot by slot | — |
+| C2 | hash-consed immutable AVs | 38–532× on slots, 2–9× on values, exact |
+| C3 | carry candidate ROOTs as a separate per-parameter provenance, instead of 1M explicit atoms through every transfer | — |
+
+Each fix is local to one part of `Analysis.cpp`. C2 is the one I can test cheapest, and it attacks the memory wall
+directly. **[conjecture on gains beyond the measured ratios]**
+
+**Next.** A cheap probe-side experiment before any prototype: for the 1,000-function sub-closures, record the
+distinct ROOT atoms and the parameters they come from. That shows whether C3 is a few hundred candidate roots copied
+everywhere (cheap to factor out) or real handle flow. Then a `.tmp` prototype of hash-consed slot values on
+SetTextEncoding −crawl 100, checking that the AV maps come out identical and measuring the change in load-slot tests
+and RSS.
