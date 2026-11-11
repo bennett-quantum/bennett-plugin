@@ -84,7 +84,7 @@ REGRESSIONS = (
     "unresolved-call",
 )
 
-# Source: /home/tobias/Projects/bennett-workspace/bennett-plugin-measure/.tmp/suite-measure/REPORT.md
+# Source: the bennett-plugin-measure worktree's .tmp/suite-measure/REPORT.md
 # and its results.jsonl, measured on this 12-core host, 2026-11-08.
 # Each command guard is >= 10x its maximum over A/B and LLVM 18/23, rounded
 # up to whole seconds with a 60 s floor. The suite guard is 10x the larger
