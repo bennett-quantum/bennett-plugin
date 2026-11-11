@@ -237,6 +237,15 @@ constant-shift checks execute the same generated function; pointer round trips c
 The helper/global-key check supplements its original comparisons with executions of the same
 linked bodies and globals. Remaining removed subprocess assertions live in the shared harness.
 
+## Multiwire marker lowering
+
+The multiwire marker driver checks CX, CZ, SWAP and exact CCX on both LLVM
+majors. Basis-state tests cover same-register and separate-register operands;
+interference tests expose CZ and CCX phase errors. Runtime selectors exercise
+opcode, index, repeated-wire and mixed-width handle checks. The helper resolves
+handles before constructing disjoint action slots. This baseline registers the
+new lowering helper and test driver; existing file budgets are unchanged.
+
 ## Council regression evidence
 
 At `2ecdd90`, both majors failed
@@ -342,6 +351,8 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "tests/production_multi_gates.py": {"complexity": 120, "functions": 3, "length_max": 72, "length_p50": 50, "length_p90": 72, "over_300": 0, "trivial_wrappers": 0},
+    "src/ProductionMultiGates.inc": {"complexity": 118, "functions": 10, "length_max": 29, "length_p50": 10, "length_p90": 28, "over_300": 0, "trivial_wrappers": 0},
     "src/Personality.inc": {"complexity": 18, "functions": 2, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
     "tests/rust_personality.py": {"complexity": 12, "functions": 3, "length_max": 47, "length_p50": 35, "length_p90": 47, "over_300": 0, "trivial_wrappers": 0},
     "src/ConstantOperands.h": {"complexity": 61, "functions": 2, "length_max": 21, "length_p50": 9, "length_p90": 21, "over_300": 0, "trivial_wrappers": 0},
