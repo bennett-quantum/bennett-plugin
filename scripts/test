@@ -51,6 +51,7 @@ DRIVERS = {
     "cc_calls": (),
     "cc_switch": (),
     "reversible": (),
+    "r_process_arguments": (),
     "softfloat": (),
     "wide": (),
     "varargs": (),
@@ -144,6 +145,9 @@ COMMAND_HANG_GUARDS_S = {
     "cc_calls": 60,
     "cc_switch": 60,
     "reversible": 171,
+    # Complete process import + musl cleanup: 86.27/88.69 s LLVM18/23,
+    # 2026-11-11; 10x the larger measured command, rounded up.
+    "r_process_arguments": 900,
     "softfloat": 83,
     "wide": 60,
     "varargs": 60,

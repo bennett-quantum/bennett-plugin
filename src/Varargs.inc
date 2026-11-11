@@ -158,7 +158,7 @@ void normaliseVarargs(Module &m,Function *&root) {
     paramAttrs.push_back(AttributeSet());
     replacement->setAttributes(AttributeList::get(ctx,c->getAttributes().getFnAttrs(),c->getAttributes().getRetAttrs(),paramAttrs));
     // A new call instruction: the callee reads the caller's frame, so it can be no tail call.
-    replacement->setDebugLoc(c->getDebugLoc());
+    replacement->setDebugLoc(c->getDebugLoc());replacement->setMetadata("bennett.varargs.fixed",MDNode::get(ctx,ConstantAsMetadata::get(b.getInt32(fixed))));
     if(c->hasName()) {auto name=c->getName().str();c->setName("");replacement->setName(name);}
     c->replaceAllUsesWith(replacement);c->eraseFromParent();
   }

@@ -1,4 +1,4 @@
-#include "ProductionGlobals.inc"
+#include "RProcessArguments.inc"
 void prepareVarargsStack(Module &m,Function *&root,uint64_t capacity);
 // §15.2 rows without an IR replacement trap only when reached.
 static void normaliseRAsm(Function &f, json::Array &coverage) {
@@ -27,8 +27,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   sourceAnalysis.releaseTransferGraphs();
   auto device=CloneModule(source);auto &m=*device;
   auto entryName=sourceEntry.getName().str();auto *root=m.getFunction(entryName);
-  for(auto &arg:root->args())if(arg.getArgNo()>0 && !arg.use_empty())
-    unimplemented("§19.2 argv/envp byte storage in R launch",4,&arg);
+  bool argumentBytes=requiresArgumentStorage(*root);
   SmallVector<StringRef> components;budgetDefault.split(components,',');
   std::vector<uint64_t> defaults;
   for(auto c:components) {uint64_t n;if(c.getAsInteger(10,n))fail("input","§9.2 budget default");defaults.push_back(n);}
@@ -71,7 +70,7 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   Analysis a(m,root,true);a.run();a.checkHandles();a.checkRegions();
   std::error_code ec;if((ec=sys::fs::create_directories(out)))fail("output",ec.message());
   std::string dir=out.str()+"/"+entryName;if((ec=sys::fs::create_directories(dir)))fail("output",ec.message());
-  Entry e{m,a,*launch,dir,stack,table};e.argvService=true;e.usesCCCalls=true;e.ccHeapBytes=table.capacities[1];
+  Entry e{m,a,*launch,dir,stack,table};e.argvService=true;e.argvByteStorage=argumentBytes;e.usesCCCalls=true;e.ccHeapBytes=table.capacities[1];
   if(!disk.empty()) {
     e.diskImage=read(disk);auto *image=ConstantDataArray::getString(m.getContext(),e.diskImage,false);
     auto *global=new GlobalVariable(m,image->getType(),true,GlobalValue::InternalLinkage,image,"__bennett_rt_disk_image");
@@ -80,8 +79,8 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
   std::map<Function *,std::string> names;unsigned ordinal=0;
   for(auto *f:closure)names[f]="R"+std::to_string(ordinal++);
   e.ccNames=&names;
-  auto *argv=new GlobalVariable(m,ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize()),false,
-      GlobalValue::InternalLinkage,ConstantAggregateZero::get(ArrayType::get(builder.getInt8Ty(),4+2*m.getDataLayout().getPointerSize())),"__bennett_rt_argv");
+  auto *argumentType=ArrayType::get(builder.getInt8Ty(),argumentBytes?24:4+2*m.getDataLayout().getPointerSize());
+  auto *argv=new GlobalVariable(m,argumentType,false,GlobalValue::InternalLinkage,ConstantAggregateZero::get(argumentType),"__bennett_rt_argv");
   auto *eh=m.getGlobalVariable("__bennett_rt_eh",true);
   for(auto *f:closure) {
     Entry callee{m,a,*f,dir,stack,table};callee.ccNames=&names;callee.rTier=f!=init;
@@ -96,19 +95,11 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     e.ccFunctions[names.at(f)]={sig,"fn "+std::string(tier)+" @"+names.at(f)+" ("+join(callee.params)+") ("+join(callee.results)+") () () ()\n"+join(callee.rows,"\n")};
   }
   e.rows={"^entry():"};
-  // argv service reply: little-endian (argc:i32, argv:P, envp:P), packed.
-  // The host populates the pointed-to argument storage in device memory.
-  auto argp=e.operand(argv),length=e.number(4+2*m.getDataLayout().getPointerSize());
-  e.emit("i64","hostcall bennett.argv "+argp+" "+length);
+  std::vector<std::string> args;std::string argumentStorage;
+  auto argp=beginLaunchArguments(e,*argv,args,argumentStorage);
   e.rows.push_back("call @"+names.at(init)+" "+e.number(table.capacities[4]));
   auto stepP=e.operand(steps),limit=e.number(limits[0]);e.rows.push_back("store.i64 "+stepP+" "+limit);
-  std::vector<std::string> args;
-  if(root->arg_size()) {
-    if(root->arg_size()!=2 && root->arg_size()!=3)fail("input","§19.2 entry needs main ABI",root);
-    args.push_back(e.emit("i32","load.i32 "+argp));
-    auto pw=std::to_string(m.getDataLayout().getPointerSizeInBits());
-    for(unsigned k=1;k<root->arg_size();++k)args.push_back(e.emit("ptr","inttoptr "+e.emit("i"+pw,"load.i"+pw+" "+e.fieldPointer(argp,4+(k-1)*m.getDataLayout().getPointerSize()))));
-  }
+  finishLaunchArguments(e,*root,argp,args);
   if(!root->getReturnType()->isIntegerTy(32))fail("input","§19.2 entry status must be i32",root);
   auto status=e.emit("i32","call @"+names.at(root)+(args.empty()?"":" "+join(args," ")));
   if(eh) {
@@ -116,10 +107,11 @@ void lowerReversible(Module &source, Analysis &sourceAnalysis, Function &sourceE
     auto exiting=e.emit("i1","icmp.eq "+active+" "+four);
     auto selector=e.emit("i32","load.i32 "+e.fieldPointer(p,4));status=e.emit("i32","select "+exiting+" "+selector+" "+status);
   }
-  e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
+  releaseLaunchArguments(e,argumentStorage);e.rows.push_back("ret "+status);e.resultTypes={"i32"};e.results={"status:i32"};
   json::Object record{{"dialect",producerDialect()},{"isa",producerISA()},{"llvm_version",LLVM_VERSION_STRING},{"pipeline","bennett"},
     {"mode","reversible"},{"verdict",reversibleVerdict()},{"source_step_limit",std::to_string(limits[0])},{"asm_rows",std::move(asmCoverage)}};
   record["entry_initialisation"] = json::Object{{"shadow_stack_bytes",std::to_string(table.capacities[4])}};
+  if(argumentBytes)(*record.getObject("entry_initialisation"))["arguments"]="bennett-argv-bytes-1";
   json::Object cert{{"versions",json::Object{{"isa",producerISA()},{"cert",producerISA()}}},{"regions",json::Object{}},
     {"composition",json::Object{{"multiplicities",json::Object{}},{"epsilon_total",json::Object{{"diamond",0}}},{"method","sum_over_multiplicities"}}}};
   auto object=launchObject(e,record,cert);record["native_global_mapping"]=nativeGlobalMapping(e,record);write(dir+"/launch.bennett",object);
