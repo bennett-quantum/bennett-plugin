@@ -149,6 +149,8 @@ struct AnalysisBudget {
   std::map<const Value *, std::map<LoadSignature, LoadImage>> loadSignatures;
   std::map<size_t, SmallVector<std::weak_ptr<const AV>, 4>> loadImagePool;
   LoadImage internLoadImage(AV image);
+  AnalysisAtomSetInterner<Atom> atomSets;
+  void internAtoms(AnalysisAtomSet<Atom> &);
   // Pure transfers retain immutable operand images. One unchanged origin/leaf
   // image can serve every instruction that reads it; later growth gets a new
   // image while earlier transfer snapshots remain alive and exact.
@@ -248,6 +250,22 @@ void memoryWork(uint64_t AnalysisWork::MemoryWork::*counter, uint64_t count = 1)
   if (!activeBudget) return;
   activeBudget->work.memory.*counter += count;
   if (auto *f = activeBudget->work.currentFunction) f->memory.*counter += count;
+}
+void AnalysisBudget::internAtoms(AnalysisAtomSet<Atom> &atoms) {
+  // Small sets already copy cheaply; this threshold changes storage only.
+  if (atoms.size() < 8) return;
+  auto hash = hash_combine(atoms.size());
+  for (const auto &a : atoms) {
+    budgetTick();
+    hash = hash_combine(hash, a.kind, a.object, a.offset, a.stride,
+                        a.integer.getBitWidth(), a.integer, a.numerical);
+  }
+  atomSets.intern(atoms, static_cast<size_t>(hash));
+}
+static bool mergeFacts(AV &destination, const AV &source) {
+  bool changed = destination.merge(source);
+  if (changed && activeBudget) activeBudget->internAtoms(destination.atoms);
+  return changed;
 }
 AnalysisBudget::LoadImage AnalysisBudget::internLoadImage(AV image) {
   auto hash = hash_combine(image.top, image.atoms.size());
@@ -1065,10 +1083,11 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
       auto [it,inserted]=slotIndex.emplace(key,slots.size());
       if(inserted) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
+        if (activeBudget) activeBudget->internAtoms(slots.back().value.atoms);
         indexSlot(it->second);
         changed=true;
         if (activeBudget) activeBudget->invalidateLoadImages(a.object);
-      } else if (slots[it->second].value.merge(v)) {
+      } else if (mergeFacts(slots[it->second].value, v)) {
         changed = true;
         if (activeBudget) activeBudget->invalidateLoadImages(a.object);
       }
@@ -1405,7 +1424,7 @@ void Analysis::bind(CallBase &c, Function *f) {
     AV unknown;unknown.top=true;
     if(c.getType()->isAggregateType() || c.getType()->isVectorTy())
       for(auto &leaf:leaves(c.getType(),M.getDataLayout()))setField(&c,leaf.path,unknown);
-    else changed|=values[&c].merge(unknown);
+    else changed|=mergeFacts(values[&c], unknown);
     std::set<const Value *> reachable;bool opaque=false;
     for(Value *v:c.args())if(v->getType()->isPointerTy()) {
       auto address=get(v);opaque|=address.top;
@@ -1434,7 +1453,7 @@ void Analysis::bind(CallBase &c, Function *f) {
         copyFields(&a, c.getArgOperand(i));
       else if (a.hasByValAttr()) {
         // PT9: the callee copy is a distinct abstract object, not an alias.
-        changed |= values[&a].merge(atom(Atom::Ptr, &a));
+        changed |= mergeFacts(values[&a], atom(Atom::Ptr, &a));
         auto src = get(c.getArgOperand(i));
         uint64_t size = M.getDataLayout().getTypeAllocSize(a.getParamByValType()).getKnownMinValue();
         auto snapshot = slots;
@@ -1445,7 +1464,7 @@ void Analysis::bind(CallBase &c, Function *f) {
                   slot.offset >= p.offset && slot.offset + slot.bytes <= p.offset + size)
                 store(slot.value, atom(Atom::Ptr, &a, slot.offset - p.offset), slot.bytes, slot.filled);
       } else
-        changed |= values[&a].merge(get(c.getArgOperand(i)));
+        changed |= mergeFacts(values[&a], get(c.getArgOperand(i)));
     }
     ++i;
   }
@@ -1455,7 +1474,7 @@ void Analysis::bind(CallBase &c, Function *f) {
         if (c.getType()->isAggregateType() || c.getType()->isVectorTy())
           copyFields(&c, r->getReturnValue());
         else
-          changed |= values[&c].merge(get(r->getReturnValue()));
+          changed |= mergeFacts(values[&c], get(r->getReturnValue()));
       }
 }
 static bool allocation(const Function *f) {
@@ -1523,10 +1542,10 @@ void Analysis::setField(const Value *v, const Path &path, const AV &a) {
     if (auto *f = activeBudget->work.currentFunction) ++f->fieldJoins;
   }
   if (path.empty())
-    changed |= values[v].merge(a);
+    changed |= mergeFacts(values[v], a);
   else
-    changed |= fields[{v, path}].merge(a);
-  changed |= values[v].merge(a);
+    changed |= mergeFacts(fields[{v, path}], a);
+  changed |= mergeFacts(values[v], a);
 }
 void Analysis::copyFields(const Value *dst, const Value *src) {
   for (auto &l : leaves(dst->getType(), M.getDataLayout()))
@@ -2129,7 +2148,7 @@ void Analysis::step(Instruction &i) {
     virtualFP=true;
     for(auto &v:instructions(*slice))if(!isa<ReturnInst>(v))step(v);
     auto *result=cast<ReturnInst>(slice->back().getTerminator())->getReturnValue();
-    if(result) {if(i.getType()->isAggregateType())copyFields(&i,result);else changed|=values[&i].merge(get(result));}
+    if(result) {if(i.getType()->isAggregateType())copyFields(&i,result);else changed|=mergeFacts(values[&i], get(result));}
     for(auto *callee:edges[slice.get()])edges[i.getFunction()].insert(callee);
     virtualFP=false;return;
   }
@@ -2160,7 +2179,7 @@ void Analysis::step(Instruction &i) {
         budgetTick();
         setField(&i, leaf.path, evaluate(leaf.path));
       }
-    } else changed |= values[&i].merge(evaluate({}));
+    } else changed |= mergeFacts(values[&i], evaluate({}));
     return;
   }
   AV a;
@@ -2387,7 +2406,7 @@ void Analysis::step(Instruction &i) {
           if (!g->isDeclaration()) {
             // Region edges bind env, but do not inherit the caller tier.
             if (!oracle && g->arg_size() == 1)
-              changed |= values[&*g->arg_begin()].merge(get(c->getArgOperand(
+              changed |= mergeFacts(values[&*g->arg_begin()], get(c->getArgOperand(
                   n == "__bennett_ctrl_v" ? 4 : c->arg_size() - 1)));
           }
       }
@@ -2506,7 +2525,7 @@ void Analysis::step(Instruction &i) {
       a.merge(integer(APInt(1, 1)));
     }
   }
-  changed |= values[&i].merge(a);
+  changed |= mergeFacts(values[&i], a);
 }
 void Analysis::run() {
   BudgetScope scope(this, M);

@@ -1,4 +1,5 @@
 #pragma once
+#include "AnalysisAtomSet.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/JSON.h"
@@ -30,7 +31,7 @@ struct Atom {
   bool operator<(const Atom &b) const;
 };
 struct AV {
-  std::set<Atom> atoms;
+  AnalysisAtomSet<Atom> atoms;
   bool top = false;
   bool merge(const AV &v);
   bool roots() const;
