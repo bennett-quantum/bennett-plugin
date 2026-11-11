@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ISALayout.h"
 #include "ByteOrder.h"
 #include "ComparisonLayout.h"
 #include "llvm/ADT/StringExtras.h"
@@ -104,56 +105,6 @@ std::string join(const std::vector<std::string> &v, StringRef sep = ", ") {
     s += x;
   }
   return s;
-}
-enum class LayoutScope { Classical, Oracle, Globals, WithoutInterfaces };
-struct LayoutLeaf {
-  std::vector<std::string> path;
-  std::string value;
-};
-// ISA 0.9 §9.2/K47 uses original key components. Legacy 0.8 retains
-// its dotted identity, including the old ordering and collision behaviour.
-std::string layoutEnvelope(const json::Object &layout,
-                          LayoutScope scope = LayoutScope::Classical,
-                          StringRef owner = "",
-                          const std::set<std::string> &referenced = {}) {
-  const bool structured = rContractProfile();
-  std::map<std::string, LayoutLeaf> leaves;
-  auto append = [&](std::vector<std::string> path, const json::Value &value) {
-    json::Array components;
-    for (const auto &part : path) components.push_back(part);
-    auto key = structured ? jcs(json::Value(std::move(components))) : join(path, ".");
-    leaves[key] = {std::move(path), jcs(value)};
-  };
-  for (const auto &member : layout) {
-    auto key = member.first.str();
-    if (key == "globals")
-      for (const auto &global : *member.second.getAsObject())
-        append({key, global.first.str()}, global.second);
-    else if (key == "interface_regions")
-      for (const auto &regionOwner : *member.second.getAsObject())
-        for (const auto &region : *regionOwner.second.getAsObject())
-          append({key, regionOwner.first.str(), region.first.str()}, region.second);
-    else append({key}, member.second);
-  }
-  std::string result;
-  for (const auto &entry : leaves) {
-    const auto &path = entry.second.path;
-    bool include = false;
-    switch (scope) {
-    case LayoutScope::Classical: include = true; break;
-    case LayoutScope::WithoutInterfaces: include = path[0] != "interface_regions"; break;
-    case LayoutScope::Oracle:
-      include = path[0] != "interface_regions" ||
-          (structured ? StringRef(path[1]) == owner :
-           StringRef(entry.first).starts_with("interface_regions." + owner.str() + "."));
-      break;
-    case LayoutScope::Globals:
-      include = path[0] == "globals" && referenced.count(path[1]);
-      break;
-    }
-    if (include) result += "layout " + entry.first + " " + entry.second.value + "\n";
-  }
-  return result;
 }
 void requireMemoryFreeReferenceLayout(const json::Object &layout, const Value *at) {
   for (const auto &member : layout) {
@@ -1288,6 +1239,7 @@ struct Entry {
       {"region_key",regionKey(body)},{"generation_steps",1},{"resolved_budget",tuple(budget)}});
     return true;
   }
+#include "ProductionQPrep.inc"
 #include "ProductionMultiGates.inc"
   void gate(CallBase &c) {
     auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
@@ -2100,8 +2052,6 @@ std::string linkReferences(Entry &e) {
 #include "CCCalls.inc"
 std::string launchObject(Entry &e, json::Object &record,
                          json::Object &certificate) {
-  if (rContractProfile() && !e.references.empty())
-    unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3, &e.f);
   std::map<std::string, std::string> sections;
   std::string ref = e.reference;
   bool unified = false;
@@ -2260,17 +2210,17 @@ std::string launchObject(Entry &e, json::Object &record,
     if(sections.count("layout")) {
       if(sections.count("data")){SmallVector<StringRef> lines;StringRef(sections["data"]).split(lines,'\n');for(auto line:lines)memoryEnvelope+="data "+line.str()+"\n";}
       auto layout=parse(sections["layout"]);
-      auto scope = name == "xor128" ? LayoutScope::WithoutInterfaces : LayoutScope::Classical;
+      auto scope = StringRef(item.second).starts_with("oracle ") ? LayoutScope::WithoutInterfaces : LayoutScope::Classical;
       memoryEnvelope += layoutEnvelope(*layout.getAsObject(), scope);
     }
     hashes[name]=hash("isa=" + producerISA() + "\nptr_width="+std::to_string(e.m.getDataLayout().getPointerSizeInBits())+"\n"+item.first+"\n"+canonical+"\n"+memoryEnvelope+refs);
-    (*so)[std::to_string(so->size())]=json::Object{{"name",name},{"kind",name=="xor128"?"oracle":"cc"},{"signature",parse(item.first)},{"interface_hash",hashes.at(name)}};
+    (*so)[std::to_string(so->size())]=json::Object{{"name",name},{"kind",StringRef(item.second).starts_with("oracle ")?"oracle":"cc"},{"signature",parse(item.first)},{"interface_hash",hashes.at(name)}};
     actionBodies+="\n"+text;
   };
   for(auto &item:e.snapshotFunctions)helper(item.first);
   std::string canonical, refs;
   std::set<std::string> referenced;
-  std::regex token(R"(@(ref[0-9]*|M[0-9]+|B[0-9]+|U[0-9]+|xor128)\b)");
+  std::regex token(R"(@(ref[0-9]*|M[0-9]+|B[0-9]+|U[0-9]+|P[0-9]+|xor128)\b)");
   size_t last = 0;
   for (std::sregex_iterator it(body.begin(), body.end(), token), end; it != end;
        ++it) {

@@ -1,0 +1,54 @@
+{
+  "objects": {
+    "0.8": {
+      "sha256": "742ccbaf23ca1b89c93e8fa6e3e6953df99748d45d6ef01cfc9f91f1a89726a8"
+    },
+    "0.9": {
+      "hashes": {
+        "object_hash": "bd7494f763180a820b167d05e24fff9b37d753b8356896c1f85e4ee7ae97ac8a",
+        "status": "ok",
+        "symbols": {
+          "G1": {
+            "closure_hash": "13b8eea5eb7ffb320806090bcb731dddee82c6b7e305d02998f18f78f818fe26",
+            "interface_hash": "13b8eea5eb7ffb320806090bcb731dddee82c6b7e305d02998f18f78f818fe26"
+          },
+          "L1": {
+            "closure_hash": "98fcc7dd56c359305055da4782e4005bddc744a4f625a2b451b405f29382ff02",
+            "interface_hash": "98fcc7dd56c359305055da4782e4005bddc744a4f625a2b451b405f29382ff02"
+          },
+          "L2": {
+            "closure_hash": "f7b3de082faf5f944e4b6c37d36440044ed95bd170a7116b6512e49f4539672e",
+            "interface_hash": "f7b3de082faf5f944e4b6c37d36440044ed95bd170a7116b6512e49f4539672e"
+          },
+          "L3": {
+            "closure_hash": "aa66f4d4406660d08985ace1cd8fbbfd509b9bc85fc7058488e89ee14dec243c",
+            "interface_hash": "aa66f4d4406660d08985ace1cd8fbbfd509b9bc85fc7058488e89ee14dec243c"
+          },
+          "L4": {
+            "closure_hash": "fbf8d223ce2e3b4d42ec8c5b9362e303d433a2051773fc34171cab30751f5673",
+            "interface_hash": "fbf8d223ce2e3b4d42ec8c5b9362e303d433a2051773fc34171cab30751f5673"
+          },
+          "ref": {
+            "closure_hash": "804efb3e4ba5d4c51b37040a90895bed08b633fdccd4565a9b45ac9ce7ecc6a5",
+            "interface_hash": "804efb3e4ba5d4c51b37040a90895bed08b633fdccd4565a9b45ac9ce7ecc6a5"
+          }
+        },
+        "unresolved_imports": []
+      },
+      "sha256": "bd7494f763180a820b167d05e24fff9b37d753b8356896c1f85e4ee7ae97ac8a"
+    }
+  },
+  "producer": {
+    "binary_sha256": "46edf303b49b275624b7b88b69e584abcb76026c1015f320f84153d9b46d9e42",
+    "llvm_major": 23,
+    "name": "bennett-plugin"
+  },
+  "scope": "Reduced-control diagnostic; does not satisfy full SQLite acceptance or clause (c).",
+  "source": {
+    "commit": "1c29c8d731228b67902c3fa72e410e1bb71d16b4",
+    "lift": "rung4-mini",
+    "linkmap": "rung4-mini",
+    "repo": "bennett-dialect-spec"
+  },
+  "vectors_checked": 18
+}

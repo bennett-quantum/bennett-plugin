@@ -237,6 +237,16 @@ constant-shift checks execute the same generated function; pointer round trips c
 The helper/global-key check supplements its original comparisons with executions of the same
 linked bodies and globals. Remaining removed subprocess assertions live in the shared harness.
 
+## Quantum preparation and ISA 0.9 references
+
+Preparation uses a four-step wide XOR oracle in a CC byte loop; its executable
+size is independent of register width. The memory range is checked before any
+wire mutation. Tests include dirty-register XOR, repeated preparation, dynamic
+lengths, size and memory faults, and the large global image. The shared layout
+envelope helper retains the legacy dotted paths and supplies ISA 0.9 structured
+paths; lproc signatures gain the required empty interface arrays on 0.9.
+The added helper and test files have explicit baseline entries.
+
 ## Resolved call dispatch regression
 
 The driver marker-dispatch regression retains the exact post-link bitcode for
@@ -360,13 +370,21 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "tests/quantum_r_references.py": {"complexity": 44, "functions": 2, "length_max": 65, "length_p50": 18, "length_p90": 65, "over_300": 0, "trivial_wrappers": 0},
+    "tests/quantum_r_production.py": {"complexity": 23, "functions": 1, "length_max": 36, "length_p50": 36, "length_p90": 36, "over_300": 0, "trivial_wrappers": 0},
+    "tests/quantum_grover.py": {"complexity": 8, "functions": 1, "length_max": 26, "length_p50": 26, "length_p90": 26, "over_300": 0, "trivial_wrappers": 0},
+    "tests/production_qprep.py": {"complexity": 38, "functions": 1, "length_max": 53, "length_p50": 53, "length_p90": 53, "over_300": 0, "trivial_wrappers": 0},
+    "src/ScalarMembers.inc": {"complexity": 14, "functions": 1, "length_max": 18, "length_p50": 18, "length_p90": 18, "over_300": 0, "trivial_wrappers": 0},
+    "src/ProductionQPrep.inc": {"complexity": 12, "functions": 5, "length_max": 31, "length_p50": 13, "length_p90": 31, "over_300": 0, "trivial_wrappers": 1},
+    "src/PrivateEntryRecords.inc": {"complexity": 154, "functions": 5, "length_max": 36, "length_p50": 9, "length_p90": 36, "over_300": 0, "trivial_wrappers": 0},
+    "src/ISALayout.h": {"complexity": 104, "functions": 2, "length_max": 13, "length_p50": 1, "length_p90": 13, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_additive_cycles.py": {"complexity": 47, "functions": 2, "length_max": 66, "length_p50": 12, "length_p90": 66, "over_300": 0, "trivial_wrappers": 0},
     "tests/cc_marker_dispatch.py": {"complexity": 5, "functions": 1, "length_max": 35, "length_p50": 35, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_atom_sharing.py": {"complexity": 2, "functions": 1, "length_max": 32, "length_p50": 32, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
     "src/AnalysisAtomSet.h": {"complexity": 89, "functions": 21, "length_max": 19, "length_p50": 1, "length_p90": 6, "over_300": 0, "trivial_wrappers": 12},
     "tests/analysis_product_budget.py": {"complexity": 15, "functions": 2, "length_max": 76, "length_p50": 18, "length_p90": 76, "over_300": 0, "trivial_wrappers": 0},
     "tests/production_multi_gates.py": {"complexity": 120, "functions": 3, "length_max": 72, "length_p50": 50, "length_p90": 72, "over_300": 0, "trivial_wrappers": 0},
-    "src/ProductionMultiGates.inc": {"complexity": 118, "functions": 10, "length_max": 29, "length_p50": 10, "length_p90": 28, "over_300": 0, "trivial_wrappers": 0},
+    "src/ProductionMultiGates.inc": {"complexity": 122, "functions": 10, "length_max": 31, "length_p50": 10, "length_p90": 28, "over_300": 0, "trivial_wrappers": 0},
     "src/Personality.inc": {"complexity": 18, "functions": 2, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
     "tests/rust_personality.py": {"complexity": 12, "functions": 3, "length_max": 47, "length_p50": 35, "length_p90": 47, "over_300": 0, "trivial_wrappers": 0},
     "src/ConstantOperands.h": {"complexity": 61, "functions": 2, "length_max": 21, "length_p50": 9, "length_p90": 21, "over_300": 0, "trivial_wrappers": 0},

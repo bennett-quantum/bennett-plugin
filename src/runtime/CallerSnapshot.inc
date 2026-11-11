@@ -1,3 +1,4 @@
+#include "../PrivateEntryRecords.inc"
   // Private CC bookkeeping is not part of G: it mirrors the ISA allocator,
   // never consumes heap entries itself, and is rebuilt per launch.
   bool automaticSnapshot = false;
@@ -31,8 +32,7 @@
     bool callerState=false,dependency=false,uncertainWrites=false;
     std::set<const GlobalVariable *> callerWrites;
     std::set<const Value *> privateInputs;
-    std::set<const Value *> descriptors;
-    for(auto &i:instructions(f))if(auto *c=dyn_cast<CallBase>(&i);c && c->getCalledFunction() && c->getCalledFunction()->getName()=="__bennett_oracle")descriptors.insert(getUnderlyingObject(c->getArgOperand(2)));
+    auto descriptors=oracleRecordObjects();
     std::set<Function *> region;
     std::function<void(Function *)> regionVisit=[&](Function *fn) {
       if(!fn || fn->isDeclaration() || !region.insert(fn).second)return;
@@ -140,11 +140,11 @@
   }
   void snapshotRuntime() {
     if(!snapshotFunctions.empty())return;
-    snapshotFunctions["xor128"]={"{\"abi\":\"0.8\",\"args\":[\"i64\",\"i64\"],\"fault\":4,\"in\":[],\"kind\":\"oracle\",\"mem\":[],\"tgt\":128,\"tier\":\"q\"}",
+    snapshotFunctions["xor128"]={"{\"abi\":\""+producerISA()+"\",\"args\":[\"i64\",\"i64\"],\"fault\":4,\"in\":[],\"kind\":\"oracle\",\"mem\":[],\"tgt\":128,\"tier\":\"q\"}",
       "oracle @xor128 () (t:wire[128]) (f:wire[4]) () (lo:i64, hi:i64)\nregs { a:reg[128], b:reg[128], s:reg[128], h:reg[128], v:reg[128] }\n^entry():\na = lift.zext.i128 lo\nb = lift.zext.i128 hi\ns = lift.const.i128 64\nh = lift.shl b s\nv = lift.or h a\nlift.retval v"};
     for(unsigned j=4;j<=snapshotExponent;++j) {
       auto name="B"+std::to_string(j);auto w=std::to_string(uint64_t(8)<<j);
-      auto sig="{\"abi\":\"0.8\",\"kind\":\"cc\",\"params\":[\"ptr\",\"token\"],\"results\":[\"qreg["+w+"]\"],\"tier\":\"cc\"}";
+      auto sig="{\"abi\":\""+producerISA()+"\",\"kind\":\"cc\",\"params\":[\"ptr\",\"token\"],\"results\":[\"qreg["+w+"]\"],\"tier\":\"cc\"}";
       auto body="fn cc @"+name+" (p:ptr, tk:token) (q:qreg["+w+"]) () () ()\n^entry():\n";
       if(j==4)body+="q = qreg.new any 128\nf = qreg.new any 4\nlo = load.i64 p\nn = const.i64 8\na = ptrtoint.i64 p\nb = add a n\np1 = inttoptr b\nhi = load.i64 p1\noracle_call @xor128 tk () q f () (lo, hi)\nqreg.free f\nret q";
       else {auto previous="B"+std::to_string(j-1);body+="l = call @"+previous+" p tk\nn = const.i64 "+std::to_string(uint64_t(1)<<(j-1))+"\na = ptrtoint.i64 p\nb = add a n\np1 = inttoptr b\nr = call @"+previous+" p1 tk\nq = qreg.concat l r\nret q";}

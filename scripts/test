@@ -72,6 +72,10 @@ DRIVERS = {
     "descriptors": (),
     "production": (),
     "production_multi_gates": (),
+    "production_qprep": (),
+    "quantum_r_references": (),
+    "quantum_r_production": (),
+    "quantum_grover": (),
     "production_environments": tuple(
         argument
         for name in (
@@ -179,6 +183,10 @@ COMMAND_HANG_GUARDS_S = {
     "descriptors": 60,
     "production": 60,
     "production_multi_gates": 60,
+    "production_qprep": 60,
+    "quantum_r_references": 60,
+    "quantum_r_production": 60,
+    "quantum_grover": 60,
     "production_environments": 150,
     "production_dispatch": 60,
     "production_shapes": 60,

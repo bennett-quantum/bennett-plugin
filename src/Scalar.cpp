@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "ISALayout.h"
 #include "ConstantOperands.h"
 #include "ByteOrder.h"
 #include "ComparisonLayout.h"
@@ -879,6 +880,10 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
     globalHashLeaves+="layout globals."+e.first+" "+globalLeaves[e.first]+"\n";
     dataSection+=e.first+" "+e.second+"\n";
   }
+  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":"+std::to_string(nullSize)+",\"ptr_width\":"+std::to_string(pw)+"}";
+  auto parsedLayout=json::parse(layout);
+  if(!parsedLayout)fail("output",toString(parsedLayout.takeError()));
+  const auto &layoutObject=*parsedLayout->getAsObject();
   // Hash the complete call graph in SCC dependency order (ISA §9.2).
   std::map<std::string,std::string> hashes=dataHashes;
   std::map<std::string,std::set<std::string>> edges;
@@ -910,6 +915,7 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
       }
       canonical+=rest.substr(last);std::string images,leaves;
       for(auto &v:data)if(referenced.count(v.first)) {images+="data "+v.first+" "+v.second+"\n";leaves+="layout globals."+v.first+" "+globalLeaves[v.first]+"\n";}
+      if(rContractProfile())leaves=layoutEnvelope(layoutObject,LayoutScope::Globals,"",referenced);
       envelopes+=prefix+signatures[g]+"\n"+canonical+"\n"+images+leaves+refs;
     }
     auto h=sha(envelopes);
@@ -927,6 +933,7 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
   canonical += wrapper.substr(last);
   std::string leaves="layout A_tab "+std::to_string(at)+"\nlayout H "+std::to_string(h)+"\nlayout S_cells "+std::to_string(sc)+"\n"+globalHashLeaves+
     "layout heap_base "+std::to_string(heap)+"\nlayout heap_limit_max "+std::to_string(heapLimit)+"\n"+regionHashLeaves+"layout null_size "+std::to_string(nullSize)+"\nlayout ptr_width "+std::to_string(pw)+"\n";
+  if(rContractProfile())leaves=layoutEnvelope(layoutObject,LayoutScope::Oracle,"ref");
   std::string oh=sha(prefix+osig+"\n"+canonical+"\n"+images+leaves+wrapperRefs);
   std::string symbols="{\"0\":{\"interface_hash\":\""+oh+"\",\"kind\":\"oracle\",\"name\":\"ref\",\"signature\":"+osig+"}";
   unsigned si=1;
@@ -935,7 +942,7 @@ void publishScalarObject(Scalar &s, ScalarPublication publication, StringRef out
   symbols+="}";
   auto parsedSymbols=json::parse(symbols);if(!parsedSymbols)fail("output",toString(parsedSymbols.takeError()));
   symbols=canonicalJSON(*parsedSymbols);
-  std::string layout="{\"A_tab\":"+std::to_string(at)+",\"H\":"+std::to_string(h)+",\"S_cells\":"+std::to_string(sc)+",\"globals\":{"+globalLayout+"},\"heap_base\":"+std::to_string(heap)+",\"heap_limit_max\":"+std::to_string(heapLimit)+",\"interface_regions\":{\"ref\":{"+regionLayout+"}},\"null_size\":"+std::to_string(nullSize)+",\"ptr_width\":"+std::to_string(pw)+"}";
+
   // Every successfully materialised L closure is independently read before
   // publishing an object. This is after all producers and object construction,
   // so unimplemented source transforms retain their own capability diagnostic.
@@ -982,23 +989,7 @@ std::vector<std::pair<std::string,uint64_t>> scalarDevices(std::string &d, Funct
   }
   return devices;
 }
-struct ScalarMembers {
-  std::map<std::string,std::string> bodies, signatures;
-  std::string text;
-};
-ScalarMembers scalarMembers(Scalar &s, const std::vector<Function *> &closure,
-                            Analysis &analysis, const std::map<Function *,std::string> &functions) {
-  auto &m = s.m;
-  ScalarMembers members;
-  for(auto *g:closure) {
-    Scalar member{m,*g};member.globals=s.globals;member.functions=functions;member.analysis=&analysis;
-    auto name=functions.at(g);members.bodies[name]=member.body();
-    std::vector<std::string> widths;for(auto &a:g->args())for(auto &field:member.fields(a.getType()))widths.push_back(std::to_string(member.width(field.type)));
-    members.signatures[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"lproc\",\"params\":["+join(widths,",")+"],\"result\":"+std::to_string(member.width(g->getReturnType()))+",\"tier\":\"q\"}";
-    if(!members.text.empty())members.text+="\n";members.text+=members.bodies[name];
-  }
-  return members;
-}
+#include "ScalarMembers.inc"
 void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
                  unsigned stackCells, uint64_t heapCapacity, int projection, std::map<std::string,std::string> *globalNames, uint64_t sstack, unsigned autoSnapshot) {
   bool singleFrame = prepareScalarModule(m, f, sstack, autoSnapshot);
@@ -1008,7 +999,6 @@ void lowerScalar(Module &m, Function &f, StringRef desc, StringRef out,
   Analysis analysis(m, &f); analysis.run();
   std::vector<Function *> closure;
   std::map<Function *,std::string> functions;
-
 
   sstack=scalarModuleFlag(m, "bennett.sstack",sstack);
   unsigned snapshot=scalarModuleFlag(m, "bennett.entry.snapshot",0);

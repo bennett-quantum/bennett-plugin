@@ -86,6 +86,8 @@
       allocateRegister(*c, q, w);
     } else if (n == "__bennett_qfree")
       withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
+    else if (n == "__bennett_qprep")
+      prepareQuantumBytes(*c);
     else if (n == "__bennett_oracle")
       descriptor(*c);
     else if (n == "__bennett_inplace")

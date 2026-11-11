@@ -314,8 +314,6 @@ static json::Object producerReport(Analysis &a) {
 }
 static void checkProductionOptions() {
   if (Output.empty()) fail("output", "§19.9 -bennett-out is required");
-  if (rContractProfile() && (!Oracle.empty() || DescriptorReference))
-    unimplemented("§1.7/§19.9 ISA 0.9 quantum reference materialisation", 3);
 }
 static void diagnoseLegacyReversible() {
   if (rContractProfile()) return;
@@ -474,7 +472,7 @@ struct BennettPass : PassInfoMixin<BennettPass> {
             }
           }
       if(!objects)fail("input","descriptor-reference found no oracle shape");
-      errs()<<"bennett: descriptor reference objects only; CC launches remain unimplemented: §17.4 (milestone 3)\n";
+      errs()<<"bennett: descriptor reference objects (explicit reference-only mode)\n";
       return PreservedAnalyses::none();
     }
     if(rEntry) {
