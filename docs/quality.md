@@ -342,6 +342,12 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "src/HostProcessArguments.inc": {"complexity": 23, "functions": 7, "length_max": 33, "length_p50": 18, "length_p90": 33, "over_300": 0, "trivial_wrappers": 0},
+    "src/RProcessArguments.inc": {"complexity": 31, "functions": 8, "length_max": 43, "length_p50": 6, "length_p90": 43, "over_300": 0, "trivial_wrappers": 2},
+    "src/ProcessCallABI.inc": {"complexity": 34, "functions": 4, "length_max": 10, "length_p50": 5, "length_p90": 10, "over_300": 0, "trivial_wrappers": 1},
+    "src/NormalisationMetadata.h": {"complexity": 6, "functions": 1, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
+    "tests/r_process_arguments.py": {"complexity": 23, "functions": 4, "length_max": 74, "length_p50": 30, "length_p90": 74, "over_300": 0, "trivial_wrappers": 0},
+    "tests/probes/r-process-arguments.c": {"complexity": 6, "functions": 3, "length_max": 6, "length_p50": 4, "length_p90": 6, "over_300": 0, "trivial_wrappers": 1},
     "tests/analysis_input_snapshots.py": {"complexity": 10, "functions": 1, "length_max": 87, "length_p50": 87, "length_p90": 87, "over_300": 0, "trivial_wrappers": 0},
     "tests/scalar_contract.py": {"complexity": 1, "functions": 1, "length_max": 6, "length_p50": 6, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/NativeGlobals.inc": {"complexity": 73, "functions": 4, "length_max": 29, "length_p50": 11, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},

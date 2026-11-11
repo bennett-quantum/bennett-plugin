@@ -28,6 +28,8 @@ std::string producerDialect();
 std::string producerISA();
 std::string producerMapping();
 namespace {
+#include "ProcessCallABI.inc"
+
 std::string coverageSource(StringRef rule) {
   return "dialect-" + producerDialect() + ":" + rule.str();
 }
@@ -285,6 +287,7 @@ struct Entry {
   bool memoryDescriptors = false;
   bool rTier = false;
   bool argvService = false;
+  bool argvByteStorage = false;
   std::set<std::string> effectModels;
   std::string diskImage, diskDataKey;
   json::Array asmPoints;
@@ -299,8 +302,8 @@ struct Entry {
     }
     rows.push_back("ret"+(values.empty()?"":" "+join(values," ")));
   }
-  void propagateExit() {
-    if(!rTier || !rEH)return;
+  void propagateExit(const Instruction *control=nullptr) {
+    if(!shouldPropagateProcessExit(rTier,rEH,control))return;
     auto p=operand(rEH),active=emit("i32","load.i32 "+p);
     auto four=operand(ConstantInt::get(Type::getInt32Ty(m.getContext()),4));
     auto exiting=emit("i1","icmp.eq "+active+" "+four);
@@ -384,6 +387,7 @@ struct Entry {
   std::string operand(Value *v) {
     if (names.count(v))
       return names[v];
+    v=v->stripPointerCastsAndAliases();
     if(auto *c=dyn_cast<ConstantFP>(v))return operand(ConstantInt::get(c->getContext(),c->getValueAPF().bitcastToAPInt()));
     if (auto *c = dyn_cast<ConstantInt>(v)) {
       auto n = fresh("i" + std::to_string(c->getBitWidth()));
@@ -1526,7 +1530,7 @@ struct Entry {
       auto value=emit("i"+std::to_string(pw),"ptrtoint.i"+std::to_string(pw)+" "+pointer);
       std::map<uint64_t,Function *> candidates;std::vector<uint64_t> keys;
       for(auto *candidate:a.candidates(c->getCalledOperand(),c->getFunctionType()))
-        if(ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str())))
+        if(compatibleProcessCall(*c,*candidate) && (ccNames->count(candidate) || (candidate->isDeclaration() && !candidate->isIntrinsic() && !markers().count(candidate->getName().str()))))
           candidates[functionKey(candidate)]=candidate;
       for(auto &candidate:candidates)keys.push_back(candidate.first);
       auto args=callArguments(*c);
@@ -1534,7 +1538,8 @@ struct Entry {
       auto id=std::to_string(dispatchBlock++),done="call"+id+"done",bad="call"+id+"bad";
       compareTree(value,pw,keys,[&](uint64_t key) {
         if(candidates.at(key)->isDeclaration()) {unresolvedCall(candidates.at(key)->getName());return;}
-        auto call="call @"+ccNames->at(candidates.at(key))+(args.values.empty()?"":" "+join(args.values," "));
+        auto operands=processCallOperands(*c,*candidates.at(key),args.values);
+        auto call="call @"+ccNames->at(candidates.at(key))+(operands.empty()?"":" "+join(operands," "));
         std::vector<std::string> values;
         if(!c->getType()->isVoidTy())for(auto &field:fields(c->getType()))values.push_back(fresh(fieldType(field.type)));
         rows.push_back((values.empty()?"":(values.size()==1?values[0]:"("+join(values)+")")+" = ")+call);
@@ -1611,7 +1616,8 @@ struct Entry {
       // ISA calls bind typed operands, keep a callee environment and
       // retain nested frames for LIFO reversal (§9.3 leaves CC dynamic).
       auto args=callArguments(*c);
-      auto call="call @"+ccNames->at(g)+(args.values.empty()?"":" "+join(args.values," "));
+      auto operands=processCallOperands(*c,*g,args.values);
+      auto call="call @"+ccNames->at(g)+(operands.empty()?"":" "+join(operands," "));
       if(c->getType()->isVoidTy())rows.push_back(call);
       else {auto ns=destinations(c);rows.push_back((ns.size()==1?ns[0]:"("+join(ns)+")")+" = "+call);}
       releaseCallArguments(args);propagateExit();
@@ -1683,6 +1689,7 @@ struct Entry {
           auto *call=dyn_cast<CallBase>(&i);auto *target=call?call->getCalledFunction():nullptr;
           if(!target || (!target->getName().starts_with("llvm.dbg.") && !target->getName().starts_with("llvm.lifetime.") && !target->getName().starts_with("__bennett_nz_rstep")))countRStep();
         }
+        propagateExit(&i);
         if (auto *c = dyn_cast<CallBase>(&i)) {
           if (lowerCall(c) == CallFlow::EndBlock) break;
         } else if(auto *insert=dyn_cast<InsertValueInst>(&i)) {
@@ -2106,6 +2113,9 @@ std::string linkReferences(Entry &e) {
   if(!data.empty()) { object+="\nsection data\n";for(auto &v:data)object+=v.first+" "+v.second+"\n"; }
   object+="\nsection layout\n"+jcs(json::Value(std::move(layout)))+"\n";return object;
 }
+#include "ProductionGlobals.inc"
+#include "HostProcessArguments.inc"
+
 // Hash CC call SCCs only after the entire shared memory layout is fixed.
 #include "CCCalls.inc"
 std::string launchObject(Entry &e, json::Object &record,
@@ -2159,7 +2169,7 @@ std::string launchObject(Entry &e, json::Object &record,
     auto *services=devices.getAsObject()->getObject("services");
     if(!services) {(*devices.getAsObject())["services"]=json::Object{};services=devices.getAsObject()->getObject("services");}
     if(e.allocatorFaultService)(*services)["bennett.fault"]=json::Object{{"version","0.2.10"}};
-    if(e.argvService)(*services)["bennett.argv"]=json::Object{{"version","0.2.10"}};
+    if(e.argvService)declareArgumentService(*services,e.argvByteStorage);
     if(e.argvService) {
       auto *models=devices.getAsObject()->getObject("models");
       for(auto &model:e.effectModels)(*models)[model]=json::Object{{"version",producerISA()}};
@@ -2590,21 +2600,8 @@ void hostStub(Function &f, StringRef object, const json::Object &record, bool sh
   auto *id = b.CreateLoad(i64, run);
   status(b.CreateCall(api("bennett_wait", i32, {ptr, i64, ptr, ptr}),
                       {p, id, result, request}));
-  if(record.getString("mode")=="reversible") {
-    // §19.2's one launch request. Entries needing argv/envp byte storage
-    // require explicit byte marshalling, rather than passing host pointers.
-    auto *req=b.CreateLoad(ptr,request);require(b.CreateIsNotNull(req));
-    auto *service=b.CreateCall(api("bennett_request_service",ptr,{ptr}),{req});
-    auto *same=b.CreateCall(api("strcmp",i32,{ptr,ptr}),{service,string("bennett.argv")});require(b.CreateICmpEQ(same,b.getInt32(0)));
-    auto *replyType=ArrayType::get(b.getInt8Ty(),4+2*m.getDataLayout().getPointerSize());auto *reply=slot(replyType);
-    b.CreateStore(ConstantAggregateZero::get(replyType),reply);
-    Value *argc=f.arg_empty()?(Value *)b.getInt32(0):f.getArg(0);
-    if(!m.getDataLayout().isLittleEndian())argc=b.CreateCall(intrinsic(Intrinsic::bswap,{i32}),{argc});
-    b.CreateStore(argc,reply);
-    status(b.CreateCall(api("bennett_reply",i32,{ptr,i64,ptr,size}),{p,id,reply,ConstantInt::get(size,replyType->getNumElements())}));
-    b.CreateCall(api("bennett_request_free",b.getVoidTy(),{ptr}),{req});
-    status(b.CreateCall(api("bennett_wait",i32,{ptr,i64,ptr,ptr}),{p,id,result,request}));
-  }
+  if(record.getString("mode")=="reversible")
+    replyHostArguments(b,f,record,p,id,request,result);
   require(b.CreateIsNull(b.CreateLoad(ptr, request)));
   auto *res = b.CreateLoad(ptr, result);
   require(b.CreateIsNotNull(res));

@@ -1,4 +1,5 @@
 #include "Bennett.h"
+#include "NormalisationMetadata.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -93,7 +94,7 @@ static void normalisePrelude(Function &f, bool privateTransfer, unsigned vscale)
   for (Instruction &i : instructions(f)) {
     SmallVector<std::pair<unsigned,MDNode *>> md; i.getAllMetadataOtherThanDebugLoc(md);
     for (auto &m : md)
-      if(m.first!=f.getContext().getMDKindID("bennett.rstep") && m.first!=f.getContext().getMDKindID("bennett.n22.pack")) i.setMetadata(m.first,nullptr);
+      if(!retainedNormalisationMetadata(f.getContext(),m.first)) i.setMetadata(m.first,nullptr);
   }
   f.setAttributes(removeAttrs(f.getAttributes()));
   for (Instruction &i : instructions(f))
