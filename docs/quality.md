@@ -342,6 +342,9 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "src/ConstantOperands.h": {"complexity": 61, "functions": 2, "length_max": 21, "length_p50": 9, "length_p90": 21, "over_300": 0, "trivial_wrappers": 0},
+    "src/ConstantOperands.inc": {"complexity": 113, "functions": 3, "length_max": 29, "length_p50": 24, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},
+    "tests/constant_operands.py": {"complexity": 13, "functions": 1, "length_max": 69, "length_p50": 69, "length_p90": 69, "over_300": 0, "trivial_wrappers": 0},
     "src/HostProcessArguments.inc": {"complexity": 23, "functions": 7, "length_max": 33, "length_p50": 18, "length_p90": 33, "over_300": 0, "trivial_wrappers": 0},
     "src/RProcessArguments.inc": {"complexity": 31, "functions": 8, "length_max": 43, "length_p50": 6, "length_p90": 43, "over_300": 0, "trivial_wrappers": 2},
     "src/ProcessCallABI.inc": {"complexity": 34, "functions": 4, "length_max": 10, "length_p50": 5, "length_p90": 10, "over_300": 0, "trivial_wrappers": 1},
