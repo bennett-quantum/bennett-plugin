@@ -468,3 +468,106 @@ so it would not block j3l. No result is claimed. **[measured]**
 **Next (unchanged).** Run the shared values + slots build on the full 18/N16 cell at 9 GiB, under the lock, once
 admission can read the Claude quota again. Compare worklist pops at the kill with 159,608 (baseline) and 159,713
 (shared slots only). The `.tmp` build and runner are ready: `full/run2.sh cowv` under `flock`.
+
+## Finding 6b — full 18/N16 cell with shared value + slot sets: the memory wall is gone; the next wall is one U × U pointer subtraction
+
+**Run.** Same input, argv, lock and 9 GiB `systemd-run` cap as finding 5. Admission used the resources-only
+`admit.py gate --repo …` check, which said ADMIT at 15:20Z. The build is finding 6's prototype: shared value, field
+and slot sets. **[measured]**
+
+| build | end | peak RSS | worklist pops at end (round 0) | analysis CPU |
+|---|---|---|---|---|
+| baseline (main-equivalent) | OOM at 9 GiB | 9.0 GB | 159,608 | ~401 s |
+| shared slot sets | OOM at 9 GiB | 9.0 GB | 159,713 | ~448 s |
+| **shared value + slot sets** | **exit 1, compiler diagnostic, no OOM** | **5.27 GB** | **159,970** | **2,310 s** |
+
+- **Memory.** At the same worklist pop (159,313) the heap is 3.1 GB, against 7.3 GB with shared slots only.
+  At the end, 60.6M logical value atoms are held in 11.4M unique set atoms. Of 10,170 large value sets, 890 are
+  distinct. **[measured]**
+- **The diagnostic.** `§5.2 PT4/PT5 budget exhausted at AV(%349) in @sqlite3WalCheckpoint …
+  %349 = sub i64 %347, %348`.
+  - Its operands (`%342 phi`, `%348 ptrtoint`) each hold **314,820 pointer atoms over 418 objects**, which is
+    U doubled.
+  - A pointer − pointer `sub` over two such sets is a U × U product. This is the site j3l counted at 175.8G
+    pointer pairs on 2026-11-09.
+  - The allowance was 1,500 s, but the stop came at 2,310 s: no budget tick fires inside that loop. j3l has
+    already reported allowance overshoot in these loops. **[measured]**
+
+**What it suggests.**
+
+1. Sharing identical sets is exact (findings 4 and 6) and removes the full-cell memory wall: 9 GiB OOM becomes a
+   5.3 GB peak.
+2. The binding cost is now **CPU in a single transfer whose operands are U-sized**. Sharing cannot fix that,
+   because the transfer still enumerates atoms pairwise.
+3. That transfer needs U handled symbolically: as one object set × one offset set, or as "U − U = every
+   difference of offsets per object pair". This is the factored representation's job, or an exact closed form
+   for pointer differences over shared sets.
+4. Separately, the missing budget tick in that loop is a small bug of its own: the clock should fire inside the
+   pair enumeration.
+
+**[conjecture on the remedies]**
+
+## Finding 7 — counter crawl (mechanism A): exact acceleration removes it where the shape matches; a changed-only worklist would not
+
+**Change (throwaway `.tmp` prototype, only in `Analysis.cpp`'s PHI transfer).** For an integer phi p, walk back
+through copy edges (phi, select, freeze) to every `add` or `sub` whose operand derives from p and whose step does
+not. D is the union of their non-zero finite INT steps. The orbit of each INT seed under +D is
+seed + 2^{tz(gcd D)}·Z/2^W:
+
+- if that orbit has more than K = 4,096 elements, p is ⊤;
+- otherwise the prototype enumerates it, as the existing direct-phi closure already does.
+
+Every element added belongs to the least fixpoint, so the result is the same fixpoint. Today's code covers only a
+direct `p = phi(…, p + step)` and constant steps along longer paths (`longAdditiveCycle`). **[source]**
+
+**Results. [measured]** Single functions, 300 s cap; baselines that did not finish were re-run with a 1,500 s cap.
+SQLite functions use production budgets; resolvconf uses the census budgets.
+
+| function | baseline: rounds / CPU | accelerated: rounds / CPU | report |
+|---|---|---|---|
+| musl `__get_resolv_conf` (resolvconf.c) | 4,098 / 77.8 s | **3 / 0.004 s** | identical (135 values) |
+| sqlite exprNodePatternLengthEst | 4,098 / 135.0 s | **3 / 0.14 s** | identical (39) |
+| sqlite convertToWithoutRowidTable | 4,098 / 350.4 s | **3 / 0.38 s** | identical (614) |
+| sqlite wherePathSolver | 4,098 / 595.1 s | **66 / 10.4 s** | identical (787) |
+| sqlite jsonGroupInverse | 2,050 / 73.3 s | 2,050 / 75.1 s (not matched) | identical (52) |
+| sqlite checkTreePage, sqlite3FindInIndex | over 300 s | over 300 s (not matched) | — |
+
+**musl corpus with the accelerated build.**
+
+- 1,306 of 1,306 passing units identical at set level. The only report change is the `analysis_rounds` counter,
+  for example towctrans 6 → 3.
+- Three units that used to exhaust 30 s now pass:
+
+  | unit | before | after |
+  |---|---|---|
+  | resolvconf | 2,885 rounds, 30 s | 3 rounds, 2 ms |
+  | vfscanf | 2,658 rounds, 30 s | 4 rounds, 66 ms |
+  | vfwscanf | 2,545 rounds, 30 s | 3 rounds, 52 ms |
+
+- random (crawl through memory slots), floatscan, iconv and qsort (mechanism B) are unchanged.
+
+**Why some are not matched (read from IR).** jsonGroupInverse runs two adds in series: `%45 = %26 + zext(i1)`,
+`%48 = %45 + sext(i1)`. The cycle step is the sum-set D₁ + D₂ = {−1, 0, 1}. An exact extension must take the gcd
+of the sum-set, not of the union: for D₁ = D₂ = {1} the step set is {2}, not {1}. checkTreePage and
+sqlite3FindInIndex are not yet characterised. **[source; conjecture for the last two]**
+
+**Iteration strategy versus acceleration.**
+
+- From the probe's per-round changed-step counts on the baselines: a changed-only worklist would re-run about
+  changed + SSA-user steps per round. That would cut re-steps 4–84× per unit: resolvconf 803k → 107k (7.5×),
+  sqlite3FindInIndex 2.65M → 32k (84×).
+- It would still make about 4,096 trips round each cycle over growing sets, about K²/2 atom operations per
+  value. In the whole program the same crawl currently re-steps all about 285k instructions per round, which is
+  where the worklist would matter most.
+- Exact acceleration removes the trips altogether. So: the strategy explains the whole-module multiplier, and
+  only acceleration removes the K² crawl.
+- Caveat: the user count includes SSA users only, not memory dependents, so it is a lower bound on worklist work.
+
+**[measured counts; extrapolation is conjecture]**
+
+**Next.**
+
+- For mechanism A: extend the closure to add chains (gcd over the sum-set) and to cycles through one memory slot,
+  as in random.c. Then re-run all 16 SQLite crawlers.
+- For the full cell, now CPU-bound: a closed form for pointer − pointer over shared sets, plus a budget tick in
+  that loop. Then re-run 18/N16 to find the next stop.
