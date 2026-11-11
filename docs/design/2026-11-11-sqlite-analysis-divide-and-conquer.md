@@ -774,3 +774,71 @@ U is unchanged: 314,822 atoms over 420 objects and 1,795 offsets, carried by man
 - Factor the exact-slot side too: one interval test per slot against O.
 - Re-run the 100-function closure for exactness, then the full 18/N16 cell. Measure how far round 0 gets and
   whether the merge-side costs then dominate.
+
+## Finding 11 — exact-slot loads factored too: exact and deterministic, but round-0 CPU does not move; loads are not where the time goes
+
+**Change (throwaway `.tmp` prototype, on top of finding 10).** For exact addresses with more than 16 offsets in an
+object, each **exact** slot is now tested once against the sorted offset set O. A binary search gives the count of
+overlapping offsets. For an exact atom and an exact slot, `classifyLoad` reduces to:
+
+- whole iff `size == bytes` and the slot's offset is in O;
+- partial iff some other offset overlaps.
+
+Smaller offset sets keep the per-offset window. The probe now counts exact-window, exact-sweep and family tests
+separately. Kept binary: `bins/cowvpf2-e2b78b8a0351`; baseline `bins/base-ad229db0d3c9`. **[source]**
+
+**Determinism, as the maintainer asked.**
+
+- Run 3× on the 100-function closure, finding 10's patch reproduced the bimodal *value* digest. One run in three,
+  and one in six with value dumps, gave the alternative values (…117121, …473121, …536063). Those were the same
+  values as finding 10's first binary.
+- Yet the complete per-value dumps of the divergent run, with stable ids and all atom fields, were identical line
+  for line to a normal run at rounds 1–2. The work counters were identical in every run.
+- Cause: my probe digest hashed each AV's atoms in `std::set` order. `Atom::operator<` orders atoms by
+  **object pointer value**, so that order depends on heap layout. The digest artifact is mine; it does not show
+  nondeterminism in the analysis.
+- With the per-atom hashes summed instead (order-independent), five runs of this binary equal a freshly
+  re-measured baseline at all 6 round ends, for values, slots and fields alike. Reports are identical.
+- Remaining caveat: atom **print order** in reports also follows pointer order. That is why raw report text was
+  never compared, only sets.
+
+**[measured]**
+
+**Exactness. [measured]**
+
+- musl: 1,306 of 1,306 identical at set level.
+- SetTextEncoding −crawl 100: report and all round digests identical in 5 of 5 runs, at 61 s CPU against the
+  baseline's 178 s in this host state.
+- Load tests on that closure: 13k window + 4.6M sweep + 0.7M family.
+
+**Full 18/N16 cell** (lock, 9 GiB systemd cap, resources-only admission at 18:29Z). **[measured]**
+
+| build | worklist pops (round 0) at the allowance | CPU when reaching pop 161,584 | plugin `load_slot_tests` | AV merges | containment tests | merge-family visits |
+|---|---|---|---|---|---|---|
+| shared sets + INT-suffix fix (finding 8) | 162,188 | 854 s | 3.32 billion | 50.8M | 883M | 267M |
+| + factored family slots (finding 10) | 162,278 | 858 s | 2.54 billion | 60.6M | 560M | 353M |
+| + factored exact slots (this finding) | **162,278** | **870 s** | 2.55 billion | 60.6M | 533M | 324M |
+
+- The stop is unchanged: PT6 `%628` in btreeBeginTrans at 1,574 s analysis CPU. Peak RSS 6.97 GB.
+- The probe's own counters for the factored exact-address path total only **45M** tests: window 0.25M, sweep
+  29.8M, family 15.4M.
+- The other about 2.5 billion `load_slot_tests` therefore come from the atoms that still take the per-atom path.
+  Those are **non-exact atoms** (`(X, *)` or residue), which test every slot of their object, plus
+  constant-global integer loads. `overlappingSlots` has no other caller.
+
+**What it suggests.**
+
+1. In this part of round 0 the CPU does not go into load slot scans. Removing about 98% of exact-address slot
+   tests left the time to pop 161,584 unchanged within noise (854 / 858 / 870 s).
+2. The cost must be elsewhere. The leading suspects are by count: `AV::merge` on U-sized sets (533M containment
+   tests, 324M family visits, 60.6M merges, 38M joins in btreeBeginTrans alone) and the per-atom loads of
+   `(X, *)` atoms.
+3. Counters cannot rank CPU time. `perf` is not installed and ptrace attach is blocked on this host.
+4. I stop the load-path line here. Each change was exact but did not move the frontier.
+
+**[measured; ranking is conjecture]**
+
+**Next.** Measure where round-0 CPU actually goes before building anything else. Add per-rule and per-function
+thread-CPU accumulators to the probe, plus time spent inside `AV::merge` and inside the per-atom load path, using
+`clock_gettime` around `step()` and those two calls. Run the 100-function closure 3× for determinism, then the
+full 18/N16 cell. That ranks merge, loads of `(X, *)` atoms, PT9 binding and the integer transfers by seconds.
