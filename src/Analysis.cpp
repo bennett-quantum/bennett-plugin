@@ -1,5 +1,6 @@
 #include "Bennett.h"
 #include "AnalysisBudgetClock.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
@@ -24,6 +25,7 @@
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 #include <numeric>
 #include <cstdlib>
+#include <memory>
 #include "llvm/Support/CommandLine.h"
 #include <tuple>
 using namespace llvm;
@@ -33,6 +35,11 @@ namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
     cl::desc("S2 thread CPU allowance in milliseconds; source/ISA budgets are independent"));
+static bool sameAV(const AV &a, const AV &b) {
+  return a.top == b.top && a.atoms.size() == b.atoms.size() &&
+         std::equal(a.atoms.begin(), a.atoms.end(), b.atoms.begin(),
+                    [](const Atom &x, const Atom &y) { return !(x < y) && !(y < x); });
+}
 struct AnalysisWork {
   static constexpr size_t TopFunctionLimit = 10;
   uint64_t transferApplications = 0;
@@ -42,11 +49,36 @@ struct AnalysisWork {
   uint64_t roundsCompleted = 0;
   uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
   uint64_t functionVisits = 0;
+  struct MemoryWork {
+    uint64_t loadAddresses = 0, loadSlotTests = 0, loadImageHits = 0, loadImageMisses = 0;
+    uint64_t loadImageComputations = 0, loadSignatureHits = 0, loadImageUnionSkips = 0;
+    uint64_t loadByteSlotTests = 0;
+    uint64_t loadImageInternHits = 0;
+    uint64_t pointerContainmentTests = 0;
+    uint64_t pointerBinaryPairs = 0, pointerBinaryAtoms = 0, pointerBinarySkippedPairs = 0;
+    uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
+    uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
+    json::Object report() const {
+      return json::Object{{"load_addresses", loadAddresses}, {"load_slot_tests", loadSlotTests},
+              {"load_image_hits", loadImageHits}, {"load_image_misses", loadImageMisses},
+              {"load_image_computations", loadImageComputations},
+              {"load_signature_hits", loadSignatureHits}, {"load_image_union_skips", loadImageUnionSkips},
+              {"load_byte_slot_tests", loadByteSlotTests},
+              {"load_image_intern_hits", loadImageInternHits},
+              {"pointer_containment_tests", pointerContainmentTests},
+              {"pointer_binary_pairs", pointerBinaryPairs}, {"pointer_binary_atoms", pointerBinaryAtoms},
+              {"pointer_binary_skipped_pairs", pointerBinarySkippedPairs},
+              {"compactions", compactions}, {"compact_slots", compactSlots},
+              {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
+              {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
+    }
+  } memory;
   struct FunctionVisits {
     std::string name;
     uint64_t visits = 0;
     uint64_t rounds = 0, dispatches = 0, transfers = 0;
     uint64_t avMerges = 0, fieldJoins = 0, slotJoins = 0;
+    MemoryWork memory;
   };
   std::vector<FunctionVisits> functions;
   FunctionVisits *currentFunction = nullptr;
@@ -70,7 +102,8 @@ struct AnalysisWork {
     for (const auto &f : functions)
       perFunction[f.name] = json::Object{{"rounds_completed", f.rounds},
           {"worklist_pops", f.dispatches}, {"transfer_applications", f.transfers},
-          {"join_count", f.avMerges + f.fieldJoins + f.slotJoins}};
+          {"join_count", f.avMerges + f.fieldJoins + f.slotJoins},
+          {"memory", f.memory.report()}};
     json::Object top;
     for (size_t n = 0; n < std::min(TopFunctionLimit, ranked.size()); ++n)
       top[ranked[n]->name] = ranked[n]->visits;
@@ -86,6 +119,7 @@ struct AnalysisWork {
             {"join_count", avMerges + fieldJoins + slotJoins},
             {"av_merges", avMerges}, {"field_joins", fieldJoins},
             {"slot_joins", slotJoins},
+            {"memory", memory.report()},
             {"function_visits", json::Object{{"total", functionVisits},
                 {"top_limit", TopFunctionLimit}, {"top", std::move(top)}}},
             {"per_function", std::move(perFunction)}, {"cpu_ms", std::move(cpu)}};
@@ -105,7 +139,17 @@ struct AnalysisBudget {
   AnalysisWork work;
   // PT6 images depend on one object's slots and the accessed representation.
   // Every growing PT7 fact invalidates that object's cached images.
-  std::map<const Value *, std::map<std::pair<Atom, Type *>, AV>> loadImages;
+  using LoadPartKey = std::tuple<int64_t, int64_t, uint64_t, bool, bool, unsigned>;
+  using LoadSignature = std::tuple<Type *, std::vector<LoadPartKey>, std::optional<int64_t>>;
+  using LoadImage = std::shared_ptr<const AV>;
+  std::map<const Value *, std::map<std::pair<Atom, Type *>, LoadImage>> loadImages;
+  std::map<const Value *, std::map<LoadSignature, LoadImage>> loadSignatures;
+  std::map<size_t, SmallVector<std::weak_ptr<const AV>, 4>> loadImagePool;
+  LoadImage internLoadImage(AV image);
+  void invalidateLoadImages(const Value *object) {
+    loadImages.erase(object);
+    loadSignatures.erase(object);
+  }
   const Analysis *owner;
   std::string reportPath;
   const Instruction *at=nullptr;
@@ -191,6 +235,34 @@ struct AnalysisBudget {
 };
 thread_local AnalysisBudget *activeBudget=nullptr;
 void budgetTick() {if(activeBudget)activeBudget->check();}
+void memoryWork(uint64_t AnalysisWork::MemoryWork::*counter, uint64_t count = 1) {
+  if (!activeBudget) return;
+  activeBudget->work.memory.*counter += count;
+  if (auto *f = activeBudget->work.currentFunction) f->memory.*counter += count;
+}
+AnalysisBudget::LoadImage AnalysisBudget::internLoadImage(AV image) {
+  auto hash = hash_combine(image.top, image.atoms.size());
+  for (const auto &a : image.atoms) {
+    budgetTick();
+    hash = hash_combine(hash, a.kind, a.object, a.offset, a.stride,
+                        a.integer.getBitWidth(), a.integer, a.numerical);
+  }
+  auto &bucket = loadImagePool[static_cast<size_t>(hash)];
+  for (auto it = bucket.begin(); it != bucket.end();) {
+    if (auto prior = it->lock()) {
+      // The hash selects candidates only. Full AV equality is required,
+      // including integer widths, numerical provenance and explicit ROOTs.
+      if (sameAV(*prior, image)) {
+        memoryWork(&AnalysisWork::MemoryWork::loadImageInternHits);
+        return prior;
+      }
+      ++it;
+    } else it = bucket.erase(it);
+  }
+  auto result = std::make_shared<const AV>(std::move(image));
+  bucket.push_back(result);
+  return result;
+}
 struct BudgetScope {
   AnalysisBudget budget;
   AnalysisBudget *previous=activeBudget;
@@ -225,6 +297,9 @@ static AV integer(APInt n) {
 bool Atom::operator<(const Atom &b) const {
   if(kind!=b.kind)return kind<b.kind;
   if(object!=b.object)return std::less<const Value *>{}(object,b.object);
+  // Keep exact pointers contiguous so union can skip them when indexing
+  // residue families. This is a set order, never an abstract-value widening.
+  if(kind==Atom::Ptr && stride!=b.stride)return stride<b.stride;
   if(offset!=b.offset)return offset<b.offset;
   if(stride!=b.stride)return stride<b.stride;
   if(integer.getBitWidth()!=b.integer.getBitWidth())return integer.getBitWidth()<b.integer.getBitWidth();
@@ -242,12 +317,15 @@ static void canonicalOffset(int64_t &offset, int64_t &stride) {
 }
 static bool offsetContains(int64_t outerOffset, int64_t outerStride,
                            int64_t innerOffset, int64_t innerStride) {
+  budgetTick();
   if (outerStride == -1) return true;
   if (!outerStride) return !innerStride && outerOffset == innerOffset;
   return innerStride != -1 && innerStride % outerStride == 0 &&
          residue(innerOffset, outerStride) == residue(outerOffset, outerStride);
 }
 static bool pointerContains(const Atom &outer, const Atom &inner) {
+  budgetTick();
+  memoryWork(&AnalysisWork::MemoryWork::pointerContainmentTests);
   return outer.kind == Atom::Ptr && inner.kind == Atom::Ptr &&
          outer.object == inner.object && outer.numerical == inner.numerical &&
          outer.integer == inner.integer &&
@@ -255,12 +333,55 @@ static bool pointerContains(const Atom &outer, const Atom &inner) {
 }
 static bool contains(const AV &outer, const AV &inner) {
   if (inner.top && !outer.top) return false;
+  // Reject missing explicit non-pointer alternatives before checking a large
+  // pointer set. TOP absorbs integers, never a missing ROOT or FN.
+  for (auto it = inner.atoms.rbegin(); it != inner.atoms.rend() && it->kind != Atom::Ptr; ++it) {
+    budgetTick();
+    if (it->kind == Atom::Int && outer.top) continue;
+    if (!outer.atoms.count(*it)) return false;
+  }
+  SmallVector<const Atom *, 4> families;
+  const Value *familyObject = nullptr;
+  bool indexed = false;
   for (const auto &a : inner.atoms) {
-    if ((a.kind == Atom::Int && outer.top) || outer.atoms.count(a)) continue;
-    if (!llvm::any_of(outer.atoms, [&](const Atom &b) { return pointerContains(b, a); }))
+    if (a.kind != Atom::Ptr) break;
+    budgetTick();
+    if (outer.atoms.count(a)) continue;
+    if (!indexed || familyObject != a.object) {
+      families.clear();
+      Atom first{Atom::Ptr,a.object,INT64_MIN,INT64_MIN,APInt(1,0)};
+      for (auto it = outer.atoms.lower_bound(first);
+           it != outer.atoms.end() && it->kind == Atom::Ptr && it->object == a.object;) {
+        budgetTick();
+        if (!it->stride) {
+          auto afterExact = first;
+          afterExact.stride = 1;
+          it = outer.atoms.lower_bound(afterExact);
+        } else families.push_back(&*it++);
+      }
+      familyObject = a.object;
+      indexed = true;
+    }
+    if (!llvm::any_of(families, [&](const Atom *b) { return pointerContains(*b, a); }))
       return false;
   }
   return true;
+}
+static std::optional<AV> coverageRequirement(const AV &value) {
+  auto sameOrigin = [](const Atom &a, const Atom &b) {
+    return a.kind == Atom::Ptr && b.kind == Atom::Ptr && a.object == b.object &&
+           a.numerical == b.numerical && a.integer.getBitWidth() == b.integer.getBitWidth() &&
+           a.integer == b.integer;
+  };
+  if (std::adjacent_find(value.atoms.begin(), value.atoms.end(), sameOrigin) == value.atoms.end())
+    return std::nullopt;
+  AV requirement; requirement.top = value.top;
+  for (auto a : value.atoms) {
+    budgetTick();
+    if (a.kind == Atom::Ptr) { a.offset = 0; a.stride = -1; }
+    requirement.atoms.insert(requirement.atoms.end(), std::move(a));
+  }
+  return requirement;
 }
 bool AV::merge(const AV &v) {
   if (activeBudget) {
@@ -277,24 +398,40 @@ bool AV::merge(const AV &v) {
   bool insertedInteger=false;
   SmallVector<Atom, 4> families;
   bool indexedFamilies = false;
+  const Value *familyObject = nullptr;
   for (auto a : v.atoms) {
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
       canonicalOffset(a.offset, a.stride);
       if (atoms.count(a)) continue;
-      // Distinct singleton addresses cannot contain one another. Index just
-      // the families once per union, instead of rescanning every exact member
-      // for every incoming pointer (large finite memcpy address products).
-      if (!indexedFamilies) {
-        for (const auto &b : atoms)
-          if (b.kind == Atom::Ptr && b.stride) families.push_back(b);
+      Atom first{Atom::Ptr,a.object,INT64_MIN,INT64_MIN,APInt(1,0)};
+      // Only families of this object can contain this pointer. Incoming atoms
+      // are grouped by object, so reuse that object's index throughout the
+      // union instead of rescanning pointers of every other object.
+      if (!indexedFamilies || familyObject != a.object) {
+        families.clear();
+        for (auto it = atoms.lower_bound(first);
+             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object;) {
+          memoryWork(&AnalysisWork::MemoryWork::mergeFamilyVisits);
+          if (!it->stride) {
+            auto afterExact = first;
+            afterExact.stride = 1;
+            it = atoms.lower_bound(afterExact);
+            continue;
+          }
+          const auto &b = *it;
+          families.push_back(b);
+          ++it;
+        }
+        familyObject = a.object;
         indexedFamilies = true;
       }
       if (llvm::any_of(families, [&](const Atom &b) { return pointerContains(b, a); }))
         continue;
       // A proven coset absorbs exactly its members, with provenance intact.
       if (a.stride) {
-        for (auto it = atoms.begin(); it != atoms.end();)
+        for (auto it = atoms.lower_bound(first);
+             it != atoms.end() && it->kind == Atom::Ptr && it->object == a.object;)
           if (pointerContains(a, *it)) it = atoms.erase(it);
           else ++it;
         llvm::erase_if(families, [&](const Atom &b) { return pointerContains(a, b); });
@@ -314,11 +451,14 @@ bool AV::merge(const AV &v) {
     change = true;
   }
   if (top)
-    for (auto i = atoms.begin(); i != atoms.end();)
-      if (i->kind == Atom::Int)
-        i = atoms.erase(i);
-      else
-        ++i;
+    while (!atoms.empty()) {
+      auto i = std::prev(atoms.end());
+      memoryWork(&AnalysisWork::MemoryWork::mergeTopVisits);
+      // Atom kinds are ordered and INT is last. TOP absorbs just this suffix,
+      // retaining every explicit pointer, function and ROOT alternative.
+      if (i->kind != Atom::Int) break;
+      atoms.erase(i);
+    }
   return change;
 }
 bool AV::roots() const {
@@ -840,7 +980,7 @@ void Analysis::indexSlot(size_t n) {
 }
 std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   std::vector<size_t> result;
-  auto test=[&](size_t n) {budgetTick();if(overlaps(a,slots[n],bytes))result.push_back(n);};
+  auto test=[&](size_t n) {budgetTick();memoryWork(&AnalysisWork::MemoryWork::loadSlotTests);if(overlaps(a,slots[n],bytes))result.push_back(n);};
   if(auto it=otherSlots.find(a.object);it!=otherSlots.end())for(auto n:it->second)test(n);
   if(auto it=exactSlots.find(a.object);it!=exactSlots.end()) {
     auto &byOffset=it->second;
@@ -854,7 +994,20 @@ std::vector<size_t> Analysis::overlappingSlots(const Atom &a,uint64_t bytes) {
   return result;
 }
 void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
-  bool compact = false;
+  std::set<const Value *> compactObjects;
+  std::optional<AV> coverage;
+  bool hasFamilies = !filled && llvm::any_of(p.atoms, [&](const Atom &a) {
+    if (a.kind != Atom::Ptr) return false;
+    auto found = otherSlots.find(a.object);
+    return found != otherSlots.end() && !found->second.empty();
+  });
+  if (hasFamilies) coverage = coverageRequirement(v);
+  auto coversWrittenValue = [&](const AV &prior) {
+    // Covering all offsets of each origin proves coverage of these offsets.
+    // This superset is only a proof requirement, never stored or propagated.
+    // A failed proof still uses the exact test (notably for stride families).
+    return (coverage && contains(prior, *coverage)) || contains(prior, v);
+  };
   for (auto a : p.atoms)
     if (a.kind == Atom::Ptr) {
       if (activeBudget) {
@@ -872,7 +1025,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             if(size>s.bytes) {
               slotIndex.erase(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical});
               s.bytes=size;slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);changed=true;
-              if (activeBudget) activeBudget->loadImages.erase(a.object);
+              if (activeBudget) activeBudget->invalidateLoadImages(a.object);
             }
             found=true;break;
           }
@@ -886,7 +1039,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
             const auto &s = slots[n];
             return !s.filled && s.bytes == size && s.numerical == a.numerical &&
                    offsetContains(s.offset, s.stride, a.offset, a.stride) &&
-                   contains(s.value, v);
+                   coversWrittenValue(s.value);
           })) continue;
       SlotKey key{a.object,a.offset,a.stride,size,filled,a.numerical};
       auto [it,inserted]=slotIndex.emplace(key,slots.size());
@@ -894,19 +1047,55 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
         slots.push_back({a.object,a.offset,a.stride,size,v,filled,a.numerical});
         indexSlot(it->second);
         changed=true;
-        if (activeBudget) activeBudget->loadImages.erase(a.object);
+        if (activeBudget) activeBudget->invalidateLoadImages(a.object);
       } else if (slots[it->second].value.merge(v)) {
         changed = true;
-        if (activeBudget) activeBudget->loadImages.erase(a.object);
+        if (activeBudget) activeBudget->invalidateLoadImages(a.object);
       }
-      compact |= !filled && a.stride != 0;
+      if (!filled && a.stride) compactObjects.insert(a.object);
     }
-  if (compact) {
+  // Delete a redundant fact by moving the last slot into its place. Repair
+  // only those two index entries; unrelated objects and their AVs stay put.
+  auto positions = [&](const Slot &s) -> std::vector<size_t> & {
+    return !s.stride && !s.filled ? exactSlots.at(s.object).at(s.offset)
+                                 : otherSlots.at(s.object);
+  };
+  auto key = [](const Slot &s) {
+    return SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical};
+  };
+  auto eraseSlot = [&](size_t n) {
+    auto &s = slots[n];
+    slotIndex.erase(key(s));
+    auto &old = positions(s);
+    auto entry = llvm::find(old, n);
+    assert(entry != old.end());
+    old.erase(entry);
+    size_t last = slots.size() - 1;
+    if (n != last) {
+      auto &moved = slots[last];
+      auto &indices = positions(moved);
+      auto entry = llvm::find(indices, last);
+      assert(entry != indices.end());
+      *entry = n;
+      slotIndex.at(key(moved)) = n;
+      slots[n] = std::move(moved);
+      memoryWork(&AnalysisWork::MemoryWork::reindexedSlots);
+    }
+    slots.pop_back();
+  };
+  for (auto *object : compactObjects) {
+    memoryWork(&AnalysisWork::MemoryWork::compactions);
     // Keep initial byte images and representation widths separate. Remove an
     // old slot only when the whole interval/value fact is represented by a
-    // family, then rebuild the positional indices after the vector compacts.
-    std::vector<Slot> retained;
-    for (size_t n = 0; n < slots.size(); ++n) {
+    // family. Snapshot keys, since swap removal changes positional indices.
+    std::vector<SlotKey> candidates;
+    for (auto n : otherSlots[object]) candidates.push_back(key(slots[n]));
+    for (auto &entry : exactSlots[object])
+      for (auto n : entry.second) candidates.push_back(key(slots[n]));
+    for (auto &candidate : candidates) {
+      budgetTick();
+      memoryWork(&AnalysisWork::MemoryWork::compactSlots);
+      size_t n = slotIndex.at(candidate);
       const auto &s = slots[n];
       bool covered = !s.filled && llvm::any_of(otherSlots[s.object], [&](size_t m) {
         const auto &family = slots[m];
@@ -915,16 +1104,7 @@ void Analysis::store(const AV &v, const AV &p, uint64_t size, bool filled) {
                offsetContains(family.offset, family.stride, s.offset, s.stride) &&
                contains(family.value, s.value);
       });
-      if (!covered) retained.push_back(s);
-    }
-    if (retained.size() != slots.size()) {
-      slots = std::move(retained);
-      slotIndex.clear(); exactSlots.clear(); otherSlots.clear(); maxSlotBytes.clear();
-      for (size_t n = 0; n < slots.size(); ++n) {
-        const auto &s = slots[n];
-        slotIndex.emplace(SlotKey{s.object,s.offset,s.stride,s.bytes,s.filled,s.numerical},n);
-        indexSlot(n);
-      }
+      if (covered) eraseSlot(n);
     }
   }
 }
@@ -995,25 +1175,44 @@ AV Analysis::readAt(CallBase &call, Value *base, uint64_t offset, Type *type) {
   }
   return read(base,offset,type);
 }
+enum LoadPart { WholeValue = 1, PartialValue = 2, RepeatedBytes = 4 };
+static unsigned classifyLoad(const Atom &a, const Slot &s, uint64_t size, Type *t) {
+  if (s.filled && !a.stride && !s.stride && a.offset >= s.offset &&
+      (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
+      (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy()))
+    return RepeatedBytes;
+  int64_t spacing = std::gcd(a.stride, s.stride);
+  __int128 difference = (__int128)a.offset - s.offset;
+  bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
+  bool whole = size == s.bytes && sameStart;
+  bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
+  return (whole ? WholeValue : 0) | (onlyWhole ? 0 : PartialValue);
+}
 AV Analysis::load(const AV &p, Type *t) {
   AV r;
+  std::set<const AV *> joinedImages;
   uint64_t size = M.getDataLayout().getTypeStoreSize(t).getKnownMinValue();
   r.top = p.top;
   for (auto &a : p.atoms)
     if (a.kind == Atom::Ptr) {
+      memoryWork(&AnalysisWork::MemoryWork::loadAddresses);
       if (!a.object) {
         r.top = true;
         continue;
       }
-      auto image = [&]() {
+      auto classify = [&]() {
+        std::vector<std::pair<size_t, unsigned>> parts;
+        for (auto n : overlappingSlots(a, size))
+          parts.emplace_back(n, classifyLoad(a, slots[n], size, t));
+        return parts;
+      };
+      auto image = [&](ArrayRef<std::pair<size_t, unsigned>> parts) {
+        memoryWork(&AnalysisWork::MemoryWork::loadImageComputations);
         AV r;
         bool partial = false;
-        for (size_t n:overlappingSlots(a,size)) {
+        for (auto [n, classification] : parts) {
             auto &s=slots[n];
-            if (s.filled && a.stride == 0 && s.stride == 0 &&
-                a.offset >= s.offset &&
-                (__int128)a.offset + size <= (__int128)s.offset + s.bytes &&
-                (t->isIntegerTy() || t->isPointerTy() || t->isFloatingPointTy())) {
+            if (classification == RepeatedBytes) {
               AV decoded;
               decoded.top = s.value.top;
               for (auto &x : s.value.atoms)
@@ -1029,13 +1228,8 @@ AV Analysis::load(const AV &p, Type *t) {
             // A family can have both identical-interval and partial-overlap
             // members. PT6 retains the whole FN/ROOT/pointer alternatives from
             // the former even when the latter also contribute non-handle TOP.
-            int64_t spacing = std::gcd(a.stride, s.stride);
-            __int128 difference = (__int128)a.offset - s.offset;
-            bool sameStart = spacing ? difference % spacing == 0 : difference == 0;
-            bool whole = size == s.bytes && sameStart;
-            bool onlyWhole = whole && (!spacing || uint64_t(spacing) >= size);
-            if (whole) r.merge(s.value);
-            if (!onlyWhole) {
+            if (classification & WholeValue) r.merge(s.value);
+            if (classification & PartialValue) {
               partial = true;
               for (auto &b : s.value.atoms)
                 if (b.kind == Atom::Root)
@@ -1045,11 +1239,21 @@ AV Analysis::load(const AV &p, Type *t) {
         // Immutable initialiser bytes reconstruct whole integer loads exactly.
         if (auto *g = dyn_cast<GlobalVariable>(a.object);
             g && g->isConstant() && t->isIntegerTy() && a.stride == 0) {
+          SmallVector<size_t, 4> byteSlots;
+          for (auto [n, classification] : parts)
+            if (!slots[n].stride) byteSlots.push_back(n);
+          // Any slot covering a requested byte overlaps the load interval.
+          // Preserve the original first-match order while excluding unrelated
+          // objects and intervals, including entirely out-of-object reads.
+          llvm::sort(byteSlots);
           APInt bits(t->getIntegerBitWidth(), 0);
           bool known = true;
           for (unsigned b = 0; b < size; ++b) {
             bool found = false;
-            for (auto &s : slots)
+            for (auto n : byteSlots) {
+              memoryWork(&AnalysisWork::MemoryWork::loadByteSlotTests);
+              budgetTick();
+              const auto &s = slots[n];
               if (s.object == a.object && s.stride == 0 &&
                   s.offset <= a.offset + b &&
                   a.offset + b < s.offset + (int64_t)s.bytes &&
@@ -1069,6 +1273,7 @@ AV Analysis::load(const AV &p, Type *t) {
                 found = true;
                 break;
               }
+            }
             known &= found;
           }
           if (known) {
@@ -1084,9 +1289,37 @@ AV Analysis::load(const AV &p, Type *t) {
         auto &images = activeBudget->loadImages[a.object];
         auto key = std::make_pair(a, t);
         auto found = images.find(key);
-        if (found == images.end()) found = images.emplace(key, image()).first;
-        r.merge(found->second);
-      } else r.merge(image());
+        if (found == images.end()) {
+          memoryWork(&AnalysisWork::MemoryWork::loadImageMisses);
+          auto parts = classify();
+          std::vector<AnalysisBudget::LoadPartKey> keys;
+          for (auto [n, classification] : parts) {
+            auto &s = slots[n];
+            keys.emplace_back(s.offset, s.stride, s.bytes, s.filled, s.numerical, classification);
+          }
+          llvm::sort(keys);
+          // PT6 depends on the slot facts and their interval classifications.
+          // Immutable integer reconstruction additionally reads exact bytes.
+          // Stable keys survive unrelated slot swaps; every growing write to
+          // this object invalidates both address and transfer-image caches.
+          std::optional<int64_t> byteOffset;
+          if (auto *g = dyn_cast<GlobalVariable>(a.object);
+              g && g->isConstant() && t->isIntegerTy() && !a.stride)
+            byteOffset = a.offset;
+          auto signature = std::make_tuple(t, std::move(keys), byteOffset);
+          auto &memo = activeBudget->loadSignatures[a.object];
+          auto prior = memo.find(signature);
+          if (prior == memo.end())
+            prior = memo.emplace(std::move(signature),
+                                 activeBudget->internLoadImage(image(parts))).first;
+          else memoryWork(&AnalysisWork::MemoryWork::loadSignatureHits);
+          found = images.emplace(key, prior->second).first;
+        } else memoryWork(&AnalysisWork::MemoryWork::loadImageHits);
+        // The immutable image already joined for another represented address
+        // contributes no new alternatives; retain the entire union once.
+        if (joinedImages.insert(found->second.get()).second) r.merge(*found->second);
+        else memoryWork(&AnalysisWork::MemoryWork::loadImageUnionSkips);
+      } else r.merge(image(classify()));
     }
   return r;
 }
@@ -1770,16 +2003,37 @@ static AV binaryPointers(Instruction &i, const AV &left, const AV &right,
                          function_ref<AV(const Atom &, const APInt &)> displace) {
   AV result;
   auto image = [&](const AV &pointers, const AV &other, bool rhs) {
+    memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+    if (pointers.atoms.empty() || pointers.atoms.begin()->kind != Atom::Ptr) return;
     bool displacement = i.getOpcode() == Instruction::Add ||
                         (i.getOpcode() == Instruction::Sub && !rhs);
-    for (const auto &pointer : pointers.atoms) {
-      if (pointer.kind != Atom::Ptr) continue;
-      bool conservative = !displacement || other.top;
+    // INT is the final atom kind. Classify the non-INT prefix once instead
+    // of pairing every pointer with alternatives that only request the same
+    // conservative image. Keep the complete Ptr x INT displacement product.
+    auto integers = other.atoms.end();
+    uint64_t integerCount = 0;
+    if (displacement)
+      while (integers != other.atoms.begin()) {
+        auto prior = std::prev(integers);
+        budgetTick();
+        memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+        if (prior->kind != Atom::Int) break;
+        integers = prior;
+        ++integerCount;
+      }
+    uint64_t nonIntegers = displacement ? other.atoms.size() - integerCount : 0;
+    bool conservative = !displacement || other.top || nonIntegers;
+    for (auto it = pointers.atoms.begin(); it != pointers.atoms.end() && it->kind == Atom::Ptr; ++it) {
+      const auto &pointer = *it;
+      budgetTick();
+      memoryWork(&AnalysisWork::MemoryWork::pointerBinaryAtoms);
+      memoryWork(&AnalysisWork::MemoryWork::pointerBinarySkippedPairs, nonIntegers);
       if (displacement)
-        for (const auto &value : other.atoms) {
-          if (value.kind != Atom::Int) { conservative = true; continue; }
-          auto delta = i.getOpcode() == Instruction::Sub ? -value.integer
-                                                       : value.integer;
+        for (auto value = integers; value != other.atoms.end(); ++value) {
+          budgetTick();
+          memoryWork(&AnalysisWork::MemoryWork::pointerBinaryPairs);
+          auto delta = i.getOpcode() == Instruction::Sub ? -value->integer
+                                                       : value->integer;
           result.merge(displace(pointer, delta));
         }
       if (conservative) {
@@ -1814,11 +2068,7 @@ void Analysis::step(Instruction &i) {
     std::vector<AV> inputs;for(Value *v:i.operands())
       for(auto &leaf:leaves(v->getType(),M.getDataLayout()))inputs.push_back(field(v,leaf.path));
     auto &old=pureInputs[&i];
-    auto equal=[](const AV &a,const AV &b) {
-      return a.top==b.top && a.atoms.size()==b.atoms.size() &&
-        std::equal(a.atoms.begin(),a.atoms.end(),b.atoms.begin(),[](auto &x,auto &y){return !(x<y) && !(y<x);});
-    };
-    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),equal))return;
+    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),sameAV))return;
     old=std::move(inputs);
   }
   if (activeBudget) {

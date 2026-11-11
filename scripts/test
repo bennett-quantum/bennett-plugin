@@ -20,6 +20,16 @@ DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
     "analysis_pt6_residue": (),
+    "analysis_slot_compaction": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_slot_compaction"),
+    "analysis_load_union": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_load_union"),
+    "analysis_load_images": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_load_images"),
+    "analysis_containment": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_containment"),
+    "analysis_pointer_products": ("--plugin", "build/libbennett-plugin-{major}.so",
+                                 "--artifacts", ".tmp/tests/analysis_pointer_products"),
     "validation": (),
     "scalars": (),
     "address_spaces": (),
@@ -103,6 +113,13 @@ COMMAND_HANG_GUARDS_S = {
     # PT6 control/residue: 0.101404 s max wall on Spiral, 2026-11-09;
     # tests/analysis_pt6_residue.py, LLVM18/23; 10x is below the 60 s floor.
     "analysis_pt6_residue": 60,
+    # Exact-work regressions, LLVM18/23, this host, 2026-11-11: max 2.758 s
+    # (pointer_products); 10x is below the 60 s floor.
+    "analysis_slot_compaction": 60,
+    "analysis_load_union": 60,
+    "analysis_load_images": 60,
+    "analysis_containment": 60,
+    "analysis_pointer_products": 60,
     "validation": 60,
     "scalars": 60,
     "address_spaces": 60,
@@ -202,7 +219,8 @@ def main():
     policies.append(["bash", "-e", "tests/native_transports.sh"])
     groups = [
         [
-            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major), *options]
+            [sys.executable, "-B", f"tests/{name}.py", "--major", str(major),
+             *(option.format(major=major) for option in options)]
             for name, options in DRIVERS.items()
         ] + [[
             sys.executable, "-B", "tests/review_regressions.py", "--major", str(major),

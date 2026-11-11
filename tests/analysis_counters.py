@@ -67,6 +67,10 @@ def main(argv=None):
         assert sum(f["join_count"] for f in functions.values()) <= work["join_count"], work
         assert all(f["rounds_completed"] >= work["rounds_completed"]
                    for f in functions.values()), work
+        memory = work["memory"]
+        assert all(type(value) is int and value >= 0 for value in memory.values()), work
+        assert all(sum(f["memory"][key] for f in functions.values()) <= value
+                   for key, value in memory.items()), work
         assert work["worklist_pops"] >= work["transfer_applications"], work
         assert work["cpu_ms"]["deterministic"] is False, work
         if cpu_clock_available:
@@ -102,6 +106,7 @@ def main(argv=None):
     }, first
     assert first["function_visits"]["total"] == 1, first
     assert first["function_visits"]["top"] == {"top": 1}, first
+    assert all(value == 0 for value in first["memory"].values()), first
     repeat = check("repeat", simple)
     assert {k: v for k, v in first.items() if k != "cpu_ms"} == {
         k: v for k, v in repeat.items() if k != "cpu_ms"
@@ -140,6 +145,7 @@ define i8 @top() {
 }""")
     work = check("field-and-slot-joins", aggregate)
     assert all(work[key] > 0 for key in ("av_merges", "field_joins", "slot_joins")), work
+    assert work["memory"]["load_addresses"] > 0 and work["memory"]["load_slot_tests"] > 0, work
 
     # An absent ordinary import is conservatively analysed, as before; adding
     # observability must not introduce a new rejection for external calls.
