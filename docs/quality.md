@@ -342,6 +342,8 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "src/Personality.inc": {"complexity": 18, "functions": 2, "length_max": 5, "length_p50": 5, "length_p90": 5, "over_300": 0, "trivial_wrappers": 0},
+    "tests/rust_personality.py": {"complexity": 12, "functions": 3, "length_max": 47, "length_p50": 35, "length_p90": 47, "over_300": 0, "trivial_wrappers": 0},
     "src/ConstantOperands.h": {"complexity": 61, "functions": 2, "length_max": 21, "length_p50": 9, "length_p90": 21, "over_300": 0, "trivial_wrappers": 0},
     "src/ConstantOperands.inc": {"complexity": 113, "functions": 3, "length_max": 29, "length_p50": 24, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},
     "tests/constant_operands.py": {"complexity": 13, "functions": 1, "length_max": 69, "length_p50": 69, "length_p90": 69, "over_300": 0, "trivial_wrappers": 0},
