@@ -842,3 +842,84 @@ separately. Kept binary: `bins/cowvpf2-e2b78b8a0351`; baseline `bins/base-ad229d
 thread-CPU accumulators to the probe, plus time spent inside `AV::merge` and inside the per-atom load path, using
 `clock_gettime` around `step()` and those two calls. Run the 100-function closure 3× for determinism, then the
 full 18/N16 cell. That ranks merge, loads of `(X, *)` atoms, PT9 binding and the integer transfers by seconds.
+
+## Finding 12 — where round-0 CPU goes, in seconds: 72% is PT6 loads through non-exact `(X, *)` atoms; the 100-function closure is different (63% PT12 reachability)
+
+**Probe (throwaway `.tmp`, on top of finding 11's build).**
+
+- Thread-CPU timers (`clock_gettime(CLOCK_THREAD_CPUTIME_ID)`) around every `step()`, attributed by rule and by
+  function.
+- Inclusive timers in `AV::merge`, the factored `load`, the remaining per-atom load path, `bind` (split into the
+  PT12 undefined-callee branch, `byval`, arguments and returns), `store`, `displace`, and value/slot interning.
+- Timer overhead is about 20% (61 → 74 s on the closure).
+- Kept binary: `bins/cowvpft-a4a8a17dad5f`.
+
+Inclusive timers nest: merge and interning run inside loads and binds. Read the rows as overlapping, not additive.
+**[source]**
+
+**Determinism and exactness.** The 100-function closure was run 3× with each of the two timer binaries. Every run
+gave an identical report and order-independent digests equal to the baseline at all 6 round ends. **[measured]**
+
+**SetTextEncoding −crawl 100** (one of the 3 identical runs; step total 73.0 s). **[measured]**
+
+| cost | seconds |
+|---|---|
+| PT8/PT9/PT12 calls (rule) | 47.8 |
+| — `bind`, PT12 undefined-callee branch | **46.3** |
+| — `bind` arguments / returns / byval | 0.5 / 0.1 / 0 |
+| PT6 loads (rule) | 13.3 (factored path 14.5 incl., per-atom 2.7) |
+| PT7 stores (rule) | 8.5 (`store` 16.0 incl., also called from calls) |
+| `AV::merge` (inclusive) | 17.5 |
+| interning | 1.3 |
+
+The PT12 branch in `bind` computes the slots reachable from an undefined callee's pointer arguments. It loops
+`while (more) for (auto &slot : slots) …` over **every slot and every slot atom** until no new object appears,
+then stores ⊤ into every reachable object. It runs on every visit of every call to a declaration. **[source]**
+
+**Full LLVM 18 / N16 cell** (lock, 9 GiB, admitted at 19:03Z). Allowance stop at 1,523 s user CPU: PT6
+`%580 = load ptr, ptr %43` in btreeBeginTrans, worklist pop 162,226. That is 52 fewer than the untimed build,
+because of timer overhead. Step total 1,484 s. **[measured]**
+
+| cost (inclusive) | seconds | share of step time |
+|---|---|---|
+| **PT6 loads (rule)** | **1,213** | **82%** |
+| — factored `load` (exact addresses, families) | 1,190 incl. | — |
+| — **per-atom path (non-exact `(X, *)`/residue atoms, constant-global integer loads)** | **1,066** | **72%** |
+| `AV::merge` (mostly inside loads) | 688 | — |
+| PT8/PT9/PT12 calls (rule) | 185 | 12% |
+| — `bind` arguments (U merged into parameters) | 166 | — |
+| — `bind` PT12 reachability | 12 | — |
+| PT2 GEP | 41 | 3% |
+| `store` / PT7 rule | 31 / 30 | 2% |
+| interning | 34 | — |
+| `displace` | 14 | — |
+| PT4/PT5 | 9 | — |
+| PT3 | 6 | — |
+
+By function: btreeBeginTrans 676 s, sqlite3WalCheckpoint 317 s, sqlite3Prepare 161 s, sqlite3_exec 111 s,
+sqlite3_wal_checkpoint_v2 76 s, sqlite3_errmsg 45 s.
+
+The trajectory fits this. Between pops 159,713 and 162,226, load time grows from 260 s to 1,190 s and the
+per-atom part from 239 s to 1,066 s.
+
+**What it suggests.**
+
+1. Round 0 of the full cell is spent almost entirely on **loads through `(X, *)` atoms**. For such an atom,
+   `overlappingSlots` returns every slot of X and the image merges each slot's value: about 41k slots for the
+   largest objects, holding U-sized values. Finding 11 explains why the exact-address factoring did not help:
+   it never touched these atoms.
+2. The image of `(X, *)` at a given type depends only on X's slots. It is already cached per (atom, type), but
+   every growing store to X invalidates the cache, and stores through U keep growing X.
+3. An exact remedy: keep, per object and per (bytes, filled, stride-class), an incremental union of stored values
+   and ROOTs. A `(X, *)` load then reads those summaries instead of scanning slots. This is factored-points-to's
+   "one payload per stored width". It is exact because the `(X, *)` classification (spacing 1: whole iff
+   `size == bytes`, otherwise partial) depends only on each slot's width class.
+4. The 100-function closure's cost is a different term, PT12 reachability. That is a reminder that a sub-closure
+   ranks costs differently from the full program.
+
+**[conjecture on the remedy's gain]**
+
+**Next.** A `.tmp` prototype of per-object width-class summaries for `(X, *)` loads, maintained in `store` and
+invalidated nowhere because they only grow. Check exactness on musl and on the 100-function closure 3× with
+digests, then run the full 18/N16 cell with timers. In the same build, a cheap exact fix to PT12 reachability:
+compute it over an object graph maintained incrementally, not by re-scanning every slot.
