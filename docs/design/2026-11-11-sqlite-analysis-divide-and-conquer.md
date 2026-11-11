@@ -571,3 +571,60 @@ sqlite3FindInIndex are not yet characterised. **[source; conjecture for the last
   as in random.c. Then re-run all 16 SQLite crawlers.
 - For the full cell, now CPU-bound: a closed form for pointer − pointer over shared sets, plus a budget tick in
   that loop. Then re-run 18/N16 to find the next stop.
+
+## Finding 8 — the "U × U subtraction" was an all-pairs scan in the integer transfer; past it, the full cell stops on loads through U (C1)
+
+**Cause, read from source.** The stop in finding 6b (`%349 = sub i64 %347, %348` in sqlite3WalCheckpoint) does not
+come from `binaryPointers`. j3l already made that linear. It comes from the elementwise integer loop in `step`
+(PT4/PT5, `for (auto &v : x.atoms) for (auto &w : y.atoms) if (v.kind == Int && w.kind == Int) …`):
+
+- the loop visits **every pair of atoms**, pointers included: 314,820² ≈ 10¹¹ pair tests for this `sub`;
+- only INT × INT pairs do anything;
+- there is no budget tick inside, which is why the allowance overshot by 810 s. **[source]**
+
+**Change (throwaway `.tmp` prototype on top of finding 6's shared sets).** INT is the last atom kind in `Atom`'s
+order, so the loop now pairs only the two INT suffixes, with a `budgetTick()` per pair. The pairs that act are
+exactly the same, so this is exact by construction.
+
+- musl: 1,306 of 1,306 passing units identical at set level. **[measured]**
+
+**Process note.** I ran that 12-way, about 40 s musl check inside the 16:00–16:10Z host-quiet window, while
+admission was holding. That was a slip. The full cell below waited for the window and was admitted at 16:10:05Z.
+
+**Full LLVM 18 / N16 cell.** Same input, argv, lock and 9 GiB systemd cap; resources-only admission.
+**[measured]**
+
+| build | end | peak RSS | worklist pops (round 0) | analysis CPU | where |
+|---|---|---|---|---|---|
+| shared value + slot sets (6b) | allowance, overshoot | 5.27 GB | 159,970 | 2,310 s | PT4/PT5 `sub` in sqlite3WalCheckpoint |
+| **+ INT-suffix pairing and tick** | **allowance, on time** (wall 1,588 s) | **8.0 GB** | **162,188** | **1,585 s** | **PT6 `%549 = load ptr, ptr %44` in btreeBeginTrans** |
+
+**What the stop looks like.** **[measured]**
+
+- **CPU.** 3.32 billion PT6 load-slot tests over 44.4M load addresses. btreeBeginTrans alone accounts for
+  1.71 billion, then sqlite3Prepare 0.53 billion, sqlite3WalCheckpoint 0.48 billion and sqlite3_errmsg
+  0.34 billion. This is C1 (finding 3) at full scale: each load through a U-sized pointer tests the slots of
+  about 420 objects.
+- **U has doubled** since finding 5: 314,822 atoms over 420 objects, 1,795 distinct offsets, 207 objects × 1,025
+  offsets. Its holders include the parameter `%0` of pcache1Shrink, sqlite3NoopDestructor, statAccumDestructor,
+  pcache1Shutdown, sqlite3MemShutdown, …. 536 values exceed 32,768 atoms.
+- **Memory.** 91.1M logical value atoms are held in 22.1M unique set atoms (974 distinct among 10,821 large
+  sets). There are 1,246,158 slots holding 286.6M logical slot atoms. Stores through U fan U into its own
+  addresses. Sharing keeps the heap at 6.2 GB, but RSS reached 8.0 GB against the 9 GiB cap.
+
+**What it suggests.**
+
+1. Each exact representation fix moves the stop further into round 0: 159,608 → 159,970 → 162,188 of about
+   285k instructions.
+2. The remaining walls are all U-shaped:
+   - loads through U scan slots one by one (C1, 3.3 billion tests);
+   - stores through U fan out into 1.25M slots;
+   - U itself keeps growing by indirect-call binding.
+3. Content sharing has done what it can. The next exact steps need U handled symbolically: for loads and stores,
+   object set × offset set against per-object slot intervals, which is the factored representation. Or U must
+   be made smaller, which is the §5 precision question (finding 5).
+4. Given the trajectory, finishing round 0 also needs several more such fixes. A later round is not in sight.
+   **[conjecture]**
+
+**Next (queued).** Mechanism-A extension: sum-set gcd for add chains, and cycles through a single memory slot.
+Re-run it over all 16 slow SQLite functions.
