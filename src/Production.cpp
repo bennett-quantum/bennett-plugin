@@ -318,6 +318,7 @@ struct Entry {
     rows.push_back("store.i64 "+p+" "+remaining);
   }
   std::set<std::string> ccGlobals;
+  std::map<std::string,std::string> deviceGlobalSources;
   uint64_t ccHeapBytes = 0, allocatedBytes = 0;
   const Value *activeRoot = nullptr;
   bool generalUsed = false;
@@ -1974,7 +1975,7 @@ std::string linkReferences(Entry &e) {
   uint64_t base=comparisonDataBase();
   for (auto &g:e.m.globals()) if (used.count(scalarGlobalKey(g))) {
     auto key=scalarGlobalKey(g),name="G"+std::to_string(globalSymbols.size()+1);
-    globalSymbols[key]=name;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=comparisonGlobalAddress(g).value_or(base);
+    globalSymbols[key]=name;e.deviceGlobalSources[name]=key;base=alignTo(base,dl.getPreferredAlign(&g));bases[name]=comparisonGlobalAddress(g).value_or(base);
     sizes[name]=dl.getTypeAllocSize(g.getValueType()).getFixedValue();base=std::max(base,bases[name]+sizes[name]);
   }
   for(auto &key:used) if(!globalSymbols.count(key)) {

@@ -342,6 +342,8 @@ json::Array finaliseSymbols(Module &m, json::Array &symbols, StringRef identity)
   return definitions;
 }
 
+#include "NativeGlobals.inc"
+
 struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
   PreservedAnalyses run(Module &m, ModuleAnalysisManager &) {
     if (NativeRecord.empty() || NativeEntry.empty() || NativeReport.empty())
@@ -371,16 +373,9 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
     auto original = parseBitcodeFile(input->getMemBufferRef(), originalContext);
     if (!original)
       fail("BD-E-NATIVE-INPUT", toString(original.takeError()));
-    if (bits(**original) != bits(m))
+    if (!sameNativeMaterialisation(**original,m))
       fail("BD-E-NATIVE-INPUT", "run comparison adaptation before further IR transformations");
-    auto buildBytes=read((sys::path::parent_path(NativeRecord)+"/build.json").str());
-    auto *buildArtifact=artifacts->getObject(NativeEntry+"/build.json");
-    if(!buildArtifact || buildArtifact->getString("sha256")!=digest(buildBytes->getBuffer()))
-      fail("BD-E-NATIVE-INPUT","build metadata does not match launch record");
-    auto build=json::parse(buildBytes->getBuffer());
-    if(!build)fail("BD-E-NATIVE-INPUT",toString(build.takeError()));
-    auto *buildObject=build->getAsObject();
-    if(!buildObject)fail("BD-E-NATIVE-INPUT","invalid build metadata");
+    auto buildObjectValue=readNativeBuild(*artifacts);auto *buildObject=&buildObjectValue;
     bool reversible=buildObject->getString("mode")=="reversible";
     std::optional<uint64_t> shadowStack,sourceSteps;
     if(reversible) {
@@ -410,6 +405,7 @@ struct NativeComparisonPass : PassInfoMixin<NativeComparisonPass> {
                         {"source_memory_faults_checked", false},
                         {"resolved_link_layout", false},
                         {"full_comparison_acceptance", false}};
+    if(reversible)bindNativeGlobals(report,*buildObject,*artifacts);
     if(shadowStack)report["shadow_stack_bytes"]=std::to_string(*shadowStack);
     if(sourceSteps)report["source_step_limit"]=std::to_string(*sourceSteps);
     auto reportText=formatv("{0:2}\n",json::Value(std::move(report))).str();
