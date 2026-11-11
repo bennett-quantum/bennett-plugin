@@ -19,6 +19,13 @@ print(arith_path(18).parent.parent)
 PYTHON
 )"
 export BENNETT_ARITH_PINNED_ROOT
+# Default: the fast (pre-merge) tier. --entry-snapshot: the whole gate, entry snapshots and the cross-major comparison
+# included (post-merge tier; it runs in its own clean worktree, so it reruns everything it compares).
+case "${1:-}" in
+  "") full=0 ;;
+  --entry-snapshot) full=1 ;;
+  *) echo "usage: scripts/gate [--entry-snapshot]" >&2; exit 3 ;;
+esac
 /usr/bin/time -f 'gate build: %e s' "$root/scripts/build"
 "$root/scripts/test"
 # Keep measured slow checks outside scripts/test's shared allowance.
@@ -31,13 +38,15 @@ for major in 18 23; do
   /usr/bin/time -f "gate r_typed_faults LLVM $major: %e s" python3 "$root/tests/r_typed_faults.py" --major "$major"
   /usr/bin/time -f "gate r_envelopes LLVM $major: %e s" python3 "$root/tests/r_envelopes.py" --major "$major"
 done
-# Independent snapshot executions are CPU-heavy; their artifacts are major-local.
-/usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
-snapshot18=$!
-/usr/bin/time -f "gate entry-snapshot LLVM 23: %e s" python3 "$root/tests/entry_snapshot.py" --major 23 &
-snapshot23=$!
-wait "$snapshot18"
-wait "$snapshot23"
-/usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
+if (( full )); then
+  # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
+  /usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
+  snapshot18=$!
+  /usr/bin/time -f "gate entry-snapshot LLVM 23: %e s" python3 "$root/tests/entry_snapshot.py" --major 23 &
+  snapshot23=$!
+  wait "$snapshot18"
+  wait "$snapshot23"
+  /usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
+fi
 /usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
 /usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"

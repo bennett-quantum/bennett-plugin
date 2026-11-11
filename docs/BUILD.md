@@ -118,7 +118,7 @@ open for the production/general-analysis obligations listed in PROGRESS.
 Every manual build/test/run must use this prefix (create `.tmp` first):
 
 ```sh
-env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR=/home/tobias/Projects/bennett-workspace/bennett-plugin/.tmp /home/tobias/Projects/bennett-workspace/bennett-plugin/scripts/pre-push
+env -u DISPLAY -u WAYLAND_DISPLAY -u DBUS_SESSION_BUS_ADDRESS -u BROWSER TMPDIR="$PWD/.tmp" scripts/pre-push   # from the bennett-plugin checkout
 ```
 
 `scripts/record-verification.py` records the actual artefacts after a successful
