@@ -55,6 +55,7 @@ if (( full )); then
   wait "$snapshot18"
   wait "$snapshot23"
   /usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
+  # Every recorded object, entry-snapshot ones included, must be unchanged.
+  /usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
 fi
-/usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
 /usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"
