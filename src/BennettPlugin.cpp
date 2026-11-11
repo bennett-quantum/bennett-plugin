@@ -22,6 +22,10 @@ cl::opt<std::string> Dialect("bennett-dialect",
                              cl::desc("Required exact dialect version"));
 cl::opt<std::string> ISA("bennett-isa", cl::init("0.8"));
 cl::opt<std::string> Output("bennett-out");
+cl::opt<uint64_t> LayoutDataBase("bennett-layout-data-base", cl::init(4096),
+    cl::desc("§19.5 comparison data base (identical native and device addresses)"));
+cl::opt<uint64_t> LayoutTextBase("bennett-layout-text-base", cl::init(0x400000),
+    cl::desc("§19.5 comparison text base, raised above device ranges when necessary"));
 cl::opt<std::string> Tier("bennett-tier");
 cl::opt<std::string> ProgramEntry("bennett-entry");
 cl::opt<std::string> Disk("bennett-disk");
@@ -497,6 +501,17 @@ struct BennettPass : PassInfoMixin<BennettPass> {
   static bool isRequired() { return true; }
 };
 } // namespace bennett
+uint64_t bennett::comparisonDataBase(uint64_t defaultBase) {
+  return hasComparisonDataBaseOverride() ? LayoutDataBase.getValue() : defaultBase;
+}
+bool bennett::hasComparisonDataBaseOverride() { return LayoutDataBase.getNumOccurrences() != 0; }
+uint64_t bennett::comparisonTextBase(uint64_t regionsEnd) {
+  constexpr uint64_t TextAlignment = 0x200000; // Dialect §19.5.
+  if (regionsEnd <= LayoutTextBase) return LayoutTextBase;
+  if (regionsEnd > uint64_t(INT64_MAX) - (TextAlignment - 1))
+    fail("BD-E-COMPARISON-LAYOUT", "device ranges leave no comparison text address");
+  return alignTo(regionsEnd, TextAlignment);
+}
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return {LLVM_PLUGIN_API_VERSION, "bennett", bennett::producerIdentity(),
           [](PassBuilder &pb) {

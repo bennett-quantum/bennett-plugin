@@ -19,25 +19,49 @@ print(arith_path(18).parent.parent)
 PYTHON
 )"
 export BENNETT_ARITH_PINNED_ROOT
+# Default: the fast (pre-merge) tier. --corpus: the dialect legality corpus gate alone (its own check, so a red there does
+# not hide the rest). --entry-snapshot: everything else, entry snapshots, cross-major and prior objects included
+# (post-merge tier; it runs in its own clean worktree, so it reruns everything it compares).
+case "${1:-}" in
+  "") full=0 ;;
+  --entry-snapshot) full=1 ;;
+  --corpus) full=corpus ;;
+  --smoke) full=smoke ;;
+  *) echo "usage: scripts/gate [--entry-snapshot | --corpus | --smoke]" >&2; exit 3 ;;
+esac
 /usr/bin/time -f 'gate build: %e s' "$root/scripts/build"
+[ "$full" = smoke ] && exit 0  # the fast tier: the plugin builds for both majors
+if [ "$full" = corpus ]; then
+  exec /usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"
+fi
 "$root/scripts/test"
 # Keep measured slow checks outside scripts/test's shared allowance.
 # Measured 2026-11-07 on tobias-ThinkPad-X1-Carbon-Gen-11 (LLVM 18/23):
 # r_typed_faults: 46.490/87.298 s; recursive opt: 28.141/46.035 s with
 # its existing 60 s subprocess bound (other subprocesses: 120 s).
 # r_envelopes: 0.566/0.817 s total with existing 120 s subprocess bounds.
-for major in 18 23; do
+# The two majors are independent (major-local work dirs), so they run at once; each major keeps its order.
+per_major() {
+  local major=$1
   /usr/bin/time -f "gate mixed-native LLVM $major: %e s" python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
   /usr/bin/time -f "gate r_typed_faults LLVM $major: %e s" python3 "$root/tests/r_typed_faults.py" --major "$major"
   /usr/bin/time -f "gate r_envelopes LLVM $major: %e s" python3 "$root/tests/r_envelopes.py" --major "$major"
-done
-# Independent snapshot executions are CPU-heavy; their artifacts are major-local.
-/usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
-snapshot18=$!
-/usr/bin/time -f "gate entry-snapshot LLVM 23: %e s" python3 "$root/tests/entry_snapshot.py" --major 23 &
-snapshot23=$!
-wait "$snapshot18"
-wait "$snapshot23"
-/usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
-/usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
-/usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"
+}
+per_major 18 & majors18=$!
+per_major 23 & majors23=$!
+status18=0; wait "$majors18" || status18=$?
+status23=0; wait "$majors23" || status23=$?
+if (( status18 != 0 )); then exit "$status18"; fi
+if (( status23 != 0 )); then exit "$status23"; fi
+if [ "$full" = 1 ]; then
+  # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
+  /usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
+  snapshot18=$!
+  /usr/bin/time -f "gate entry-snapshot LLVM 23: %e s" python3 "$root/tests/entry_snapshot.py" --major 23 &
+  snapshot23=$!
+  wait "$snapshot18"
+  wait "$snapshot23"
+  /usr/bin/time -f "gate production_cross_major: %e s" python3 "$root/tests/production_cross_major.py"
+  # Every recorded object, entry-snapshot ones included, must be unchanged.
+  /usr/bin/time -f "gate prior_objects: %e s" python3 "$root/tests/prior_objects.py"
+fi

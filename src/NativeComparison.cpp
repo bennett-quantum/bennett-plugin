@@ -481,6 +481,11 @@ void addNativeFinalisePass(ModulePassManager &pm) { pm.addPass(NativeFinalisePas
 void initialiseComparisonLayout(Module &m) {
   layout.reset();
   layoutHash.clear();
+  auto pointerBits=m.getDataLayout().getPointerSizeInBits();
+  auto addressLimit=pointerBits<64?(uint64_t(1)<<pointerBits)-1:uint64_t(INT64_MAX);
+  if (comparisonDataBase()<4096 || comparisonDataBase()>addressLimit ||
+      comparisonTextBase(0)<4096 || comparisonTextBase(0)>addressLimit)
+    fail("BD-E-COMPARISON-LAYOUT", "comparison bases must fit non-null target addresses");
   if (LayoutFile.empty()) return;
   auto bytes = read(LayoutFile);
   auto value = json::parse(bytes->getBuffer());
@@ -492,14 +497,14 @@ void initialiseComparisonLayout(Module &m) {
       !o->getObject("globals") || !o->getObject("functions"))
     fail("BD-E-COMPARISON-LAYOUT", "schema, pointer width or source correspondence missing");
   auto end = integer(*o, "data_end"), heap = integer(*o, "heap_base");
-  if (end < 4096 || end > uint64_t(INT64_MAX) - 4095 || heap != alignTo(end, uint64_t(4096)))
+  if (end < comparisonDataBase() || end > uint64_t(INT64_MAX) - 4095 || heap != alignTo(end, uint64_t(4096)))
     fail("BD-E-COMPARISON-LAYOUT", "heap must be the first page boundary after linked data");
   std::vector<std::pair<uint64_t,uint64_t>> ranges;
   for (auto &item : *o->getObject("globals")) {
     auto *entry = item.second.getAsObject();
     if (!entry) fail("BD-E-COMPARISON-LAYOUT", "invalid global entry");
     auto address = integer(*entry, "address"), size = integer(*entry, "size"), alignment = integer(*entry, "alignment");
-    if (address < 4096 || address > end || size > end - address ||
+    if (address < comparisonDataBase() || address > end || size > end - address ||
         !isPowerOf2_64(alignment) || address % alignment)
       fail("BD-E-COMPARISON-LAYOUT", "misaligned/out-of-data global range");
     if (size) ranges.push_back({address, address+size});
@@ -513,8 +518,8 @@ void initialiseComparisonLayout(Module &m) {
     auto *entry = item.second.getAsObject();
     if (!entry) fail("BD-E-COMPARISON-LAYOUT", "invalid function entry");
     auto address = integer(*entry, "address");
-    if (address < 4096 || !addresses.insert(address).second)
-      fail("BD-E-COMPARISON-LAYOUT", "null or merged source function address");
+    if (address < comparisonTextBase(0) || !addresses.insert(address).second)
+      fail("BD-E-COMPARISON-LAYOUT", "source function below text base or merged address");
     for (auto range : ranges) if (address >= range.first && address < range.second)
       fail("BD-E-COMPARISON-LAYOUT", "function address overlaps source data");
   }

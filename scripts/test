@@ -33,6 +33,7 @@ DRIVERS = {
     "allocator_closure": (),
     "native_comparison": (),
     "native_layout": (),
+    "comparison_layout": (),
     "native_fixtures": (),
     "native_hello": (),
     "native_checked": (),
@@ -46,7 +47,6 @@ DRIVERS = {
     "integer_intrinsics": (),
     "memory_runtime": (),
     "region_keys": (),
-    "key_audit": (),
     "descriptors": (),
     "production": (),
     "production_environments": tuple(
@@ -84,7 +84,7 @@ REGRESSIONS = (
     "unresolved-call",
 )
 
-# Source: /home/tobias/Projects/bennett-workspace/bennett-plugin-measure/.tmp/suite-measure/REPORT.md
+# Source: the bennett-plugin-measure worktree's .tmp/suite-measure/REPORT.md
 # and its results.jsonl, measured on this 12-core host, 2026-11-08.
 # Each command guard is >= 10x its maximum over A/B and LLVM 18/23, rounded
 # up to whole seconds with a 60 s floor. The suite guard is 10x the larger
@@ -115,6 +115,9 @@ COMMAND_HANG_GUARDS_S = {
     "allocator_closure": 60,
     "native_comparison": 60,
     "native_layout": 60,
+    # tests/comparison_layout.py: max 0.67 s wall on Spiral, LLVM18/23,
+    # 2026-11-09; 10x is below the shared 60 s hang-guard floor.
+    "comparison_layout": 60,
     "native_fixtures": 68,
     "native_hello": 60,
     "native_checked": 60,
@@ -128,7 +131,6 @@ COMMAND_HANG_GUARDS_S = {
     "integer_intrinsics": 60,
     "memory_runtime": 60,
     "region_keys": 60,
-    "key_audit": 60,
     "descriptors": 60,
     "production": 60,
     "production_environments": 150,

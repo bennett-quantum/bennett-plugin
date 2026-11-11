@@ -1,8 +1,12 @@
 # Push-gate pins (bennett/tools/gate_README.md). Siblings resolve only to these commits.
 schema = 1
 repo = "bennett-plugin"
-tool_sha = "3779522887ace6426f8ba13fb0d55b625b781941"
+tool_sha = "822aaeffab369114e1a719a7b887a0192b22d386"
 timeout_s = 28800
+
+# Paths no check reads; changing only these reuses a PASS receipt (bennett/tools/gate_README.md).
+[receipt]
+non_product = [".beads/", "worklog/", "CLAUDE.md"]
 
 [env]
 BENNETT_SIBLINGS = "{layout}"
@@ -14,8 +18,25 @@ name = "quality baseline"
 argv = ["python3", "-B", "scripts/quality.py", "--check"]
 
 [[check]]
-name = "plugin gate"
-argv = ["scripts/gate"]
+name = "build"
+argv = ["scripts/gate", "--smoke"]
+
+# The whole gate (unit suites, majors loop, entry snapshots, cross-major, prior objects): post-merge only.
+[[check]]
+name = "full gate"
+argv = ["scripts/gate", "--entry-snapshot"]
+tier = "post-merge"
+
+# Last, so a red here never stops the checks above (main-health baseline tracks it by name).
+[[check]]
+name = "corpus gate"
+tier = "post-merge"  # heavy: runs on main-health's cadence, not per push
+argv = ["scripts/gate", "--corpus"]
+
+# Evidence only (never the verdict): beads obligations, read from the gated commit's export.
+[[report]]
+name = "key audit (beads obligations)"
+argv = ["sh", "-c", "s=0; for m in 18 23; do python3 -B tests/key_audit.py --major $m --beads-from-commit \"$BENNETT_GATE_SHA\" || s=1; done; exit $s"]
 
 [siblings."bennett-isa-spec"]
 sha = "3b1090790d82a00ac95d30b8da6b42d1d7a9f5d1"
