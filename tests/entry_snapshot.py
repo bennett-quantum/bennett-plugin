@@ -4,7 +4,8 @@
 Exit 124 means UNKNOWN: a hang guard expired. Test failures retain their exit status.
 """
 
-import argparse, json, shutil, subprocess, hashlib, shlex, sys
+import argparse, json, os, shutil, subprocess, hashlib, shlex, sys
+from concurrent.futures import ThreadPoolExecutor
 from production import REF as DEBUG_REF
 
 REF = DEBUG_REF.parent.parent / "release/bennett-isa-ref"
@@ -17,6 +18,10 @@ from contracts import run as _run
 # The guard is 10x that measurement, rounded up to whole seconds.
 ENTRY_SNAPSHOT_HANG_GUARD_S = 8504
 UNKNOWN_EXIT_STATUS = 124
+# Concurrency: scripts/gate runs both LLVM majors at once; each case is one opt then single-threaded reference runs.
+MAJORS_AT_ONCE = 2
+CPUS_PER_CASE = 2
+CASE_PEAK_BYTES = 4 * 1024**3  # provisional per-case peak; replace with the measured value (reform 2026-11-11)
 from contracts import ROOT as R
 
 from production_environments import descriptor, DECL
@@ -234,94 +239,106 @@ def cases():
     yield "save-state", stack_witness(saved, 1, first=1), [(0, 2)]
 
 
+def run_case(major, name, body, vectors):
+    """One case: plugin build of its IR, then reference runs per vector. Cases share nothing on disk."""
+    d = R / f".tmp/entry-snapshot/{major}/{name}"
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    ll = d / "input.ll"
+    ll.write_text(body)
+    out = d / "out"
+    heap, sstack = (
+        (48, 24)
+        if name
+        in ("logical-stack", "popped-frame", "restored-allocation", "save-state")
+        else (
+            (0, 0)
+            if name in ("global", "handle-input", "several-entries")
+            else (16, 0)
+        )
+    )
+    z = run(
+        [
+            f"/usr/lib/llvm-{major}/bin/opt",
+            "-load-pass-plugin=" + str(R / f"build/libbennett-plugin-{major}.so"),
+            "-passes=bennett",
+            "-bennett-dialect=0.2.13",
+            f"-bennett-budget-default=1000000,{heap},4096,16,{sstack}",
+            "-bennett-out=" + str(out),
+            "-disable-output",
+            ll,
+        ]
+    )
+    row = {"name": name, "exit": z.returncode, "diagnostic": z.stderr}
+    if z.returncode:
+        return row
+    row["check"] = True
+    row["runs"] = []
+    for entry in (("first", "second") if name == "several-entries" else ("top",)):
+        obj = out / entry / "launch.bennett"
+        c = run([DEBUG_REF, "check", obj])
+        row["check"] &= c.returncode == 0
+        row.setdefault("checks", {})[entry] = c.stdout + c.stderr
+        tokens = json.loads((out / entry / "build.json").read_text())["budgets"]
+        for n, expected in vectors:
+            if isinstance(expected, dict):
+                expected = expected[entry]
+            z = run(
+                [
+                    REF,
+                    "run-program",
+                    obj,
+                    entry,
+                    "--args",
+                    ",".join([str(n)] + [str(t["steps"]) for t in tokens]),
+                    "--budget",
+                    f"10000000,{heap},4096,16",
+                ]
+            )
+            v = json.loads(z.stdout) if z.returncode == 0 else {}
+            row["runs"].append(
+                {
+                    "entry": entry,
+                    "n": n,
+                    "result": v,
+                    "error": z.stderr,
+                    "ok": v.get("status") == "COMPLETED"
+                    and v.get("results")
+                    == [{"type": "i64", "value": str(expected)}],
+                }
+            )
+    if name == "address-observation":
+        # §8.5 expressly makes allocation-derived address observations an
+        # allocator-state dependency, even when the closure has no load or alloc.
+        reference = (out / "top/oracle-0/ref.bennett").read_text()
+        row["complete_history_interface"] = (
+            "s0:region[" in reference
+            and "lift.alloc" in reference
+            and "lift.free" in reference
+        )
+        row["check"] &= row["complete_history_interface"]
+    row["ok"] = row["check"] and all(r["ok"] for r in row["runs"])
+    print(name, row["ok"], flush=True)
+    return row
+
+
+def width(selected):
+    """Cases run concurrently; both majors run at once, each reference run is single-threaded."""
+    cpus = len(os.sched_getaffinity(0))
+    with open("/proc/meminfo") as meminfo:
+        available = next(int(l.split()[1]) * 1024 for l in meminfo if l.startswith("MemAvailable:"))
+    return max(1, min(len(selected), cpus // CPUS_PER_CASE, available // (MAJORS_AT_ONCE * CASE_PEAK_BYTES)))
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--major", type=int, required=True)
     p.add_argument("--case", action="append")
     a = p.parse_args()
-    rows = []
-    for name, body, vectors in cases():
-        if a.case and name not in a.case:
-            continue
-        d = R / f".tmp/entry-snapshot/{a.major}/{name}"
-        shutil.rmtree(d, ignore_errors=True)
-        d.mkdir(parents=True)
-        ll = d / "input.ll"
-        ll.write_text(body)
-        out = d / "out"
-        heap, sstack = (
-            (48, 24)
-            if name
-            in ("logical-stack", "popped-frame", "restored-allocation", "save-state")
-            else (
-                (0, 0)
-                if name in ("global", "handle-input", "several-entries")
-                else (16, 0)
-            )
-        )
-        z = run(
-            [
-                f"/usr/lib/llvm-{a.major}/bin/opt",
-                "-load-pass-plugin=" + str(R / f"build/libbennett-plugin-{a.major}.so"),
-                "-passes=bennett",
-                "-bennett-dialect=0.2.13",
-                f"-bennett-budget-default=1000000,{heap},4096,16,{sstack}",
-                "-bennett-out=" + str(out),
-                "-disable-output",
-                ll,
-            ]
-        )
-        row = {"name": name, "exit": z.returncode, "diagnostic": z.stderr}
-        rows.append(row)
-        if z.returncode:
-            continue
-        row["check"] = True
-        row["runs"] = []
-        for entry in (("first", "second") if name == "several-entries" else ("top",)):
-            obj = out / entry / "launch.bennett"
-            c = run([DEBUG_REF, "check", obj])
-            row["check"] &= c.returncode == 0
-            row.setdefault("checks", {})[entry] = c.stdout + c.stderr
-            tokens = json.loads((out / entry / "build.json").read_text())["budgets"]
-            for n, expected in vectors:
-                if isinstance(expected, dict):
-                    expected = expected[entry]
-                z = run(
-                    [
-                        REF,
-                        "run-program",
-                        obj,
-                        entry,
-                        "--args",
-                        ",".join([str(n)] + [str(t["steps"]) for t in tokens]),
-                        "--budget",
-                        f"10000000,{heap},4096,16",
-                    ]
-                )
-                v = json.loads(z.stdout) if z.returncode == 0 else {}
-                row["runs"].append(
-                    {
-                        "entry": entry,
-                        "n": n,
-                        "result": v,
-                        "error": z.stderr,
-                        "ok": v.get("status") == "COMPLETED"
-                        and v.get("results")
-                        == [{"type": "i64", "value": str(expected)}],
-                    }
-                )
-        if name == "address-observation":
-            # §8.5 expressly makes allocation-derived address observations an
-            # allocator-state dependency, even when the closure has no load or alloc.
-            reference = (out / "top/oracle-0/ref.bennett").read_text()
-            row["complete_history_interface"] = (
-                "s0:region[" in reference
-                and "lift.alloc" in reference
-                and "lift.free" in reference
-            )
-            row["check"] &= row["complete_history_interface"]
-        row["ok"] = row["check"] and all(r["ok"] for r in row["runs"])
-        print(name, row["ok"], flush=True)
+    selected = [c for c in cases() if not a.case or c[0] in a.case]
+    # map() keeps the report in case order whatever order the cases finish in; a hang-guard SystemExit propagates.
+    with ThreadPoolExecutor(max_workers=width(selected)) as pool:
+        rows = list(pool.map(lambda c: run_case(a.major, *c), selected))
     report = {
         "major": a.major,
         "isa_ref": str(REF),

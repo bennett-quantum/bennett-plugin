@@ -33,11 +33,19 @@ esac
 # r_typed_faults: 46.490/87.298 s; recursive opt: 28.141/46.035 s with
 # its existing 60 s subprocess bound (other subprocesses: 120 s).
 # r_envelopes: 0.566/0.817 s total with existing 120 s subprocess bounds.
-for major in 18 23; do
+# The two majors are independent (major-local work dirs), so they run at once; each major keeps its order.
+per_major() {
+  local major=$1
   /usr/bin/time -f "gate mixed-native LLVM $major: %e s" python3 "$root/tests/review_regressions.py" --major "$major" --case mixed-native
   /usr/bin/time -f "gate r_typed_faults LLVM $major: %e s" python3 "$root/tests/r_typed_faults.py" --major "$major"
   /usr/bin/time -f "gate r_envelopes LLVM $major: %e s" python3 "$root/tests/r_envelopes.py" --major "$major"
-done
+}
+per_major 18 & majors18=$!
+per_major 23 & majors23=$!
+status18=0; wait "$majors18" || status18=$?
+status23=0; wait "$majors23" || status23=$?
+if (( status18 != 0 )); then exit "$status18"; fi
+if (( status23 != 0 )); then exit "$status23"; fi
 if (( full )); then
   # Independent snapshot executions are CPU-heavy; their artifacts are major-local.
   /usr/bin/time -f "gate entry-snapshot LLVM 18: %e s" python3 "$root/tests/entry_snapshot.py" --major 18 &
