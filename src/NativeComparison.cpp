@@ -474,9 +474,10 @@ void addNativeComparisonPass(ModulePassManager &pm) {
 }
 void addNativeHostImportsPass(ModulePassManager &pm) { pm.addPass(NativeHostImportsPass()); }
 void addNativeFinalisePass(ModulePassManager &pm) { pm.addPass(NativeFinalisePass()); }
-void initialiseComparisonLayout(Module &m) {
+void initialiseComparisonLayout(Module &m, bool materialising) {
   layout.reset();
   layoutHash.clear();
+  if(!materialising && LayoutFile.empty())return;
   auto pointerBits=m.getDataLayout().getPointerSizeInBits();
   auto addressLimit=pointerBits<64?(uint64_t(1)<<pointerBits)-1:uint64_t(INT64_MAX);
   if (comparisonDataBase()<4096 || comparisonDataBase()>addressLimit ||
