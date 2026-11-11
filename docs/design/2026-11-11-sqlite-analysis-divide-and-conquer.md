@@ -705,3 +705,72 @@ analysis with up to 1,080 s CPU; where the baseline did not finish, the report c
 **Next.** Finding 10, the factored load path on the full cell. It is already exact on musl (1,306 of 1,306) and
 gives an identical final report on SetTextEncoding −crawl 100, but its per-round **value** digests differ from the
 baseline's. I am finding the cause with a per-value dump before running the full cell.
+
+## Finding 10 — factored PT6 over family slots: exact and 45× fewer slot tests on the 100-function closure, but only −24% on the full cell
+
+**Change (throwaway `.tmp` prototype on top of finding 8's build).** In `load`, exact addresses of non-constant
+objects are grouped per object into one sorted offset set O. For every family slot and filled slot of the object
+(`otherSlots`), one evaluation per slot decides whether **any** o ∈ O gives a whole, partial or repeated-byte
+classification:
+
+- residue families use O's residues modulo the family stride, computed once per stride;
+- filled intervals use a binary search in O.
+
+Before this, `overlappingSlots` tested every family slot once per atom. Exact slots are still found per offset by
+interval, as before. Constant globals with integer loads, and non-exact atoms, keep the per-atom path, because of
+byte reconstruction.
+
+This is exact by construction: the union over atoms commutes with the union over slots, and each per-slot test is
+`classifyLoad`/`overlaps` applied to the same facts. **[source]**
+
+**Exactness. [measured]**
+
+- musl: 1,306 of 1,306 identical at set level.
+- SetTextEncoding −crawl 100: final report identical. Three runs of the rebuilt binary match the baseline's
+  digests at all 6 round ends (values, slots, fields). Full per-value dumps at rounds 1–2 are identical line for
+  line (18,021 and 18,206 values).
+- One unexplained run: the **first** binary of this patch had per-round *value* digests that differed from the
+  baseline, though its final report was identical. I rebuilt it with only a probe dump added, and that binary
+  matches 3 of 3 times. The first binary was overwritten, so the cause stays unknown.
+
+**Cost.** **[measured]**
+
+| input | baseline | shared value + slot sets | + factored family loads |
+|---|---|---|---|
+| SetTextEncoding −crawl 100: CPU | 209.6 s | 100.0 s | **74.6 s** |
+| SetTextEncoding −crawl 100: load-slot tests | 206.4M | 206.4M | **4.55M** (45×) |
+| full 18/N16 cell: worklist pops at the allowance | — | 162,188 (finding 8, with INT-suffix fix) | **162,278** |
+| full 18/N16 cell: load-slot tests | — | 3.32 billion | **2.54 billion** (−24%) |
+| full 18/N16 cell: peak RSS | — | 8.0 GB | 6.97 GB |
+
+The full cell stops in the same place: the allowance at 1,581 s analysis CPU, PT6 `%628 = load ptr` in
+btreeBeginTrans. Other work at the stop:
+
+- pointer-containment tests 560M (down from 883M);
+- merge-family visits 353M;
+- AV merges 60.6M;
+- the btreeBeginTrans function alone: 38.5M joins in 718 worklist pops.
+
+U is unchanged: 314,822 atoms over 420 objects and 1,795 offsets, carried by many parameters.
+
+**What it suggests.**
+
+1. On the sub-closure, family slots were the load cost. On the full cell they are about a quarter of it.
+2. The rest is most likely the per-offset **exact-slot** window. The window is [o − maxSlotBytes + 1, o + size),
+   and maxSlotBytes per object is large once U's stores write wide intervals, so each of about 1,025 offsets per
+   object scans a wide window of exact slots. I did not measure this; my counters do not separate exact-slot
+   tests from family tests.
+3. Factoring exact slots the same way would make the cost proportional to the number of slots per object, not to
+   offsets × window: one test per slot against O, by binary search.
+4. Union costs come next: containment and family visits inside `AV::merge` when U-sized sets meet. That is the
+   remaining argument for a fully factored set representation (object × offset rectangles) over per-path
+   patches.
+
+**[conjecture on the split]**
+
+**Next.**
+
+- Split the counter into exact-window tests and family tests.
+- Factor the exact-slot side too: one interval test per slot against O.
+- Re-run the 100-function closure for exactness, then the full 18/N16 cell. Measure how far round 0 gets and
+  whether the merge-side costs then dominate.
