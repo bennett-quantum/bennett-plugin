@@ -923,3 +923,74 @@ per-atom part from 239 s to 1,066 s.
 invalidated nowhere because they only grow. Check exactness on musl and on the 100-function closure 3× with
 digests, then run the full 18/N16 cell with timers. In the same build, a cheap exact fix to PT12 reachability:
 compute it over an object graph maintained incrementally, not by re-scanning every slot.
+
+## Finding 13 (PARTIAL, stopped at session wind-down) — `(X, *)` summaries and incremental PT12 reachability: exact, fast on the closure, slower on the full cell
+
+**Base.** Current plugin main `09dc874`, which already contains j3l's shared/interned atom sets. The patches are
+reapplied on top of it in `.tmp`:
+
+- probe and timers;
+- INT-suffix pairing (finding 8);
+- factored exact and family loads (findings 10–11);
+- **new:** per-object width-class summaries for `(X, *)` loads. They hold the union of values by slot width plus
+  the union of ROOTs by width, are updated once per (object, width) per `store()` call, are built lazily, and are
+  disabled after the fixpoint, when ROOT pruning mutates slots;
+- **new:** incremental PT12 undefined-callee reachability over a maintained object graph, reproducing the original
+  loop's opaque case including its EXT insertion.
+
+Kept binaries: `bins/mainx-3ff5c6b1489d` (prototype) and `bins/mainb-ddba54aff956` (main + probe only).
+**[source]**
+
+**Measured.**
+
+- musl: main + probe against the old baseline, 1,306 of 1,306 identical; the prototype against main, 1,306 of
+  1,306 identical.
+- SetTextEncoding −crawl 100: main baseline 105.6 s CPU, with digests equal to the earlier baseline. Prototype 3×:
+  reports identical, order-independent digests equal at all round ends, **41–42 s** CPU including about 20% timer
+  overhead. PT12 `bindDecl` fell from about 46 s to 13 s.
+- Full LLVM 18 / N16 cell (lock; admitted 20:05Z; 9 GiB cap): stopped by me at wind-down, so **no end state**.
+  The last sample was 1,097 s CPU at worklist pop 161,698 in btreeBeginTrans (PT6): step time 1,061 s, of which
+  the per-atom load path took 738 s and merge 566 s (inclusive); 50,855 `(X, *)` loads went through the
+  summaries. The same build was **slower** than finding 12's: at pop ≈159,710 the per-atom path had taken 289 s
+  against 239 s, and finding 12 reached pop 161,717 at 972 s.
+
+**Not measured.**
+
+- The full-cell end state: final pop, stop rule and peak RSS.
+- Where the extra time inside the summary path goes.
+
+**Reading (conjecture).** The per-atom load cost is not slot scanning but merging large images into the load
+result. The old per-atom path interned its images, and its `joinedImages` identity check skipped re-merging an
+image whose storage it had already merged. `starImage` returns a fresh, uninterned AV each time, so it loses that
+skip. Interning `starImage` results and caching them per (object, width, summary version) would be the next
+change to try.
+
+## Where the prototypes live, and what is in the real analysis
+
+Every prototype in this log is **throwaway** and lives only in the private worktree
+`bennett-plugin-job-sqlite-inv/.tmp/sqlite-inv/`, never committed:
+
+- `probe/`: probe and timer code (`probe.inc`, `timers.py`), patch sources (`atomset.h`, `accel*.inc`,
+  `factored-load*.inc`, `summaries.inc`) and build scripts (`build*.py`, `build-main.py`);
+- `bins/`: kept, hashed binaries (`base-*`, `cowvpf2-*`, `cowvpft-*`, `mainx-*`, `mainb-*`);
+- `step1/`: musl census;
+- `sq/`: SQLite per-function census;
+- `sub/`: growing sub-closures and the 100-function closure runs;
+- `accel/`: crawl experiments;
+- `full/`: full-cell runners and receipts;
+- `PROGRESS.md`: resume block.
+
+**None of these changes is in the real analysis**, except what j3l landed in product independently:
+
+- `37032b6`: shared atom sets;
+- `3af6302`: PT5 budget check;
+- `f7e1629`: additive-cycle acceleration.
+
+**Next experiment** (unchanged from finding 12, refined by finding 13):
+
+1. Per-object width-class summaries for `(X, *)` loads, with interned, version-cached images so the union skip
+   still applies.
+2. Incremental undefined-callee reachability, which is already exact and cuts PT12 3.5× on the 100-function
+   closure.
+3. Check exactness on musl and on the 100-function closure 3× with order-independent digests.
+4. Then the full 18/N16 cell with timers, under the lock and admission.
