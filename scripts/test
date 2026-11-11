@@ -64,6 +64,7 @@ DRIVERS = {
     "region_keys": (),
     "descriptors": (),
     "production": (),
+    "production_multi_gates": (),
     "production_environments": tuple(
         argument
         for name in (

@@ -366,7 +366,7 @@ struct Entry {
       rows.push_back(live + " = icmp.ne " + liveTag + " " + zero);
       rows.push_back(ok + " = and " + eq + " " + live);
       rows.push_back("br " + ok + " ^" + leaf + "() ^" + next + "()");
-      rows.push_back("^" + leaf + "():"); activeRoot=site; body(slot.q); activeRoot=nullptr;
+      rows.push_back("^" + leaf + "():"); auto *previousRoot=activeRoot; activeRoot=site; body(slot.q); activeRoot=previousRoot;
       if (retire) rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + slot.tag + " " + zero);
       rows.push_back("br ^" + done + "(" + (result.empty() ? "" : names.at(returned)) + ")"); rows.push_back("^" + next + "():");
     }
@@ -1288,6 +1288,7 @@ struct Entry {
       {"region_key",regionKey(body)},{"generation_steps",1},{"resolved_budget",tuple(budget)}});
     return true;
   }
+#include "ProductionMultiGates.inc"
   void gate(CallBase &c) {
     auto measurement = c.getCalledFunction()->getName() == "__bennett_measure";
     auto *v = c.getArgOperand(measurement ? 0 : 1);
@@ -1454,7 +1455,7 @@ struct Entry {
       if (memoryDescriptors || !descriptorObjects.count(getUnderlyingObject(st->getPointerOperand())))
         for (auto &x : a.get(st->getValueOperand()).atoms) if (x.kind == Atom::Root) memoryRoots.insert(x.object);
     for(Instruction &i:instructions(f)) if(isa<SelectInst>(i) || isa<PHINode>(i)) {
-      bool descriptorUse=i.getName().starts_with("width.handle");
+      bool descriptorUse=i.getName().starts_with("width.handle") || multiWireHandleUse(i);
       for(auto *u:i.users())if(auto *st=dyn_cast<StoreInst>(u))descriptorUse |= descriptorObjects.count(getUnderlyingObject(st->getPointerOperand()));
       auto v=a.get(&i); if(descriptorUse && v.roots())for(auto &x:v.atoms)if(x.kind==Atom::Root)memoryRoots.insert(x.object);
     }
@@ -1583,28 +1584,7 @@ struct Entry {
       rows.push_back("trap"); return CallFlow::EndBlock;
     }
     if (n == "llvm.trap") { rows.push_back("trap"); return CallFlow::EndBlock; }
-    if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
-      auto w = integer(a.get(c->getArgOperand(1)), c);
-      auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");
-      if (files.count(c)) {
-        // No site is executed twice in this acyclic entry-local file.
-        // Distinct nonzero identities are stable across stores and loads;
-        // free retires the live tag before any later use can match it.
-        auto tag = fresh("i" + std::to_string(m.getDataLayout().getPointerSizeInBits()));
-        rows.push_back(tag + " = const.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + std::to_string(files.at(c).identity));
-        names[c] = tag;
-        rows.push_back("store.i" + std::to_string(m.getDataLayout().getPointerSizeInBits()) + " " + files.at(c).tag + " " + tag);
-      } else names[c] = q;
-      allocateRegister(*c, q, w);
-    } else if (n == "__bennett_qfree")
-      withHandle(c->getArgOperand(0), [&](std::string q) { rows.push_back("qreg.free " + q); }, true);
-    else if (n == "__bennett_oracle")
-      descriptor(*c);
-    else if (n == "__bennett_inplace")
-      inplace(*c);
-    else if(n=="__bennett_ctrl" && controlledIdentity(*c)) {}
-    else if (n == "__bennett_gate" || n == "__bennett_measure")
-      gate(*c);
+    if (lowerQuantumMarker(*c)) {}
     else if(n=="__bennett_nz_alloc") {
       auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
     } else if(n=="__bennett_nz_free") {
