@@ -21,7 +21,7 @@ UNKNOWN_EXIT_STATUS = 124
 # Concurrency: scripts/gate runs both LLVM majors at once; each case is one opt then single-threaded reference runs.
 MAJORS_AT_ONCE = 2
 CPUS_PER_CASE = 2
-CASE_PEAK_BYTES = 4 * 1024**3  # provisional per-case peak; replace with the measured value (reform 2026-11-11)
+CASE_PEAK_BYTES = 3 * 1024**3  # measured: reference run-program peaks at ~2.2 GB RSS per case (Spiral, 2026-11-11)
 from contracts import ROOT as R
 
 from production_environments import descriptor, DECL
