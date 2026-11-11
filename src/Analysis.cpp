@@ -2451,6 +2451,7 @@ void Analysis::step(Instruction &i) {
       a.top = x.top || y.top;
       for (auto &v : x.atoms) {
         for (auto &w : y.atoms) {
+          budgetTick();
           if (v.kind == Atom::Int && w.kind == Atom::Int &&
               v.integer.getBitWidth() == w.integer.getBitWidth()) {
             APInt b = v.integer, c = w.integer, r = b;
