@@ -69,8 +69,8 @@
     };
     resolve(0);
   }
-  bool lowerQuantumMarker(CallBase &call) {
-    auto *c=&call;auto n=c->getCalledFunction()->getName();
+  bool lowerQuantumMarker(CallBase &call, StringRef n) {
+    auto *c=&call;
     if (n == "__bennett_qalloc" || n == "__bennett_qborrow") {
       auto w = integer(a.get(c->getArgOperand(1)), c);
       auto q = files.count(c) ? files.at(c).q : fresh("qreg[" + std::to_string(w) + "]");

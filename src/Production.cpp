@@ -1584,7 +1584,7 @@ struct Entry {
       rows.push_back("trap"); return CallFlow::EndBlock;
     }
     if (n == "llvm.trap") { rows.push_back("trap"); return CallFlow::EndBlock; }
-    if (lowerQuantumMarker(*c)) {}
+    if (lowerQuantumMarker(*c,n)) {}
     else if(n=="__bennett_nz_alloc") {
       auto size=operand(c->getArgOperand(0));auto p=fresh("ptr");rows.push_back(p+" = alloc "+size);names[c]=p;recordAllocation(p,size);ccHeapBytes=table.capacities[1];
     } else if(n=="__bennett_nz_free") {

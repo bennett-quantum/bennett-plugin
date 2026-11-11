@@ -59,6 +59,7 @@ DRIVERS = {
     "cc_switch": (),
     "reversible": (),
     "r_process_arguments": (),
+    "cc_marker_dispatch": (),
     "softfloat": (),
     "wide": (),
     "varargs": (),
