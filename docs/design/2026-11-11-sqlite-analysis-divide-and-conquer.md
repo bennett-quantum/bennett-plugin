@@ -109,3 +109,67 @@ cap). It answers three questions:
 - Is it mechanism A, mechanism B, or call/memory fan-out of the `sqliteDefaultBusyCallback` kind, which a
   single function cannot show?
 - Are the large SQLite address sets dense?
+
+## Finding 2 — SQLite per function: cheap in memory, expensive only by counter crawl; the blow-up needs connected functions
+
+**Run.** Input: the original full LLVM 18 / N16 input, 1,473 defined functions (the 1,218-function sqlite closure
+plus runtime). Each function was extracted alone with `llvm-extract --func=F --rglob='.*'`, which keeps every global and
+its initialiser, so the function sees the real data image. Callees and other functions become declarations, so they
+take PT12 host-call semantics. F was made non-local so that its parameters get the PT11 unknown-caller seeds.
+Settings: 30 s allowance, production budget argv, 32-way parallel. Total wall time 51 s. **[measured]**
+
+**Concentration.**
+
+- 1,457 of 1,473 functions finish alone. Their analysis CPU sums to 325 s.
+- Per-function CPU: median 155 ms, p90 366 ms, p99 1.17 s. Only 19 passing functions take more than 1 s; the
+  slowest passing one takes 17.9 s.
+- 16 functions exhaust 30 s alone: checkTreePage, constructAutomaticIndex, convertToWithoutRowidTable, exprAnalyze,
+  exprNodePatternLengthEst, generateSortTail, jsonGroupInverse, sqlite3FindInIndex, sqlite3Insert, sqlite3ParseUri,
+  sqlite3Pragma, sqlite3VdbeExec, sqlite3VdbeHalt, sqlite3WalCheckpoint, sqlite3_str_vappendf and wherePathSolver.
+  **[measured]**
+
+**Mechanism.** All 16 are CPU problems, not memory problems. Heap at the stop is 10–23 MB, against 9 GiB in the
+whole-program run. **[measured]**
+
+| shape | functions | evidence |
+|---|---|---|
+| A, counter crawl | 13 of 16 | Largest values are integer `phi`/`add` chains growing about one INT per round: jsonGroupInverse 1,761 INTs after 880 rounds; exprNodePatternLengthEst 1,752 after 1,751; sqlite3FindInIndex 2,408 after 601; checkTreePage 441 after 441. Same shape as musl resolvconf (finding 1). |
+| A2, large spec-mandated INT sets | sqlite3VdbeExec, sqlite3VdbeHalt, sqlite3_str_vappendf (exprAnalyze partly) | `and x, m` with x = ⊤ gives every submask of m (PT5), which yields 256–4,096-element INT sets. Elementwise binary transfers then cost about the product of the operand set sizes. VdbeExec: 18 rounds, about 1.7 s per round. |
+| B, address sets | none dominant | Largest per-function address sets are 256–257 atoms: table lookups into @sqlite3UpperToLower, @sqlite3CtypeMap, @aDigits and @aPrefix (offsets 0..255, step 1), and @sqlite3Pragma.encnames (0..4,080, step 16). **Every one is dense, i.e. exactly one residue class.** |
+
+**[measured]**
+
+**The full-run blow-up is not in any function alone.**
+
+- j3l's whole-program runs stopped in sqlite3SetTextEncoding (157,636 addresses on one load), sqlite3_db_release_memory
+  and sqliteDefaultBusyCallback (6M atoms per 512 MiB). These three have no direct callees.
+- Alone, each analyses in 0.10–0.12 s and 80 MB RSS. **[measured]**
+- Their pathological values therefore enter from outside:
+  - parameters bound by PT9 at indirect call sites. SQLite reaches the VFS, pager and busy handler through function
+    pointers, and REPORT.md counts 2,229 indirect sites, 1,247 of them with 8–40 candidates;
+  - memory reached through shared globals, heap objects and EXT.
+
+  bp-fj1's 2026-11-02 note already named one instance: under §14.2 top candidates, an `alloca` of
+  pagerOpenWalIfPresent is bound to every i32(ptr,ptr) function. **[measured + source; route of entry is conjecture]**
+
+**What it suggests.** Divide-and-conquer splits the problem cleanly into two independent costs:
+
+1. **Per-function CPU (A/A2).** It is bounded and parallel by construction: 1,457 functions cost 325 s CPU in total,
+   and 16 crawl. Exact acceleration of integer recurrences fixes the crawl. Today's pattern-specific
+   `longAdditiveCycle` would need generalising to non-constant steps, `or`/`and` chains and cycles through memory.
+   That would remove A without changing any AV. **[conjecture on gain]**
+2. **Whole-program memory, about 44M value atoms in round 0.** It appears only when functions are connected, so the
+   right divide-and-conquer probe is a growing sub-closure along call edges that include indirect candidates.
+   Per-function slicing cannot see it.
+3. **Density.** Every large address set seen so far, in musl and in SQLite, is a dense residue class. If the 157,636
+   set also is, a residue/interval representation (factored-points-to, mechanism B) would hold it in O(1) atoms
+   without changing the denoted set. **[conjecture until measured]**
+
+**Next.** Growing sub-closures that follow indirect calls:
+
+- Start from sqlite3SetTextEncoding and sqliteDefaultBusyCallback.
+- Add callers and indirect-call candidates in BFS order, using §14.2 type and address-taken candidates.
+- Run each size (about 10, 30, 100, 300, … functions) with a 4 GB / 120 s cap and the probe on.
+
+Look for the size at which heap jumps from MB to GB, which value or slot carries the blob, its density, and whether it
+enters via PT9 parameter binding or via memory.
