@@ -628,3 +628,80 @@ admission was holding. That was a slip. The full cell below waited for the windo
 
 **Next (queued).** Mechanism-A extension: sum-set gcd for add chains, and cycles through a single memory slot.
 Re-run it over all 16 slow SQLite functions.
+
+## Finding 9 — the extended exact closure removes the counter crawl from 15 of the 16 slow SQLite functions
+
+**Shapes, read from IR.** The crawlers that finding 7 missed are mostly **vector induction variables** made by
+the loop vectoriser. They live in `composite`'s per-lane PHI copy, which the scalar closure never sees:
+
+- `constructAutomaticIndex %295 = phi <4 x i64> […], %303 = add %295, splat 4`;
+- `sqlite3WalCheckpoint %405 <8 x i16> + splat 8/16`;
+- `generateSortTail %405 = add <4 x i32> %368, %403`;
+- `sqlite3ParseUri <2 x i64> + zext <2 x i1>`;
+- `sqlite3Pragma`'s crawling `%2769` is `llvm.vector.reduce.add` of such a vector.
+
+The others are **add chains**, for example jsonGroupInverse `%45 = %26 + zext(i1)` then `%48 = %45 + sext(i1)`,
+and exprAnalyze. One is **recursion**: checkTreePage's `%199 = phi(-1, %192 = call @checkTreePage …)` passes
+through its own return value. musl `random.c` packs `i`, `j` and `n` through memory with `shl`/`or` and
+`lshr`/`and`, which is not an additive cycle. **[source]**
+
+**Change (throwaway `.tmp` prototype).** One exact closure, `accelerateCycle`, applied to scalar integer phis and
+to every integer lane of a vector phi:
+
+- it follows paths p ← (phi | select | freeze | add | sub)* ← p;
+- a path's step set is the **sum-set** of its steps' current INT values. PT5 takes the Cartesian product of operand
+  sets, so every p + s lies in the least fixpoint even when a step depends on p;
+- the gcd over all path sums gives the subgroup 2^tz·Z/2^W; more than K elements means ⊤.
+
+It replaces finding 7's union-of-steps rule, which was exact only for single-add paths. **[source]**
+
+**Results** (single functions, production budgets, 300 s cap for the closure). The baselines are main-equivalent
+analysis with up to 1,080 s CPU; where the baseline did not finish, the report could not be compared. **[measured]**
+
+| function | baseline: rounds / CPU | extended closure: rounds / CPU | report |
+|---|---|---|---|
+| musl resolvconf | 4,098 / 77.8 s | 3 / 0.003 s | identical |
+| exprNodePatternLengthEst | 4,098 / 135.0 s | 3 / 0.10 s | identical |
+| jsonGroupInverse (add chain) | 2,050 / 73.3 s | 3 / 0.12 s | identical |
+| exprAnalyze (add chain) | 2,050 / 242.8 s | 3 / 0.82 s | identical |
+| sqlite3FindInIndex (vector) | 4,098 / 268.9 s | 3 / 0.20 s | identical |
+| convertToWithoutRowidTable | 4,098 / 350.4 s | 3 / 0.36 s | identical |
+| constructAutomaticIndex (vector) | 4,098 / 376.5 s | 3 / 0.34 s | identical |
+| wherePathSolver | 4,098 / 595.1 s | 66 / 7.3 s | identical |
+| generateSortTail (vector) | still running at 1,080 s (1,435 rounds) | 3 / 0.28 s | baseline unfinished |
+| sqlite3ParseUri (vector) | at 1,080 s (1,951 rounds) | 3 / 0.34 s | baseline unfinished |
+| sqlite3Insert | at 1,080 s (670 rounds) | 3 / 0.79 s | baseline unfinished |
+| sqlite3VdbeHalt | at 1,080 s (1,938 rounds) | 3 / 1.66 s | baseline unfinished |
+| sqlite3_str_vappendf | at 1,080 s (845 rounds) | 3 / 1.78 s | baseline unfinished |
+| sqlite3WalCheckpoint (vector) | at 1,080 s (3,480 rounds) | 3 / 1.20 s | baseline unfinished |
+| sqlite3Pragma (vector reduce) | at 1,080 s (632 rounds) | 9 / 6.1 s | baseline unfinished |
+| sqlite3VdbeExec | at 1,080 s (833 rounds) | 17 / 24.6 s | baseline unfinished |
+| checkTreePage (recursion) | at 1,080 s (2,757 rounds) | at 300 s (1,649 rounds) | not matched |
+
+**musl corpus with the extended closure.**
+
+- 1,306 of 1,306 passing units identical at set level.
+- Four of the seven 30 s exhaustions now pass: iconv (4 rounds, 1.0 s: its address enumeration was fed by an
+  integer counter), resolvconf, vfscanf and vfwscanf.
+- random, floatscan and qsort still exhaust.
+
+**[measured]**
+
+**Process note.** The two concurrent runners extracted the same new functions into one file. One input
+(sqlite3WalCheckpoint) came out empty, and I re-ran both of its jobs. The empty-input result is not used above.
+
+**What it suggests.**
+
+1. Almost all of SQLite's counter crawl is the vectoriser's induction vectors plus short add chains. One exact,
+   about 60-line closure, applied per lane, removes it: 15 of 16 functions drop from minutes or more than 18 min
+   to 0.1–25 s, with identical reports wherever the baseline finishes.
+2. Only interprocedural recurrences remain, through a call's own return value (checkTreePage). Covering them needs
+   the same closure across PT9 return edges, or SCC-wise solving.
+3. Separately, sqlite3VdbeExec (17 rounds, 24.6 s) and wherePathSolver (66 rounds, 7.3 s) still show the
+   whole-module re-step cost per round. That is the iteration-strategy part of finding 7.
+
+**[conjecture]**
+
+**Next.** Finding 10, the factored load path on the full cell. It is already exact on musl (1,306 of 1,306) and
+gives an identical final report on SetTextEncoding −crawl 100, but its per-round **value** digests differ from the
+baseline's. I am finding the cause with a per-value dump before running the full cell.
