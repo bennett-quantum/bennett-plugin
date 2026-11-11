@@ -342,6 +342,7 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "tests/analysis_input_snapshots.py": {"complexity": 10, "functions": 1, "length_max": 87, "length_p50": 87, "length_p90": 87, "over_300": 0, "trivial_wrappers": 0},
     "tests/scalar_contract.py": {"complexity": 1, "functions": 1, "length_max": 6, "length_p50": 6, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/NativeGlobals.inc": {"complexity": 73, "functions": 4, "length_max": 29, "length_p50": 11, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},
     "src/ProductionGlobals.inc": {"complexity": 5, "functions": 1, "length_max": 12, "length_p50": 12, "length_p90": 12, "over_300": 0, "trivial_wrappers": 0},
@@ -351,7 +352,7 @@ The source keeps configured classes available; no replacement executor or privat
     "scripts/quality.py": {"complexity": 68, "functions": 6, "length_max": 46, "length_p50": 24, "length_p90": 46, "over_300": 0, "trivial_wrappers": 0},
     "scripts/record-verification.py": {"complexity": 64, "functions": 5, "length_max": 150, "length_p50": 9, "length_p90": 150, "over_300": 0, "trivial_wrappers": 1},
     "scripts/test": {"complexity": 7, "functions": 3, "length_max": 36, "length_p50": 28, "length_p90": 36, "over_300": 0, "trivial_wrappers": 0},
-    "src/Analysis.cpp": {"complexity": 6823, "functions": 98, "length_max": 428, "length_p50": 12, "length_p90": 78, "over_300": 1, "trivial_wrappers": 10},
+    "src/Analysis.cpp": {"complexity": 6847, "functions": 99, "length_max": 439, "length_p50": 12, "length_p90": 78, "over_300": 1, "trivial_wrappers": 10},
     "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
     "src/BennettPlugin.cpp": {"complexity": 914, "functions": 35, "length_max": 134, "length_p50": 7, "length_p90": 39, "over_300": 0, "trivial_wrappers": 2},

@@ -56,6 +56,7 @@ struct AnalysisWork {
     uint64_t loadImageInternHits = 0;
     uint64_t pointerContainmentTests = 0;
     uint64_t pointerBinaryPairs = 0, pointerBinaryAtoms = 0, pointerBinarySkippedPairs = 0;
+    uint64_t inputSnapshotCopiedAtoms = 0, inputSnapshotHits = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
@@ -68,6 +69,8 @@ struct AnalysisWork {
               {"pointer_containment_tests", pointerContainmentTests},
               {"pointer_binary_pairs", pointerBinaryPairs}, {"pointer_binary_atoms", pointerBinaryAtoms},
               {"pointer_binary_skipped_pairs", pointerBinarySkippedPairs},
+              {"input_snapshot_copied_atoms", inputSnapshotCopiedAtoms},
+              {"input_snapshot_hits", inputSnapshotHits},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
@@ -146,6 +149,12 @@ struct AnalysisBudget {
   std::map<const Value *, std::map<LoadSignature, LoadImage>> loadSignatures;
   std::map<size_t, SmallVector<std::weak_ptr<const AV>, 4>> loadImagePool;
   LoadImage internLoadImage(AV image);
+  // Pure transfers retain immutable operand images. One unchanged origin/leaf
+  // image can serve every instruction that reads it; later growth gets a new
+  // image while earlier transfer snapshots remain alive and exact.
+  std::map<std::pair<const Value *, std::vector<unsigned>>, LoadImage> inputImages;
+  std::map<const Instruction *, std::vector<LoadImage>> pureInputImages;
+  LoadImage snapshotInput(const Value *, ArrayRef<unsigned>, const AV &);
   void invalidateLoadImages(const Value *object) {
     loadImages.erase(object);
     loadSignatures.erase(object);
@@ -262,6 +271,17 @@ AnalysisBudget::LoadImage AnalysisBudget::internLoadImage(AV image) {
   auto result = std::make_shared<const AV>(std::move(image));
   bucket.push_back(result);
   return result;
+}
+AnalysisBudget::LoadImage AnalysisBudget::snapshotInput(
+    const Value *value, ArrayRef<unsigned> path, const AV &current) {
+  auto &image = inputImages[{value, std::vector<unsigned>(path.begin(), path.end())}];
+  if (image && sameAV(*image, current)) {
+    memoryWork(&AnalysisWork::MemoryWork::inputSnapshotHits);
+    return image;
+  }
+  image = std::make_shared<const AV>(current);
+  memoryWork(&AnalysisWork::MemoryWork::inputSnapshotCopiedAtoms, current.atoms.size());
+  return image;
 }
 struct BudgetScope {
   AnalysisBudget budget;
@@ -2065,11 +2085,22 @@ void Analysis::step(Instruction &i) {
   bool pure=isa<StoreInst>(i)||isa<BinaryOperator>(i)||isa<ICmpInst>(i)||isa<CastInst>(i)||isa<GetElementPtrInst>(i)||isa<SelectInst>(i)||isa<PHINode>(i)||isa<FreezeInst>(i);
   for(Value *v:i.operands())scalar &= v->getType()->isIntegerTy() || v->getType()->isPointerTy() || (isa<StoreInst>(i) && (v->getType()->isAggregateType() || v->getType()->isVectorTy()));
   if(scalar && pure) {
-    std::vector<AV> inputs;for(Value *v:i.operands())
-      for(auto &leaf:leaves(v->getType(),M.getDataLayout()))inputs.push_back(field(v,leaf.path));
-    auto &old=pureInputs[&i];
-    if(old.size()==inputs.size() && std::equal(old.begin(),old.end(),inputs.begin(),sameAV))return;
-    old=std::move(inputs);
+    assert(activeBudget && "pure transfer snapshots require the run's budget scope");
+    std::vector<AnalysisBudget::LoadImage> inputs;
+    for (Value *v : i.operands())
+      for (auto &leaf : leaves(v->getType(), M.getDataLayout())) {
+        if (isa<Constant>(v))
+          inputs.push_back(activeBudget->snapshotInput(v, leaf.path, field(v, leaf.path)));
+        else {
+          // Nonconstant leaves already reside in the analysis maps. Compare
+          // them before copying; get()/field() return an AV by value.
+          const AV &current = leaf.path.empty() ? values[v] : fields[{v, leaf.path}];
+          inputs.push_back(activeBudget->snapshotInput(v, leaf.path, current));
+        }
+      }
+    auto &old = activeBudget->pureInputImages[&i];
+    if (old == inputs) return;
+    old = std::move(inputs);
   }
   if (activeBudget) {
     ++activeBudget->work.transferApplications;
