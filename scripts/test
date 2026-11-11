@@ -15,7 +15,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet", "build_defaults", "scalar_contract")
+POLICIES = ("smoke", "gate_policy", "contract_policy", "pin_policy", "quality_ratchet", "build_defaults", "scalar_contract", "rust_personality")
 DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
@@ -112,6 +112,7 @@ COMMAND_HANG_GUARDS_S = {
     "pin_policy": 149,
     "quality_ratchet": 60,
     "scalar_contract": 60,
+    "rust_personality": 60,
     "build_defaults": 65,
     "recognition": 60,
     "analysis_edges": 60,
