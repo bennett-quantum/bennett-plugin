@@ -93,7 +93,20 @@ done:
     assert values['top', '%read0'] == (False, ['INT(0)', 'PTR(@a,0,0)', 'PTR(@b,0,0)']), values
     assert values['top', '%read1'] == (False, ['INT(0)', 'PTR(@c,0,0)']), values
     assert data['analysis_rounds'] >= 3, data['analysis_rounds']
-    print(json.dumps(dict(major=args.major, cases=len(receipts) + 1, passed=True)))
+    # Narrow integer source modes still supply a native pointer layout and
+    # valid comparison bases. Real comparison keeps rejecting invalid bases.
+    source = directory / 'narrow-source.ll'
+    source.write_text('target datalayout = "e-p:64:64-p1:8:8"\n'
+                      'define i8 @source(i8 %x) { %r = add i8 %x, 1\n ret i8 %r }\n')
+    argv = [f'/usr/lib/llvm-{args.major}/bin/opt',
+            f'-load-pass-plugin={args.plugin.absolute()}', '-passes=bennett',
+            '-bennett-dialect=0.2.13', '-disable-output', source]
+    for mode in ('-bennett-analysis-only', '-bennett-validate-only', '-bennett-normalise-only'):
+        result = run([*argv, mode])
+        assert result.returncode == 0, (mode, result.stderr)
+    result = run([*argv, '-bennett-comparison', '-bennett-layout-data-base=0'])
+    assert result.returncode != 0 and 'BD-E-COMPARISON-LAYOUT' in result.stderr, result.stderr
+    print(json.dumps(dict(major=args.major, cases=len(receipts) + 5, passed=True)))
 
 
 if __name__ == '__main__':

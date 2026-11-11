@@ -11,6 +11,14 @@ from analysis_convergence import MAX_ROUNDS, frozen_clock
 from contracts import ROOT, run
 
 
+def small_pointer_module(body):
+    """Keep 8-bit orbit pointers in AS1 and valid native addresses in AS0."""
+    body = re.sub(r"\bptr\b", "ptr addrspace(1)", body)
+    body = body.replace("= internal global", "= internal addrspace(1) global")
+    body = re.sub(r"^(define [^\n]*\)) \{", r"\1 addrspace(1) {", body, flags=re.M)
+    return 'target datalayout = "e-p:64:64-p1:8:8"\n' + body
+
+
 def least_fixpoint(width, seeds, edges):
     """Simultaneous set union, independent of the plugin's subgroup solver."""
     modulus = 1 << width
@@ -57,11 +65,13 @@ def main(argv=None):
 
     def check(name, body, layout="e-p:64:64", diagnostic=None, max_rounds=MAX_ROUNDS):
         source = directory / f"{name}.ll"
-        source.write_text(f'target datalayout = "{layout}"\n' + body)
+        source.write_text(small_pointer_module(body) if layout == "e-p:8:8"
+                          else f'target datalayout = "{layout}"\n' + body)
         report = directory / f"{name}.json"
         result = run([
             f"/usr/lib/llvm-{args.major}/bin/opt", f"-load-pass-plugin={plugin}",
             "-passes=bennett", "-bennett-dialect=0.2.13", "-bennett-analysis-only",
+            "-bennett-layout-data-base=4096", "-bennett-layout-text-base=4194304",
             f"-bennett-analysis-max-rounds={max_rounds}", f"-bennett-report={report}",
             "-disable-output", source,
         ], env=environment)
