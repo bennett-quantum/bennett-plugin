@@ -11,9 +11,9 @@ from contracts import ROOT as R, dialect_text
 
 p = argparse.ArgumentParser()
 p.add_argument("--major", type=int, required=True)
-p.add_argument("--beads-from-commit", metavar="SHA",
-               help="read .beads/issues.jsonl from this commit instead of the checkout (the gate report "
-                    "passes $BENNETT_GATE_SHA; the gated tree itself has no beads export)")
+p.add_argument("--beads-from-commit", metavar="SHA", default="HEAD",
+               help="commit whose .beads/issues.jsonl export is audited (the gate report passes "
+                    "$BENNETT_GATE_SHA; the gated tree itself has no beads export)")
 a = p.parse_args()
 path = R / f".tmp/region-key-audit-{a.major}.json"
 path.unlink(missing_ok=True)
@@ -30,11 +30,8 @@ x = subprocess.run(
 )
 raw = json.loads(path.read_text())
 spec = dialect_text()
-if a.beads_from_commit:
-    export = subprocess.run(["git", "-C", str(R), "cat-file", "-p", f"{a.beads_from_commit}:.beads/issues.jsonl"],
-                            capture_output=True, text=True, check=True).stdout
-else:
-    export = (R / ".beads/issues.jsonl").read_text()
+export = subprocess.run(["git", "-C", str(R), "cat-file", "-p", f"{a.beads_from_commit}:.beads/issues.jsonl"],
+                        capture_output=True, text=True, check=True).stdout
 beads = [json.loads(l) for l in export.splitlines()]
 assert x.returncode == int(raw["passed"] != raw["cases"]), x.stderr
 owners = {}
