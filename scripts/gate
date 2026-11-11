@@ -26,9 +26,11 @@ case "${1:-}" in
   "") full=0 ;;
   --entry-snapshot) full=1 ;;
   --corpus) full=corpus ;;
-  *) echo "usage: scripts/gate [--entry-snapshot | --corpus]" >&2; exit 3 ;;
+  --smoke) full=smoke ;;
+  *) echo "usage: scripts/gate [--entry-snapshot | --corpus | --smoke]" >&2; exit 3 ;;
 esac
 /usr/bin/time -f 'gate build: %e s' "$root/scripts/build"
+[ "$full" = smoke ] && exit 0  # the fast tier: the plugin builds for both majors
 if [ "$full" = corpus ]; then
   exec /usr/bin/time -f "gate corpus_gate: %e s" python3 "$root/tests/corpus_gate.py"
 fi

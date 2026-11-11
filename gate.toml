@@ -18,20 +18,19 @@ name = "quality baseline"
 argv = ["python3", "-B", "scripts/quality.py", "--check"]
 
 [[check]]
-name = "plugin gate"
-argv = ["scripts/gate"]
+name = "build"
+argv = ["scripts/gate", "--smoke"]
 
-# Input trigger is an early warning; main-health must run --tier full.
-# Include all plugin sources/test helpers/build configuration; pins are keyed automatically.
+# The whole gate (unit suites, majors loop, entry snapshots, cross-major, prior objects): post-merge only.
 [[check]]
-name = "entry snapshots"
+name = "full gate"
 argv = ["scripts/gate", "--entry-snapshot"]
 tier = "post-merge"
-inputs = ["src/", "tests/", "scripts/", "CMakeLists.txt", "cmake/", "include/", "SPEC_VERSIONS.toml", "gate.toml"]
 
 # Last, so a red here never stops the checks above (main-health baseline tracks it by name).
 [[check]]
 name = "corpus gate"
+tier = "post-merge"  # heavy: runs on main-health's cadence, not per push
 argv = ["scripts/gate", "--corpus"]
 
 # Evidence only (never the verdict): beads obligations, read from the gated commit's export.
