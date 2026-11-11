@@ -666,6 +666,7 @@ static void normaliseMemoryIntrinsics(Function &f) {
 }
 
 #include "ConstantOperands.inc"
+#include "Personality.inc"
 
 void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   if(f.hasFnAttribute("bennett.n21.boundary"))return;
@@ -681,6 +682,7 @@ void normaliseScalar(Function &f, bool wide, bool privateTransfer) {
   normaliseInteger(f);
   normaliseFP(f);
   if(wide)normaliseWideFP(f);
+  normaliseUnusedPersonality(f);
 }
 } // namespace bennett
 
