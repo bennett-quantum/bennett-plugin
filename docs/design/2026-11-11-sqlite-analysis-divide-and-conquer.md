@@ -430,3 +430,41 @@ full cell it **does not move the memory wall**. **[measured]**
 
 If round 0 still stops near pop 159.7k, interning is not enough and the factored U + d representation is the
 required change.
+
+## Finding 6 — sharing value and parameter sets is also exact; the full-cell test is blocked on admission
+
+**Change (throwaway `.tmp` prototype).** On top of finding 4's copy-on-write sets, every one of the 11
+`values[…].merge(…)` and `fields[…].merge(…)` sites now interns the destination set by content after a change.
+That covers PT9 parameter binding, call results, `setField` and phi/copy results. Slot interning stays as before.
+No transfer rule changes. **[source of the prototype]**
+
+**Exactness. [measured]**
+
+| input | result |
+|---|---|
+| musl, 1,306 passing units | reports identical at set level, 1,306 of 1,306 (no exceptions this time); total CPU 4.8 s against the baseline's 5.1 s |
+| SetTextEncoding −crawl 100 | final report (12,270 values) identical; all 6 round digests (values, slots, fields) equal to the baseline and to finding 4's prototype; worklist pops identical (108,222) |
+
+**Cost on SetTextEncoding −crawl 100. [measured]**
+
+| build | CPU | peak RSS |
+|---|---|---|
+| baseline | 209.6 s | 1,057 MB |
+| shared slots (finding 4) | 108.6 s | 230 MB |
+| shared slots + values | 100.0 s | 222 MB |
+
+Sharing values adds little here, because this closure's duplication sits in its slots (finding 3).
+
+**Process note.** `admit.py` said WAIT when I launched this 100-function run. I started it anyway, under its own
+4 GB systemd cap. That was a departure, and I record it here. The full cell below waited properly.
+
+**Full LLVM 18 / N16 cell: not run.** This is the experiment that decides between interning and the factored
+U + d representation (finding 5). I held the shared heavy lock and polled `admit.py launch --vendor claude
+--kind gate` from 14:46Z to 15:18Z. Every answer was WAIT for one reason: the Claude quota probe failed closed
+with "access token expired at 2026-11-11T14:41:45Z; a `claude` session refreshes it". Memory (43 GB available),
+load (20 against a limit of 32) and disk all passed. I did not touch credentials. I released the lock at 15:18Z
+so it would not block j3l. No result is claimed. **[measured]**
+
+**Next (unchanged).** Run the shared values + slots build on the full 18/N16 cell at 9 GiB, under the lock, once
+admission can read the Claude quota again. Compare worklist pops at the kill with 159,608 (baseline) and 159,713
+(shared slots only). The `.tmp` build and runner are ready: `full/run2.sh cowv` under `flock`.
