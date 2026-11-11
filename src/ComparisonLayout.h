@@ -7,7 +7,7 @@ namespace bennett {
 uint64_t comparisonDataBase(uint64_t defaultBase = 4096);
 bool hasComparisonDataBaseOverride();
 uint64_t comparisonTextBase(uint64_t regionsEnd);
-void initialiseComparisonLayout(llvm::Module &);
+void initialiseComparisonLayout(llvm::Module &, bool sourceOnly = false);
 bool hasComparisonLayout();
 void checkComparisonMaterialisation(llvm::Module &);
 std::optional<uint64_t> comparisonGlobalAddress(const llvm::GlobalVariable &);

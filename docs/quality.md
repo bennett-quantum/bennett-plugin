@@ -342,7 +342,7 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
-    "tests/analysis_input_snapshots.py": {"complexity": 10, "functions": 1, "length_max": 87, "length_p50": 87, "length_p90": 87, "over_300": 0, "trivial_wrappers": 0},
+    "tests/analysis_input_snapshots.py": {"complexity": 12, "functions": 1, "length_max": 100, "length_p50": 100, "length_p90": 100, "over_300": 0, "trivial_wrappers": 0},
     "tests/scalar_contract.py": {"complexity": 1, "functions": 1, "length_max": 6, "length_p50": 6, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/NativeGlobals.inc": {"complexity": 73, "functions": 4, "length_max": 29, "length_p50": 11, "length_p90": 29, "over_300": 0, "trivial_wrappers": 0},
     "src/ProductionGlobals.inc": {"complexity": 5, "functions": 1, "length_max": 12, "length_p50": 12, "length_p90": 12, "over_300": 0, "trivial_wrappers": 0},
@@ -355,13 +355,13 @@ The source keeps configured classes available; no replacement executor or privat
     "src/Analysis.cpp": {"complexity": 6847, "functions": 99, "length_max": 439, "length_p50": 12, "length_p90": 78, "over_300": 1, "trivial_wrappers": 10},
     "src/AnalysisBudgetClock.h": {"complexity": 24, "functions": 4, "length_max": 6, "length_p50": 5, "length_p90": 6, "over_300": 0, "trivial_wrappers": 0},
     "src/Bennett.h": {"complexity": 0, "functions": 1, "length_max": 1, "length_p50": 1, "length_p90": 1, "over_300": 0, "trivial_wrappers": 0},
-    "src/BennettPlugin.cpp": {"complexity": 914, "functions": 35, "length_max": 134, "length_p50": 7, "length_p90": 39, "over_300": 0, "trivial_wrappers": 2},
+    "src/BennettPlugin.cpp": {"complexity": 926, "functions": 35, "length_max": 134, "length_p50": 7, "length_p90": 39, "over_300": 0, "trivial_wrappers": 2},
     "src/ByteOrder.h": {"complexity": 15, "functions": 1, "length_max": 15, "length_p50": 15, "length_p90": 15, "over_300": 0, "trivial_wrappers": 0},
     "src/CCCalls.inc": {"complexity": 171, "functions": 3, "length_max": 81, "length_p50": 36, "length_p90": 81, "over_300": 0, "trivial_wrappers": 0},
     "src/ComparisonLayout.h": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "src/Integer.cpp": {"complexity": 614, "functions": 3, "length_max": 72, "length_p50": 54, "length_p90": 72, "over_300": 0, "trivial_wrappers": 0},
     "src/Memory.cpp": {"complexity": 34, "functions": 1, "length_max": 14, "length_p50": 14, "length_p90": 14, "over_300": 0, "trivial_wrappers": 0},
-    "src/NativeComparison.cpp": {"complexity": 715, "functions": 36, "length_max": 75, "length_p50": 7, "length_p90": 32, "over_300": 0, "trivial_wrappers": 5},
+    "src/NativeComparison.cpp": {"complexity": 706, "functions": 36, "length_max": 69, "length_p50": 7, "length_p90": 32, "over_300": 0, "trivial_wrappers": 5},
     "src/NativeComparison.h": {"complexity": 0, "functions": 0, "length_max": 0, "length_p50": 0, "length_p90": 0, "over_300": 0, "trivial_wrappers": 0},
     "src/Normalise.cpp": {"complexity": 2166, "functions": 32, "length_max": 221, "length_p50": 13, "length_p90": 44, "over_300": 0, "trivial_wrappers": 0},
     "src/Production.cpp": {"complexity": 7785, "functions": 127, "length_max": 295, "length_p50": 9, "length_p90": 37, "over_300": 0, "trivial_wrappers": 7},
