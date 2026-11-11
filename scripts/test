@@ -46,6 +46,7 @@ DRIVERS = {
     "native_comparison": (),
     "native_layout": (),
     "comparison_layout": (),
+    "constant_operands": (),
     "native_fixtures": (),
     "native_hello": (),
     "r_native_globals": (),
@@ -142,6 +143,7 @@ COMMAND_HANG_GUARDS_S = {
     # tests/comparison_layout.py: max 0.67 s wall on Spiral, LLVM18/23,
     # 2026-11-09; 10x is below the shared 60 s hang-guard floor.
     "comparison_layout": 60,
+    "constant_operands": 60,
     "native_fixtures": 68,
     "native_hello": 60,
     "r_native_globals": 60,

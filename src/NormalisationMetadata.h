@@ -2,7 +2,7 @@
 #include "llvm/IR/LLVMContext.h"
 namespace bennett {
 inline bool retainedNormalisationMetadata(llvm::LLVMContext &context, unsigned kind) {
-  for(auto name:{"bennett.rstep","bennett.n22.pack","bennett.varargs.fixed"})
+  for(auto name:{"bennett.rstep","bennett.n22.pack","bennett.varargs.fixed","bennett.constant.operand"})
     if(kind==context.getMDKindID(name))return true;
   return false;
 }
