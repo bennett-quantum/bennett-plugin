@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A controlled CPU clock interrupts non-INT Cartesian pairs inside PT5."""
+"""PT5 skips non-INT pairs and checks the clock on productive INT pairs."""
 import argparse
 import json
 import os
@@ -48,10 +48,10 @@ def main():
     clock = directory / 'clock.so'
     built = run(['cc', '-shared', '-fPIC', '-x', 'c', '-o', clock, '-'], input=CLOCK)
     assert built.returncode == 0, built.stderr
-    rows = []
-    matched = False
-    for threshold in range(1, 65):
-        report = directory / f'{threshold}.json'
+    # The clock previously expired in the useless pointer x pointer scan.
+    # Skipping that scan must reach binaryPointers (or a later transfer) first.
+    def invoke(threshold, case):
+        report = directory / f'{case}-{threshold}.json'
         env = dict(os.environ, LD_PRELOAD=str(clock.absolute()),
                    ANALYSIS_PRODUCT_CLOCK_READS=str(threshold))
         result = run([f'/usr/lib/llvm-{args.major}/bin/opt',
@@ -59,22 +59,44 @@ def main():
                       '-bennett-dialect=0.2.13', '-bennett-analysis-only',
                       '-bennett-analysis-budget-ms=1', f'-bennett-report={report}',
                       '-disable-output', source], env=env)
-        data = json.loads(report.read_text())
-        work = data['analysis_work']
-        # Four transfers have started, but binaryPointers has not started yet.
-        # An expiry on the next return or at sub's entry does not meet this.
+        work = json.loads(report.read_text())['analysis_work']
         inside = (result.returncode != 0 and '%difference = sub i64' in result.stderr
-                  and work['transfer_applications'] == 4
+                  and case == 'no-ints' and work['transfer_applications'] == 4
                   and work['memory']['pointer_binary_atoms'] == 0)
-        rows.append(dict(threshold=threshold, exit=result.returncode, inside=inside,
-                         transfers=work['transfer_applications'],
-                         pointer_atoms=work['memory']['pointer_binary_atoms'],
-                         diagnostic=[s for s in result.stderr.splitlines() if s.startswith('bennett:')]))
+        return dict(threshold=threshold, exit=result.returncode, inside=inside,
+                    transfers=work['transfer_applications'],
+                    pointer_atoms=work['memory']['pointer_binary_atoms'],
+                    diagnostic=[line for line in result.stderr.splitlines()
+                                if line.startswith('bennett:')])
+
+    skipped = invoke(5, 'no-ints')
+    (directory / 'skipped.json').write_text(json.dumps(skipped, indent=2) + '\n')
+    assert skipped['pointer_atoms'] > 0 or skipped['transfers'] > 4, (
+        'PT5 consumed the clock before binaryPointers despite empty INT tails', skipped)
+
+    # Keep the clock regression on a real integer product, where every pair acts.
+    source.write_text(text.replace('global i8 0', 'global i64 0').replace(
+        '%x = ptrtoint ptr %p to i64', '%x = load i64, ptr %p').replace(
+        '\n'.join(f'@t{i} = internal global i64 0' for i in range(count)),
+        '\n'.join(f'@t{i} = internal global i64 {i}' for i in range(count))).replace(
+        '@top(i64 %index) {', '@top(i64 %raw) {\n %index = and i64 %raw, 127'))
+    rows = []
+    matched = False
+    entry_pointer_atoms = None
+    for threshold in range(1, 129):
+        row = invoke(threshold, 'ints')
+        at_product = any('%difference = sub i64' in line for line in row['diagnostic'])
+        if at_product and row['transfers'] == 4:
+            entry_pointer_atoms = row['pointer_atoms']
+        row['inside'] = (at_product and row['transfers'] == 5
+                         and entry_pointer_atoms is not None
+                         and row['pointer_atoms'] == entry_pointer_atoms)
+        rows.append(row)
         (directory / 'results.json').write_text(json.dumps(rows, indent=2) + '\n')
-        if inside:
+        if row['inside']:
             matched = True
             break
-    assert matched, 'No allowance check fired inside the PT5 non-INT product'
+    assert matched, 'No allowance check fired inside the productive PT5 INT product'
     print(json.dumps(dict(major=args.major, clock_threshold=rows[-1]['threshold'], passed=True)))
 
 

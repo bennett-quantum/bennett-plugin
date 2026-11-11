@@ -2507,11 +2507,20 @@ void Analysis::step(Instruction &i) {
         a.merge(integer(APInt(m->getBitWidth(), k)));
     } else {
       a.top = x.top || y.top;
-      for (auto &v : x.atoms) {
-        for (auto &w : y.atoms) {
+      // Only INT pairs act here; Atom's order puts every INT in the final
+      // suffix. Pointer/function/ROOT alternatives still reach binaryPointers.
+      auto intStart = [](const AV &value) {
+        auto first = value.atoms.end();
+        while (first != value.atoms.begin() && std::prev(first)->kind == Atom::Int)
+          --first;
+        return first;
+      };
+      auto xInts = intStart(x), yInts = intStart(y);
+      for (auto left = xInts; left != x.atoms.end(); ++left) {
+        for (auto right = yInts; right != y.atoms.end(); ++right) {
           budgetTick();
-          if (v.kind == Atom::Int && w.kind == Atom::Int &&
-              v.integer.getBitWidth() == w.integer.getBitWidth()) {
+          const auto &v = *left, &w = *right;
+          if (v.integer.getBitWidth() == w.integer.getBitWidth()) {
             APInt b = v.integer, c = w.integer, r = b;
             bool valid = true;
             switch (i.getOpcode()) {
