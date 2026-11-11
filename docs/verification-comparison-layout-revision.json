@@ -1,0 +1,2988 @@
+{
+  "schema": 1,
+  "code_head": "3991909c1fb306c94f23eef0f16c2dff0c3da434",
+  "dialect_commit": "1c29c8d731228b67902c3fa72e410e1bb71d16b4",
+  "dialect_sha256": "803c2e5589fb26ddba322206a08e8759a38c23bd7eded5c31ed0ad99ba4bda15",
+  "decision": "Intentional comparison-layout placement correction under dialect0.2.13 \u00a719.5. Function addresses honor text_base0x400000 and stay disjoint from reserved device ranges; heap_base is the first4096-byte page after data. No transfer rule, published lift reference object, prior name, or old gate-pass claim changes.",
+  "cause_commits": [
+    "3112d60bd590423a06b56674a8290d92de203013",
+    "0810a57dd8136e73669c7bd788d6c93558351443"
+  ],
+  "artifact_code_commit": "eb48d1a41fcecede265cbf70d6704824097d833b",
+  "artifact_code_equivalence": {
+    "checked_paths": [
+      "src",
+      "tests",
+      "scripts",
+      "CMakeLists.txt",
+      "SPEC_VERSIONS.toml",
+      "gate.toml"
+    ],
+    "differences": []
+  },
+  "audit": {
+    "prior_objects": 312,
+    "changed": 14,
+    "unchanged": 298,
+    "missing": 0,
+    "current_objects_per_major": 313,
+    "majors": [
+      18,
+      23
+    ]
+  },
+  "oracle": {
+    "pin": "3b1090790d82a00ac95d30b8da6b42d1d7a9f5d1",
+    "sha256": "4144c748a27dc0974f6cc89dc1f0f56fe12c62276c2eb36b77e06ba11e549d04",
+    "executable": "bennett-isa-ref (release)",
+    "reply_fixture": [
+      {
+        "service": "bennett.argv",
+        "payload": "0000000000000000000000000000000000000000",
+        "reply": "0000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "objects": [
+    {
+      "object": "production-dispatch/binding-block-byte/out/top/launch.bennett",
+      "previous_sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+      "sha256": "857285f683cb3d2957e7d72f3e96cba1762e440e9f848859aacd40f7c22e4169",
+      "bytes": 3243,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v13",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v18",
+            "before": 8192,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "heap_base",
+            "before": 12288,
+            "after": 8192
+          },
+          {
+            "path": "interface_regions.ref.k0.base",
+            "before": 12288,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "d8b62cd7d2e9416b2f38824d13a19210522ec688e7604e83ef2fb74d68e3b786",
+            "after": "04f3ca145a1ffc46dcd99ba50776a7a63cb538e5482bfa0ddff4249e4a0d58b4"
+          },
+          {
+            "symbol": "top",
+            "before": "72e365cf140c32e5bdb82d04a68657ebf91e32d1c67cbfea22f6790eaeb00bfb",
+            "after": "45ebfa5b776dc5459ab1b28045aec46744b3a3afac90bd286e3b73101d1a0654"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "after_sha256": "857285f683cb3d2957e7d72f3e96cba1762e440e9f848859aacd40f7c22e4169",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "21d865e20d906ec9db55983ce356b59d6b9dc5407b05b8fb14afbacd83e47300",
+          "after_sha256": "857285f683cb3d2957e7d72f3e96cba1762e440e9f848859aacd40f7c22e4169",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-clock-read/out/top/launch.bennett",
+      "previous_sha256": "84d854a55ec40926e4f7e9ba1ebe4004b1261cef2fe9a409a3060e4e31223226",
+      "sha256": "929669ff9a9ebd3b0fddd610c1190b42db9140de315a964c19b3ca9a489f6ab2",
+      "bytes": 2916,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v12",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v17",
+            "before": 8192,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 14,
+            "after": 13
+          },
+          {
+            "path": "heap_base",
+            "before": 12288,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "7dc40b444effd45f5b256cfbfed4e52a0bb39f905ddf9652660b8c98936c1520",
+            "after": "27a8a0403bffc1938a3fe9ab8b05327d7ab4c826cf8e81ff8c6357cd158cbf73"
+          },
+          {
+            "symbol": "top",
+            "before": "7aeb8f4f42e244f5f53c620291723a92147663473a63f3de7315f6851d281edd",
+            "after": "35cdd0d98706261e3c08d9bc5715f06473893ee90b86a252777bd7139efdb177"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "84d854a55ec40926e4f7e9ba1ebe4004b1261cef2fe9a409a3060e4e31223226",
+          "after_sha256": "929669ff9a9ebd3b0fddd610c1190b42db9140de315a964c19b3ca9a489f6ab2",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "84d854a55ec40926e4f7e9ba1ebe4004b1261cef2fe9a409a3060e4e31223226",
+          "after_sha256": "929669ff9a9ebd3b0fddd610c1190b42db9140de315a964c19b3ca9a489f6ab2",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-console-byte/out/top/launch.bennett",
+      "previous_sha256": "958cfdc34c695817f6abd7f1b7efd5a43e4f7368e260f150d77d027420ac7ef2",
+      "sha256": "9b0821441ee5ef760732adba1e99b2496d80b3b377bbbadef25fa3ff143b3865",
+      "bytes": 3668,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v12",
+            "before": 8192,
+            "after": 4194304
+          },
+          {
+            "register": "v17",
+            "before": 8192,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "heap_base",
+            "before": 12288,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "088919c90f3c116f2c94b2af3425a40d0a90f48ee9782651c93c45d8a1fcb157",
+            "after": "82aa872187094d2e3f204da439cb5060bacd5c7c9234aafdc90da40940bd74b5"
+          },
+          {
+            "symbol": "top",
+            "before": "f292a2bab4ce9bd7249d99e1291ab40769956b05f5193a803fe6cde632503536",
+            "after": "9b729e32af7cf6ed00447635260d0f3c19670245a67960c15eef19189ca5411c"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "958cfdc34c695817f6abd7f1b7efd5a43e4f7368e260f150d77d027420ac7ef2",
+          "after_sha256": "9b0821441ee5ef760732adba1e99b2496d80b3b377bbbadef25fa3ff143b3865",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "958cfdc34c695817f6abd7f1b7efd5a43e4f7368e260f150d77d027420ac7ef2",
+          "after_sha256": "9b0821441ee5ef760732adba1e99b2496d80b3b377bbbadef25fa3ff143b3865",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/binding-out-byte/out/top/launch.bennett",
+      "previous_sha256": "301cee83e3006a8cf0121a535f980c9b126e2028fca4d68f16716e98ee3394b4",
+      "sha256": "b222e58d4c3ed3352dc6d3d81e5a36148b3adc66c951319e0bed95c37a4d4a64",
+      "bytes": 2505,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v12",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v17",
+            "before": 4096,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 14,
+            "after": 13
+          },
+          {
+            "path": "heap_base",
+            "before": 8192,
+            "after": 4096
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "f56db8e3cf2f95301604de891df1b159d7c4bedc1259affbc0dc6e132fdbba18",
+            "after": "53e80acd1ae1e915b3ce43f8d91c744d9f7c805920e0b1080d4d84c29ea75d91"
+          },
+          {
+            "symbol": "top",
+            "before": "8d0eab20335a3eeb3aa7621b3ede0e2b47a75565b2183d9a3d8e43f781a993ad",
+            "after": "eb431af770c0d1c3f2e0ad1fce845ea566cb60353978777ac6e59e99ee474dbd"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "301cee83e3006a8cf0121a535f980c9b126e2028fca4d68f16716e98ee3394b4",
+          "after_sha256": "b222e58d4c3ed3352dc6d3d81e5a36148b3adc66c951319e0bed95c37a4d4a64",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "301cee83e3006a8cf0121a535f980c9b126e2028fca4d68f16716e98ee3394b4",
+          "after_sha256": "b222e58d4c3ed3352dc6d3d81e5a36148b3adc66c951319e0bed95c37a4d4a64",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,1,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-memory/out/top/launch.bennett",
+      "previous_sha256": "5b4d2fda5315679642e64cb8797e5a36ff427a8ee8b18f1e7eb8bd6670552a56",
+      "sha256": "193b7eb63c6c4f65bca33c692d6bdbfd2dd369dd1faf7d98b13310a31eb71882",
+      "bytes": 3745,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v6",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v8",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v17",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v20",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v25",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v28",
+            "before": 4096,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 14,
+            "after": 13
+          },
+          {
+            "path": "heap_base",
+            "before": 8192,
+            "after": 4096
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "1290c4cdba91ec3086a349b7e1a6fdd29cc46b7148f6f8800371f1d9e860fd32",
+            "after": "567bf4c9a4c8a17a0faca805ba1b6365e80fc22069785f28dd20c75cd0f5bfa1"
+          },
+          {
+            "symbol": "ref1",
+            "before": "9e863323b6d822ac509860476dd01cec4609b1434e564352787d6aa284e35932",
+            "after": "38206107b3d99754568b06b792b97a388710491883a33848de2fa52f331303a4"
+          },
+          {
+            "symbol": "top",
+            "before": "0f3b824cbdbfed285dd68f2cc1fb11649e6912c9452b0535536b0675d2a1b196",
+            "after": "636603dfc19c86436c88fc4769577e045721fe88bc68f1bf99dbc477bca6580a"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "5b4d2fda5315679642e64cb8797e5a36ff427a8ee8b18f1e7eb8bd6670552a56",
+          "after_sha256": "193b7eb63c6c4f65bca33c692d6bdbfd2dd369dd1faf7d98b13310a31eb71882",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "5b4d2fda5315679642e64cb8797e5a36ff427a8ee8b18f1e7eb8bd6670552a56",
+          "after_sha256": "193b7eb63c6c4f65bca33c692d6bdbfd2dd369dd1faf7d98b13310a31eb71882",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,8,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-no-match/out/top/launch.bennett",
+      "previous_sha256": "2e106060e1632c63d592e63dffae455b95ecea9d8b29ae044452f2714de6ae65",
+      "sha256": "389ebc348ef41b1eeb64fc1d40461eb6c7acd0d09d0fb018334cfb5b2a2d9756",
+      "bytes": 2330,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v12",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v17",
+            "before": 4096,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 13,
+            "after": 12
+          },
+          {
+            "path": "heap_base",
+            "before": 8192,
+            "after": 4096
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "e420f69863538b7c8c727f7268900028b33f1325e63b7d55ee1990f41fefba31",
+            "after": "a00e2b7d45f16d29626f6bad75999aeb158af294ec1d9e192c92751f22ae1891"
+          },
+          {
+            "symbol": "top",
+            "before": "51619507f011d2a8f2057be0016764097f1d813a64b6829df798c8ac8422c005",
+            "after": "908afc88114a41b65fbdabee6eb3bafbaad5459fc44d6ac08ba8584a2ca1070a"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "2e106060e1632c63d592e63dffae455b95ecea9d8b29ae044452f2714de6ae65",
+          "after_sha256": "389ebc348ef41b1eeb64fc1d40461eb6c7acd0d09d0fb018334cfb5b2a2d9756",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "2e106060e1632c63d592e63dffae455b95ecea9d8b29ae044452f2714de6ae65",
+          "after_sha256": "389ebc348ef41b1eeb64fc1d40461eb6c7acd0d09d0fb018334cfb5b2a2d9756",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "production-dispatch/candidate-select/out/top/launch.bennett",
+      "previous_sha256": "4eddf85164518c8a482d6928c25cbbe7fede7acc188031c4c3f8daadedbca01d",
+      "sha256": "9e73ff9fcebd03f2e34bddda6dac40e50374ad92d21c3d7a6bca60397ade190c",
+      "bytes": 3625,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v4",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v6",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v12",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v15",
+            "before": 4096,
+            "after": 4194304
+          },
+          {
+            "register": "v20",
+            "before": 4112,
+            "after": 4194320
+          },
+          {
+            "register": "v23",
+            "before": 4096,
+            "after": 4194304
+          }
+        ],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 13,
+            "after": 12
+          },
+          {
+            "path": "heap_base",
+            "before": 8192,
+            "after": 4096
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "ref",
+            "before": "1505a33254c49d6f28a06887e1b88a9c7a8f18ae383a10a638863264950c0e0f",
+            "after": "7970e07cc9f74fa0e7553fbd781526064a956805857e2474c2dd89e65a53bce8"
+          },
+          {
+            "symbol": "ref1",
+            "before": "d6bff295caa5c7887b62bb8f13e455aafc068282cfcdc6999309f30b23ef68c0",
+            "after": "f07d411c19e65db3d93d5f56b881fb915ad38f97b74a8812b204f1f8d978332e"
+          },
+          {
+            "symbol": "top",
+            "before": "937b3094c1e21c75917d9300453cf12765b9403a3fa85c36d156e46266c45ec5",
+            "after": "444767aa1364b7ee3a8e73d00a64c1205010d20dc982c097587c0d686d9eba3a"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "4eddf85164518c8a482d6928c25cbbe7fede7acc188031c4c3f8daadedbca01d",
+          "after_sha256": "9e73ff9fcebd03f2e34bddda6dac40e50374ad92d21c3d7a6bca60397ade190c",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "4eddf85164518c8a482d6928c25cbbe7fede7acc188031c4c3f8daadedbca01d",
+          "after_sha256": "9e73ff9fcebd03f2e34bddda6dac40e50374ad92d21c3d7a6bca60397ade190c",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": 0,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "0,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": ""
+              }
+            },
+            {
+              "input": 1,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "top",
+                "--args",
+                "1,1000,1000,1000,1000",
+                "--budget",
+                "1000000,0,128,8"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i1",
+                    "value": "1"
+                  }
+                ],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-0/out/main/launch.bennett",
+      "previous_sha256": "18e42af3826c659b6e2c594509dd9487d9888175acf75f4a7bc3008c0d75a485",
+      "sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+      "bytes": 3980,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R0",
+            "before": "c27c88752e93a951baa2160dac764f64f35a8b7ae1b8fb1908b26c836f66b894",
+            "after": "037ac7153f042f27ebf37e9079a5fdd2e4c1ecf8093f7cb29b2ac7bb9ed1b079"
+          },
+          {
+            "symbol": "R1",
+            "before": "31701721614e5cbb012a03d6c045f0740b4468a79f99779a3a277ef300e2e470",
+            "after": "1d0b6e4d250401d8d2149cb784946f4b6e79f678b2f33fc9455463ab716a60ee"
+          },
+          {
+            "symbol": "main",
+            "before": "590357e102edb91299a639fe925b85a486b0063faa9468715dea82f2a3610a6f",
+            "after": "6d48ce1d000a193421bdb71098206e3fea852b30f7c9d8a1e545e89844199b48"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "18e42af3826c659b6e2c594509dd9487d9888175acf75f4a7bc3008c0d75a485",
+          "after_sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "18e42af3826c659b6e2c594509dd9487d9888175acf75f4a7bc3008c0d75a485",
+          "after_sha256": "fc2f1b7eea8cd59a95a85abe653e9eddff224fba4eeb3d49de56c320ab6efaf8",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-1/out/main/launch.bennett",
+      "previous_sha256": "cb808914f6c9d9740a5eadccd8cf58d14c5e75a29d9e9da9cd0542a08f03a2a7",
+      "sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+      "bytes": 3980,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R0",
+            "before": "c27c88752e93a951baa2160dac764f64f35a8b7ae1b8fb1908b26c836f66b894",
+            "after": "037ac7153f042f27ebf37e9079a5fdd2e4c1ecf8093f7cb29b2ac7bb9ed1b079"
+          },
+          {
+            "symbol": "R1",
+            "before": "31701721614e5cbb012a03d6c045f0740b4468a79f99779a3a277ef300e2e470",
+            "after": "1d0b6e4d250401d8d2149cb784946f4b6e79f678b2f33fc9455463ab716a60ee"
+          },
+          {
+            "symbol": "main",
+            "before": "9def95f479f657990f5fdaa5c88a4bf77cdb7945580d9c2f1073fe87c5498023",
+            "after": "6f892b3e85989f12d1613488e4f87cb9f1585bd3c80b8e8feb5424c2f0461d9f"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "cb808914f6c9d9740a5eadccd8cf58d14c5e75a29d9e9da9cd0542a08f03a2a7",
+          "after_sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": "78"
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "cb808914f6c9d9740a5eadccd8cf58d14c5e75a29d9e9da9cd0542a08f03a2a7",
+          "after_sha256": "1c2a422dc452039dd03d0fd527836569a9528374369ac9e409e2b6b4ddd69193",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "FAILED",
+                "fault": 4,
+                "faults": [
+                  {
+                    "code": 4,
+                    "name": "FAULT_UB_TRAP"
+                  }
+                ],
+                "results": [],
+                "console_hex": "78"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/budget-2/out/main/launch.bennett",
+      "previous_sha256": "859bf50fbd8f3c5dd9be04f87a970309ae712ee5739094af15bbeb2823ed1ac7",
+      "sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+      "bytes": 3980,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R0",
+            "before": "c27c88752e93a951baa2160dac764f64f35a8b7ae1b8fb1908b26c836f66b894",
+            "after": "037ac7153f042f27ebf37e9079a5fdd2e4c1ecf8093f7cb29b2ac7bb9ed1b079"
+          },
+          {
+            "symbol": "R1",
+            "before": "31701721614e5cbb012a03d6c045f0740b4468a79f99779a3a277ef300e2e470",
+            "after": "1d0b6e4d250401d8d2149cb784946f4b6e79f678b2f33fc9455463ab716a60ee"
+          },
+          {
+            "symbol": "main",
+            "before": "797cfdd9ad7f4eb0d6641acbf540bf97c50d04ba4c7d340ed57a5ac7d495e54e",
+            "after": "7154d99ba69e510cddd931c95b20ab644ea23ce13b5536322cfaea95bdf2fac4"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "859bf50fbd8f3c5dd9be04f87a970309ae712ee5739094af15bbeb2823ed1ac7",
+          "after_sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "859bf50fbd8f3c5dd9be04f87a970309ae712ee5739094af15bbeb2823ed1ac7",
+          "after_sha256": "24e2f5087e0e333ee9b9e288b400cf4938637cfd773770e245b00a2e57b72a3f",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-asm/out/main/launch.bennett",
+      "previous_sha256": "6892b6d531171b282ab8480110efb4a73b03269108211afac3d44cfc3753365d",
+      "sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+      "bytes": 4980,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R0",
+            "before": "016996a08c1445912c557b695aa7673dbc681029b13f3c9025f89f18c71ee8d8",
+            "after": "d063cb7a31ffadced911648783bf35693f43fcf0fce8f65005d492a097ae1937"
+          },
+          {
+            "symbol": "R1",
+            "before": "31701721614e5cbb012a03d6c045f0740b4468a79f99779a3a277ef300e2e470",
+            "after": "1d0b6e4d250401d8d2149cb784946f4b6e79f678b2f33fc9455463ab716a60ee"
+          },
+          {
+            "symbol": "main",
+            "before": "b564db5d6a4b1ea3d689d1bc560879c47cebacc0f6051686d38f9202ddb8ed2a",
+            "after": "2fc97ffd0ce79ebc19c7a104c7bb386bf0592d2cc288dc77afd0967da9407b01"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "6892b6d531171b282ab8480110efb4a73b03269108211afac3d44cfc3753365d",
+          "after_sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "6892b6d531171b282ab8480110efb4a73b03269108211afac3d44cfc3753365d",
+          "after_sha256": "55134a4894d6a64929f055d0e80ce448c02928b7e913e7f0ba5a1e0471690791",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-callback/out/main/launch.bennett",
+      "previous_sha256": "c2eba0b084bd1b54279d491621f47dc1a33f2db21365273c3db9b579b8da6106",
+      "sha256": "5a501d794a6aa5f0d5674818cecc216ad92dd63d52278d4d7f305678fd2e16c7",
+      "bytes": 5332,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [
+          {
+            "register": "v19",
+            "before": 2105360,
+            "after": 4194320
+          }
+        ],
+        "data_images": [
+          {
+            "image": "G2",
+            "before": "1020200000000000",
+            "after": "1000400000000000"
+          }
+        ],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "G2",
+            "before": "d22b6564fc6bef8d92596e6b8a1ff6b4fea5f845a7927c36e8763839802d93c9",
+            "after": "deb1558460e033064fa37924dbc8dff3b11b78d2d7cd2858565e96ce01f70464"
+          },
+          {
+            "symbol": "R2",
+            "before": "c7b28274b27a06659c4e226c2a188724b411f69fea77edf8e9e9d9e58f2b71cb",
+            "after": "190656eb89224af6b3a0c4da3a0dff1a8d6b9a1cb8164f9eb9e94a4409e61226"
+          },
+          {
+            "symbol": "main",
+            "before": "06ba6eff0b1ef650702deece69ecf0451c2e1a094cd5e4d1eeb977d0b4d23d13",
+            "after": "26fce45f8fbdd68c3f4c4e234e244bdfa21dbbc3462b1307f949d1176e4af520"
+          },
+          {
+            "symbol": "R0",
+            "before": "81744936adcd997831734c09c918625740d7482e024210fcd0e53e0a204f7660",
+            "after": "534e2d11cd90729f845808af3c5a73e6830aa73d3cae7008499539f616cd8d04"
+          },
+          {
+            "symbol": "R1",
+            "before": "069251341db4256a49aab6f23fb9e280c93d027389a6a3521456079ebba43d13",
+            "after": "7623141f7ca101559189b39edf3f24cab6d9c1bea4df964adf4e0e319d45a898"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "c2eba0b084bd1b54279d491621f47dc1a33f2db21365273c3db9b579b8da6106",
+          "after_sha256": "5a501d794a6aa5f0d5674818cecc216ad92dd63d52278d4d7f305678fd2e16c7",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "c2eba0b084bd1b54279d491621f47dc1a33f2db21365273c3db9b579b8da6106",
+          "after_sha256": "5a501d794a6aa5f0d5674818cecc216ad92dd63d52278d4d7f305678fd2e16c7",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "78"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-console/out/main/launch.bennett",
+      "previous_sha256": "4eea7e615519a29ffed68b7d1f1dfc67cf5d5fc1615db246639d68336d532267",
+      "sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+      "bytes": 3989,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R0",
+            "before": "bc8d5c931604e215278a3bbb8a04b3b540df20d68e3030c70c36358daef12d48",
+            "after": "94082f21af7fdbb433d79a51619b0f385f0131106f75a07fc882aa618dfde7fd"
+          },
+          {
+            "symbol": "R1",
+            "before": "96f036be234fd71b0827c28c30b05c15926e949c984832384e11dd469494b854",
+            "after": "1a34f19b7a3ceed2b7e16b4bc32c547bb351bbd423e883d4fcd92a2d99495bb9"
+          },
+          {
+            "symbol": "main",
+            "before": "c335e0af20911ef419a3cbc0f5e986e446cb82ee057217dc4eaafe65b86229c2",
+            "after": "13cc1ff53728126566eb8eb2ed3fb1178ce0b3cc3797d46cbe6829e0cb8c44e2"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "4eea7e615519a29ffed68b7d1f1dfc67cf5d5fc1615db246639d68336d532267",
+          "after_sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "68690a"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "4eea7e615519a29ffed68b7d1f1dfc67cf5d5fc1615db246639d68336d532267",
+          "after_sha256": "079d8499f07f4606260efe25c546541926672c67e2b7a88b58392774a5ce06f4",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "68690a"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "0"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "object": "reversible/r-start-exit/out/main/launch.bennett",
+      "previous_sha256": "6fef58e391bfcf0b4a71d7f51817567f2984faa8f6b64efd45cff13aa11dfc34",
+      "sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+      "bytes": 7316,
+      "cause_commit": "3112d60bd590423a06b56674a8290d92de203013",
+      "layout_followup_commit": "0810a57dd8136e73669c7bd788d6c93558351443",
+      "spec_clause": "Dialect0.2.13 \u00a719.5 comparison-link placement and heap alignment; \u00a74.4 unique function identity; \u00a717.4 plugin-defined CC/R lowering.",
+      "reason": "Only placement constants, address images, layout fields and their bound interface hashes change; symbol signatures and all other instructions are identical.",
+      "majors": [
+        18,
+        23
+      ],
+      "changes": {
+        "function_constants": [],
+        "data_images": [],
+        "layout": [
+          {
+            "path": "H",
+            "before": 22,
+            "after": 18
+          },
+          {
+            "path": "heap_base",
+            "before": 2109440,
+            "after": 8192
+          }
+        ],
+        "interface_hashes": [
+          {
+            "symbol": "R2",
+            "before": "b417804642a59bd912f2f9a515024a4adad04fa9c6f7ffaf14bef7ffcc5d5710",
+            "after": "1c05702691800bbbd7af4f345a6d044633626cb0fb16c55a50deac941570c13c"
+          },
+          {
+            "symbol": "R3",
+            "before": "54c54c9d24eba5e432bc3b07b65e42a2091daf44dcc417867ca1bc3aa9e70447",
+            "after": "8bb138f1ef928e364753daa8766fa524b704fa4e430655abbe46702c674e2a5f"
+          },
+          {
+            "symbol": "main",
+            "before": "50585efde0a7d59e48fd7d279d4c85e2d06aebdffdf110fc566a9bca61b53bb2",
+            "after": "54aaf2539275dc50d75d26b47f070206de84176fc5832e8b36fe6c88a548703b"
+          },
+          {
+            "symbol": "R0",
+            "before": "0349def0153cc1184b29b356cbebb61059a996b497113e3199997fb3bd847e79",
+            "after": "7bb2cf06bc8f18ec1455dbf52aabf090c911437cba31ba0320068414f79bd84a"
+          },
+          {
+            "symbol": "R1",
+            "before": "c7d441fbc0fe056bc1433c5e21ad08f3754aff0edfa315d5eb6ea36c1e3fdb26",
+            "after": "38c9553e8e26241e8a18a674edab6821f1d9760c982152451d2001d97d29884b"
+          }
+        ]
+      },
+      "runs": [
+        {
+          "major": 18,
+          "identical": true,
+          "before_sha256": "6fef58e391bfcf0b4a71d7f51817567f2984faa8f6b64efd45cff13aa11dfc34",
+          "after_sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "3"
+                  }
+                ],
+                "console_hex": "780a"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "3"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        },
+        {
+          "major": 23,
+          "identical": true,
+          "before_sha256": "6fef58e391bfcf0b4a71d7f51817567f2984faa8f6b64efd45cff13aa11dfc34",
+          "after_sha256": "9237462a76ad87c684929fd8bc8d6ce0961e6075b9029849c245851afd810225",
+          "independent_check": {
+            "before_exit": 0,
+            "after_exit": 0
+          },
+          "vectors": [
+            {
+              "input": null,
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES"
+              ],
+              "identical_projection": {
+                "status": "COMPLETED",
+                "fault": null,
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "3"
+                  }
+                ],
+                "console_hex": "780a"
+              }
+            },
+            {
+              "input": "reverse",
+              "before_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$BEFORE_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "after_command": [
+                "$PINNED_ISA_REF",
+                "run-program",
+                "$AFTER_OBJECT",
+                "main",
+                "--budget",
+                "1000000,131072,4096,32",
+                "--replies",
+                "$EMPTY_ARGV_REPLIES",
+                "--reverse"
+              ],
+              "identical_projection": {
+                "status": "REVERSED",
+                "faults": [],
+                "results": [
+                  {
+                    "type": "i32",
+                    "value": "3"
+                  }
+                ],
+                "console_hex": "",
+                "equals_entry": true,
+                "memory_equals_entry": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
