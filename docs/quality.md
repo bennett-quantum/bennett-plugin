@@ -245,6 +245,10 @@ It verifies the frozen module hashes, reversible publication and independent
 reference admission. The extracted marker dispatcher receives the resolved
 callee name already established by its caller; a typed call may resolve to a
 function while `getCalledFunction()` is null. This registers the new driver.
+The reduced LLVM fixture covers a differing call type and a function alias.
+Forward execution must retain both callees' state updates and return 42;
+reverse execution must restore the entry state and memory. The driver budget
+includes these executable assertions in addition to the frozen-module replay.
 
 ## Multiwire marker lowering
 
@@ -361,7 +365,7 @@ The source keeps configured classes available; no replacement executor or privat
 {
   "files": {
     "tests/analysis_additive_cycles.py": {"complexity": 47, "functions": 2, "length_max": 66, "length_p50": 12, "length_p90": 66, "over_300": 0, "trivial_wrappers": 0},
-    "tests/cc_marker_dispatch.py": {"complexity": 5, "functions": 1, "length_max": 35, "length_p50": 35, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
+    "tests/cc_marker_dispatch.py": {"complexity": 14, "functions": 2, "length_max": 36, "length_p50": 28, "length_p90": 36, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_atom_sharing.py": {"complexity": 2, "functions": 1, "length_max": 32, "length_p50": 32, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
     "src/AnalysisAtomSet.h": {"complexity": 89, "functions": 21, "length_max": 19, "length_p50": 1, "length_p90": 6, "over_300": 0, "trivial_wrappers": 12},
     "tests/analysis_product_budget.py": {"complexity": 15, "functions": 2, "length_max": 76, "length_p50": 18, "length_p90": 76, "over_300": 0, "trivial_wrappers": 0},
