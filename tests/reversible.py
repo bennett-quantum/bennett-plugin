@@ -30,6 +30,7 @@ def main():
     for case, expected, status in [
         ("r-console", "68690a", "0"),
         ("r-start-exit", "780a", "3"),
+        ("r-exit-widths", "780a", "3"),
         ("r-callback", "78", "0"),
         ("r-asm", "78", "0"),
     ]:

@@ -300,7 +300,8 @@ struct Entry {
     std::vector<std::string> values;
     for(auto &t:resultTypes) {
       auto z=number(0);if(t=="ptr")z=emit("ptr","inttoptr "+z);
-      else if(t!="i64")z=emit(t,"trunc."+t+" "+z);
+      // ISA §3.3: preserve zero's bits while strictly narrowing or widening.
+      else if(t!="i64")z=emit(t,std::string(std::stoul(t.substr(1))<64?"trunc.":"zext.")+t+" "+z);
       values.push_back(z);
     }
     rows.push_back("ret"+(values.empty()?"":" "+join(values," ")));
