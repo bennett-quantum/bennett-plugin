@@ -994,3 +994,88 @@ Every prototype in this log is **throwaway** and lives only in the private workt
    closure.
 3. Check exactness on musl and on the 100-function closure 3× with order-independent digests.
 4. Then the full 18/N16 cell with timers, under the lock and admission.
+
+## Finding 14 — provenance of U: it is born at one destructor call through a ⊤ callee, and spreads by §14.2 type-wide dispatch
+
+**Input and build.** The frozen cc12e9a input is not on this host, so I rebuilt 18/N16 with the rung-4 `gate.py` recipe:
+SQLite 3.54.1, the pinned flags, and the pinned arith (5e9b450). The result is `postlink.ll` sha256 `3c51062848dd…`,
+with 1,487 defined functions against 1,473 in cc12e9a. Analysis source is main b120196 plus a read-only probe, run
+analysis-only with production budgets. The probe logs:
+
+- the first time any value, field or slot reaches 4, 16, 64, 128, 256 or 400 distinct objects, with the instruction
+  being stepped and its operands' sizes;
+- the first time each object enters a set of 200 or more objects ("join");
+- every indirect call whose candidate set became type-wide.
+
+**[measured]**
+
+**What U is made of.** The joined objects are 468 constant globals (string literals and constant tables), 9 mutable
+globals and 44 allocas. **No heap object** is among them. U is "every `char *` target plus every function-table
+entry", not "every object". **[measured]**
+
+**Where U is born.** It happens at worklist pop 30,151 of round 0, in `sqlite3VdbeMemSetStr`:
+`tail call void %4(ptr %1)`. This is `xDel(z)`, the destructor call.
+
+- AV(`%4`) has 4 atoms, no object, and ⊤.
+- §14.2 turns ⊤ into every address-taken function of the call's type, `void(ptr)`.
+- PT9 then binds `z`, 191 string literals, to parameter 0 of 40 functions in that one step: `sqlite3_free`,
+  `sqlite3MemFree`, `pcache1Destroy`, `sqlite3RowSetClear`, `jsonArrayFinal`, `jsonObjectFinal`, `sumFinalize`,
+  `row_numberValueFunc`, `statAccumDestructor`, ….
+- From there the spread is ordinary PT6/PT7/PT9. A `sqlite3_context *` that now "points to" string literals is
+  dereferenced, its fields are stored through, and stores land in string literals (`statAccumDestructor`
+  `store ptr %14, ptr %0` writes `@sqlite3_version`, `@.str.*`).
+- Later the same pattern repeats at other type-wide sites, for example `btreeInvokeBusyHandler %14`, which reaches
+  403 objects at pop 147,807. In this run 356 indirect sites became type-wide: 313 because the callee had the ⊤
+  flag, and 43 because the callee held a data pointer atom.
+
+**[measured]**
+
+**Why `%4` is ⊤ [source].** Two sources:
+
+- **The sentinel.** `SQLITE_TRANSIENT` is `inttoptr (i64 -1 to ptr)`. For a non-zero INT, `convert` adds the numerical
+  unknown and ⊤. §5.2 states this outright: "An `inttoptr` of a constant gives (EXT, `*`) and, for function-pointer
+  purposes, ⊤". The guard `xDel != SQLITE_TRANSIENT` is invisible to a flow-insensitive analysis.
+- **Host seeding.** Every non-local function is a host function in production. PT11 gives its pointer parameters
+  (EXT, `*`), so destructor arguments of API functions are ⊤ too.
+
+**Three diagnostic builds** (probe only, **unsound, never product**). Each was run to round-0 pop of about 160k on the
+same input. **[measured]**
+
+| build | U forms? | events reaching ≥ 200 objects | largest set at pop ≈ 158k |
+|---|---|---|---|
+| main + probe | yes, 403 objects, 85,958 atoms by pop 152k | ≈ 5,300 | 85,958 atoms |
+| drop explicit FN candidates whose type ≠ call type | yes, 404 objects / 85,958 atoms | — | 85,958 atoms |
+| `inttoptr(const ≠ 0)` keeps INT only (sentinel exact) | yes, 404 objects / 85,959 atoms | 5,295 | 85,959 atoms |
+| **no type-wide dispatch from ⊤ at indirect calls** | **no** | **13** | 32,939 atoms (195 objects) |
+
+What the table shows:
+
+1. Type-mismatched explicit FN candidates amplify the collapse but do not start it.
+2. Making the sentinel exact alone does not help, because host-seeded ⊤ reaches the same destructor calls.
+3. Turning off ⊤ type-wide dispatch removes almost all of the collapse.
+4. A second, smaller merge remains. `Parse *` reaches 61 objects and `ExprList` items reach 195 objects and 119 FN
+   atoms (`sqlite3ExprCodeIN %148`), most likely through union and `void *` plumbing. **[conjecture on the route]**
+   Even in this build, `btreeBeginTrans` stores into string literals at out-of-bounds offsets (`@.str.1101` offset
+   9,556). Those offsets are PT2/PT5's retained modular alternatives.
+
+**What it suggests.**
+
+1. The CPU and memory walls of findings 5–13 are symptoms. The root is a precision collapse in the *reference*
+   analysis on SQLite's callback idiom:
+   - a destructor or callback pointer that may be a sentinel, or comes from the host, is ⊤;
+   - §14.2 dispatches ⊤ to every address-taken function of type `void(ptr)` (40 or more functions);
+   - context-insensitive PT9 then merges every argument into every parameter, and the merged parameters are
+     dereferenced.
+2. This is a property of the specified least fixpoint (§5, §5.2's `inttoptr` rule, §14.2, PT11), not of the solver.
+   A faster solver computes the same U.
+3. Whether U is the true reference result, or a spec precision gap to fix by erratum, is a maintainer decision. Two
+   candidate refinements with soundness arguments to check:
+   - (a) a constant `inttoptr` whose value cannot equal any A(F) contributes no function candidates;
+   - (b) arguments bound by a type-wide ⊤ dispatch are confined to targets compatible with the callee.
+   I name the clauses and stop.
+
+**Next.** Two things:
+
+- Measure the residual merge in the no-⊤-dispatch build: its route, and whether round 0 then completes.
+- Count how much of U survives each of the candidate refinements (a) and (b), once the maintainer says which are
+  admissible.
