@@ -7,10 +7,12 @@ bool isVaOperation(const Instruction &i) {
   return intr && (intr->getIntrinsicID()==Intrinsic::vastart ||
                   intr->getIntrinsicID()==Intrinsic::vaend || intr->getIntrinsicID()==Intrinsic::vacopy);
 }
+static bool unsupportedVaABI(Module &,const Value *);
 namespace {
 enum class VaTarget {X86_64,AArch64,RISCV64};
 VaTarget vaTarget(Module &m,const Value *at) {
   Triple triple(m.getTargetTriple());
+  if(unsupportedVaABI(m,at))unimplemented("§14.3 N23 va_list row for this target ABI",2,at);
   // A module with no triple is the System V layout of every published example.
   if(triple.getArch()==Triple::UnknownArch || triple.getArch()==Triple::x86_64)return VaTarget::X86_64;
   if(triple.getArch()==Triple::aarch64)return VaTarget::AArch64;
@@ -89,6 +91,8 @@ void lowerVaOperations(Function &f,Value *block) {
     Value *cursorAddress=target==VaTarget::X86_64?b.CreateGEP(b.getInt8Ty(),v->getPointerOperand(),b.getInt64(8),"nz.vov."+r):v->getPointerOperand();
     auto *cursor=b.CreateLoad(b.getPtrTy(),cursorAddress,"nz.vc."+r);cursor->setAlignment(Align(8));
     auto *t=v->getType();
+    if(!t->isSized() || dl.getTypeStoreSize(t).isScalable())
+      unimplemented("§5.2 / §14.3 N23 va_arg has no fixed ABI size",2,v);
     uint64_t align=std::max<uint64_t>(8,dl.getABITypeAlign(t).value());
     Value *at=cursor;
     if(align>8) {
@@ -105,6 +109,7 @@ void lowerVaOperations(Function &f,Value *block) {
 }
 
 }
+#include "VarargsAnalysis.inc"
 void normaliseVarargs(Module &m,Function *&root) {
   auto &ctx=m.getContext();
   auto spared=[&](Function *f) {return f->isIntrinsic() || markers().count(f->getName().str());};
@@ -116,36 +121,14 @@ void normaliseVarargs(Module &m,Function *&root) {
       calls.push_back(c);
     }
   }
-  auto &dl=m.getDataLayout();
   std::map<Function *,unsigned> resultless;
   for(auto *c:calls) {
     if(!isa<CallInst>(c))unimplemented("§14.3 N23 invoke of a variadic function",2,c);
     Function *caller=c->getFunction();auto *oldType=c->getFunctionType();
     unsigned fixed=oldType->getNumParams();
     std::string r=c->hasName()?c->getName().str():caller->getName().str()+"."+std::to_string(resultless[caller]++);
-    uint64_t size=0,alignment=8;
-    SmallVector<uint64_t> offsets;
-    for(unsigned k=fixed;k<c->arg_size();++k) {
-      if(c->paramHasAttr(k,Attribute::ByVal))unimplemented("§14.3 N23 byval variadic argument",2,c);
-      auto *t=c->getArgOperand(k)->getType();
-      uint64_t align=std::max<uint64_t>(8,dl.getABITypeAlign(t).value());
-      size=alignTo(size,align);offsets.push_back(size);
-      size+=alignTo(dl.getTypeStoreSize(t).getFixedValue(),8);
-      alignment=std::max(alignment,align);
-    }
-    IRBuilder<> b(ctx);
-    Value *block=ConstantPointerNull::get(b.getPtrTy());
-    if(size) {
-      b.SetInsertPoint(&*caller->getEntryBlock().getFirstInsertionPt());
-      auto *slot=b.CreateAlloca(ArrayType::get(b.getInt8Ty(),size),nullptr,"nz.vb."+r);
-      slot->setAlignment(Align(alignment));block=slot;
-      b.SetInsertPoint(c);
-      for(unsigned k=fixed;k<c->arg_size();++k) {
-        unsigned j=k-fixed;
-        Value *address=j?b.CreateGEP(b.getInt8Ty(),block,b.getInt64(offsets[j]),"nz.vb"+std::to_string(j)+"."+r):block;
-        b.CreateStore(c->getArgOperand(k),address)->setAlignment(Align(std::max<uint64_t>(8,dl.getABITypeAlign(c->getArgOperand(k)->getType()).value())));
-      }
-    }
+    IRBuilder<> b(c);
+    Value *block=spillVaArguments(b,c,r);
     SmallVector<Type *> params(oldType->param_begin(),oldType->param_end());params.push_back(PointerType::get(ctx,0));
     auto *newType=FunctionType::get(oldType->getReturnType(),params,false);
     SmallVector<Value *> args(c->arg_begin(),c->arg_begin()+fixed);args.push_back(block);

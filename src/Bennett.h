@@ -51,6 +51,13 @@ class Analysis {
   bool changed = false;
   bool virtualFP = false;
   std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> fpTransfers;
+  std::map<llvm::Instruction *, std::unique_ptr<llvm::Function>> vaTransfers;
+  std::map<llvm::Function *, AV> vaBlocks;
+  void bindVarargs(llvm::CallBase &, llvm::Function &);
+  void varargsReachable(llvm::CallBase &, std::set<const llvm::Value *> &);
+  void seedVarargs(llvm::Function &);
+  bool stepVarargs(llvm::Instruction &);
+  AV evaluateVarargs(llvm::Instruction &, bool spill);
   std::map<const llvm::Value *, AV> values;
   std::map<const llvm::Instruction *, std::vector<AV>> pureInputs;
   std::vector<Slot> slots;
@@ -102,6 +109,7 @@ std::string scalarGlobalKey(const llvm::GlobalVariable &);
 std::string scalarGlobalImage(llvm::GlobalVariable &, const std::map<const llvm::GlobalVariable *,uint64_t> &);
 void validateResidual(llvm::Module &, bool classical = false,
                       const std::set<llvm::Function *> *variants = nullptr);
+llvm::Function *varargsTransfer(llvm::Instruction &, bool spill);
 void normaliseScalar(llvm::Function &, bool wide = true, bool privateTransfer = false);
 void normaliseFP(llvm::Function &);
 void materialiseFPBits(llvm::Function &);
