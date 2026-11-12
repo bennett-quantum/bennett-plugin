@@ -1540,3 +1540,81 @@ Bennett's extra cost is conjecture]**
   - which of those sites have quantum-dependent callee values;
   - how many width, op and cls operands are ⊤ (BLK-1);
   - |R| against "all live allocations".
+
+## Finding 20 — solver sizing: early rounds are pure growth (a worklist saves nothing there); crawls are where round-robin wastes work; Bennett's sets are mostly offset atoms SVF does not have
+
+Configuration (rebuilt input `3c51062…`, internalised):
+
+- **Sound switches:** VA (N23 model), CFSKIP (exact collapse), VANOREG (sound-more-precise).
+- **Diagnostic switch:** SEED=1.
+
+A step counts as having changed input when, since its previous step, any of these changed:
+
+- an operand AV or field;
+- any slot of an object reachable from its pointer operands (loads and calls);
+- the return AVs of any possible callee.
+
+Thread CPU is timed around `step()`. "New atoms" is the growth of total input-operand atoms over the previous step.
+
+**1. Wasted work in round-robin [measured].**
+
+| input | rounds observed | changed-input steps | CPU in changed steps | CPU in unchanged steps | new fraction of input atoms (changed steps) |
+|---|---|---|---|---|---|
+| hello (21 functions, finishes) | 5 (fixpoint) | 6.2% | ≈0 | ≈0 | 0.35 |
+| printf program (66 functions, 7.5k instructions) | 669 by 600 s, still growing about 12 atoms per round | 2.4% | 371 s | 110 s (23%) | 0.08 |
+| SQLite BFS-25 (6.9k instructions) | 47 by 600 s | 0.9% | 3.8 s | 482 s (**99%**) | 0.52 |
+| SQLite BFS-100 (38k instructions) | round 2 | 42.8% | 246 s | 60 s (20%) | 0.79 |
+| **full input, round 1, first 16,862 steps** | — | **75%** | **199.5 s** | **0.0 s** | **0.99** |
+
+Reading:
+
+- **Early rounds of the big inputs are pure growth.** Almost every step has changed inputs, and almost all of their
+  input atoms are new. A worklist bounds savings at 0–20% of CPU there, and difference propagation at about 1–20% of
+  atoms.
+- **Later rounds are crawls.** printf has been crawling for 669+ rounds (mechanism A, one or two atoms per round
+  through vfprintf). BFS-25 crawls with 8 changed steps a round.
+  - There, round-robin re-executes about 99% of steps. A worklist would remove most of each round's CPU: 23% for
+    printf, where pure-transfer snapshots already make unchanged steps cheap, and 99% for BFS-25, where unchanged
+    loads and calls are expensive.
+  - The number of rounds would remain. Only acceleration removes a crawl (findings 7 and 9).
+- The existing pure-transfer snapshots already make unchanged scalar steps nearly free. Unchanged cost sits in loads
+  and calls, which "deliberately remain live".
+
+**2. Fixpoint run (started 10:58Z).**
+
+- **Setup:** detached unit `sqsize-fix`, allowance lifted to 21,600,000 ms in the diagnostic argv only, MemoryMax
+  9 GiB, wall cap 6 h. The heartbeat is one line per round.
+- **Round 0:** 177 s CPU, 270,203 values, 4.27M value atoms, 87,996 slots (196k atoms), 99,795 unique sets, 444
+  type-wide sites, 366 MB RSS.
+- **Round 1:** still running at 10 min of CPU (pop about 293k of 553k in the parallel heartbeat run). The result is
+  pending.
+
+**3. Problem size: SVF (`wpa -ander`, no indirect-edge limit) and Bennett on the same module [measured].** The Bennett
+column is the end of round 0, not a fixpoint.
+
+| quantity | SVF (fixpoint) | Bennett (after round 0) |
+|---|---|---|
+| pointer / value nodes | 302,347 pointers; 93,524 constraint-graph nodes after merging | 270,203 values (all types) + 87,996 slots |
+| memory objects | 6,676 (1 heap; arrays field-insensitive: 1,816 FI, 796 FS, 2,272 field objects) | objects × exact offsets: each object/offset pair is an atom |
+| constraint edges / transfers | 147,821 edges: 63,264 copy, 20,841 load, 7,080 store, 56,636 gep | 276,582 instructions re-stepped per round |
+| cycles collapsed | 12,840 nodes in cycles; largest SCC 9,656 | none (no SCC collapse) |
+| solver work | 26 iterations; 9.24M load, 2.37M store, 0.50M copy, 0.59M gep processed | round 0: 4.27M value atoms produced; round 1 ≥ 12 ms per changed step |
+| set representation | sparse bit vector of object IDs (SVF default) **[source: SVF docs, conjecture for this build]** | `std::set<Atom>`, copy-on-write shared; 99,795 unique sets |
+| average set (top-level pointers) | 310 objects; max 526 | 42 objects per pointer value; 76.8 atoms per value set incl. INT/FN |
+| atoms by kind (values + slots) | objects only | (X, `*`) 2.06M (46%); exact offset 1.05M, of which 581k (56%) **outside the object**; residue 271k; (EXT, `*`) 51k; FN 590k; INT 453k; ROOT 19 |
+| ⊤ | none (no integer domain, no ⊤ dispatch) | 85,090 values carry ⊤; 444 type-wide sites in round 0 |
+| result | complete: 3:30 wall, 202 s user, 2.6 GB | round 0 only: 177 s CPU, 366 MB; round 1 still running |
+
+Where Bennett's problem is larger by construction:
+
+1. **Offsets.** An SVF object is one node (arrays collapsed, fields up to a limit). A Bennett pointer to it is one atom
+   per (object, offset or residue or `*`). 56% of exact atoms are out-of-bounds modular alternatives (PT2/PT5) that
+   SVF never represents.
+2. **Integers.** 453k INT atoms and 85k ⊤ values. SVF has no value analysis.
+3. **⊤ dispatch and partial-overlap ⊤.** 444 type-wide sites after round 0, against SVF's 38-target average computed
+   from FN flow only.
+4. **Solver.** SVF has no repeated re-stepping, collapses SCCs (12,840 nodes), and runs difference propagation over
+   bit vectors.
+
+**[measured counts; the split of Bennett's per-step cost between "more atoms" and "slower per atom" is conjecture —
+round 1's 99%-new atoms say the domain grows, not that the solver repeats]**
