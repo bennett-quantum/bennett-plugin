@@ -1709,3 +1709,81 @@ But on its own it does not buy convergence:
 1. Integer crawls need integer acceleration or widening (w4 converges printf in 34 rounds, 4.4 s).
 2. On the full input, round-1 cost is dominated by an implementation scan in `store`. Widening multiplies family slots
    ((X, `*`)), so it can even make this worse.
+
+## Finding 22 (PARTIAL, stopped at wind-down) — on main 5a9d8a2 two exact index changes cut round-1 per-step cost several-fold; idiom micro-benchmark table
+
+Configuration: rebuilt input (`3c51062…`), internalised, sound switches VA, CFSKIP and VANOREG, diagnostic SEED=1, with
+the probe ported onto main 5a9d8a2 (r3cpu). CPU times are thread CPU on a shared host, where load varied between 6 and
+59. Comparisons below use the same step counts; the per-run CPU noise is visible in round 0 (58.7 s, 83.6 s, 93.8 s
+and 112 s for identical round-0 work).
+
+**Round 1 on main [measured].**
+
+- Without changes (m1): round 0 takes 58.7 s, against 177 s on b120196. r3cpu helped about 3×.
+- Round-1 changed steps cost 435.5 s up to step 23,215, against 1,208 s at step 21,042 on b120196 (finding 21).
+- `perf`: 66.6% in `Analysis::store`. The hot line is now `store`'s compaction loop: for every slot of an object
+  receiving a family write, an `any_of` over all its family slots, which is O(slots × families) per call. The
+  store-skip `any_of` of finding 21 has only about 5% of samples there.
+
+**Exact prototypes (diagnostic switches; full-state per-round digests identical to the unindexed build on hello 5/5,
+printf 278/278 and SQLite BFS-25 11–13/13 rounds) [measured].**
+
+- **FAMIDX:** a per-object index of family slots by (bytes, numerical), then `*` or (stride, residue). It answers the
+  store-skip and compaction coverage queries from the only structurally possible candidates. It is maintained
+  incrementally on `indexSlot` and invalidated by a per-object epoch on `eraseSlot`.
+- **TMIDX:** `transferMemory` visits only the source atoms of the slot's object (`lower_bound` on the sorted set)
+  instead of filtering the whole set for every snapshot slot. That is the same subsequence in the same order.
+
+| build | changed-step CPU at round-1 step 23,215 | at 30,203 | top `perf` entries in round 1 |
+|---|---|---|---|
+| main (m1) | 435.5 s | — | `store` 66.6% (compaction scan), `_Rb_tree_increment` 7.8% |
+| + FAMIDX, `std::map` groups (m3) | 183.4 s | 569.7 s | group-map lookup 24.5%, set iteration 21.9%, `store` 16.8% |
+| + FAMIDX, flat hash groups (m4) | **59.8 s** | 310.0 s | set iteration inside `transferMemory` ≈ 64% |
+| + FAMIDX + TMIDX (m5) | 116.2 s (host-noise run; see round-0 times) | — | `store` ≈ 30%, index hash lookups 14% + 14%, `transferMemory` iteration 8%, `contains` 5% |
+
+- `storeCalls` is identical across builds at the same step: 311.3M at 23,215, 1,059M at 30,203, 1,648M at 32,830. So
+  the trajectory is the same and only the per-call cost changed.
+- Between steps 23k and 33k, `store` calls grow 5.3× for 1.4× the steps. Per-step work is growing, which is the domain
+  ("more atoms"), on top of per-atom cost.
+- **Stop rule state at wind-down:** after FAMIDX and TMIDX the profile is flatter, and no entry is above 40%. The
+  remaining top entries are `store` itself and the probe index's own hash lookups (about 28%, a cheaper per-object
+  pointer would remove them), then per-atom `contains`.
+- Not measured before the stop: ms per changed step for m5 at a later step, and a rerun of the fixpoint run with the
+  indexes.
+
+**Fixpoint run `sqsize-fix` (b120196 probe, no indexes):** stopped by me at 12:15Z, still in round 1 (round 0 done in
+177 s). It was only measuring the scan.
+
+**Idiom micro-benchmarks** (helper; generators in `tests/idioms/` on `job/idioms`, pushed as `wip/idioms`). Main
+b120196 probe, sound switches VA, CFSKIP, VANOREG; no diagnostic seeds; 60 s budget per run. The table is the
+helper's, copied unchanged.
+- **Caveat:** "M" marks measured attributions and "C" conjecture. CPU fits are noisy on the shared host.
+- **Not finished at wind-down:** the follow-up classification of the quadratic rows (output size / rounds × re-step /
+  per-step cost) is incomplete.
+
+| Idiom | N series | Rounds growth | Atoms growth (value+slot) | CPU growth | What goes wrong, at which N (M) | Responsible rule |
+|---|---|---|---|---|---|---|
+| Scalar/direct calls | 1,4,16,64,256,1024 | constant (3) | linear | linear | top at N=1; no crawl | PT11 C |
+| Structs + scalar chain | 1,2,4,8,12,16,64,256,1024 | constant (2) | burst then linear | linear tail, noisy | top first sampled at N=12; 37,191 atoms | PT5/6/7 finite-set saturation C |
+| Structs/independent constant indices | 1,4,16,64,256,1024 | constant (2) | linear | linear | no top; no crawl through N=1024 | PT1/2/6/7 C; no failure M |
+| Walk/GEP/literal bound | 1,4,16,64,256,1024 | constant (4) | linear | constant floor | top at N=4; no crawl | PT2/3/6 C |
+| Walk/GEP/global bound | 1,4,16,64,256,1024 | constant (4) | linear | constant floor | top at N=1; no crawl | PT2/3/6 C |
+| Walk/uintptr/literal bound | 1,4,16,64,256,1024 | constant (4) | linear | constant floor | top at N=4; no crawl | PT3/4/5/6 C |
+| Walk/uintptr/global bound | 1,4,16,64,256,1024 | constant (4) | linear | constant floor | top at N=1; no crawl | PT3/4/5/6 C |
+| Malloc list | 1,4,16,64,256,1024,4096 | linear; censored at 4096 | linear at fixpoint | quadratic fit | crawl from N=4; budget at N=4096; no fixpoint in 60s at N=4096 (296 rounds complete) | PT7 budget M; PT6/9 crawl C |
+| Malloc binary tree | 1,4,16,64,256,1024,4096 | logarithmic | linear | quadratic+ fit | top at N=1 | PT6/9 C |
+| Allocator wrapper | 1,4,16,64,256,1024 | constant tail (4) | linear | linear | top at N=1; N=4 takes 9 rounds | PT9/11 C |
+| Function table | 1,4,16,64,256,1024 | constant (3) | linear | linear | no type-wide; candidates=N for N>=4 | PT2/6 C; precise FINAL M |
+| Struct callback | 1,4,16,64,256,1024 | constant (3) | linear | quadratic fit | type-wide at N=1; candidates=N | §14.2 M; PT11/6 C |
+| Struct callback + sentinel | 1,4,16,64,256,1024,4096 | constant where converged | linear at fixpoint | quadratic+ fit | type-wide at N=1; guard retains data-pointer alternative; no fixpoint in 60s at N=4096 (0 rounds complete) | §14.2 and PT2 budget M; PT3/4/11 C |
+| Variadic config | 1,4,16,64,256,1024,4096 | constant (3) | linear at fixpoint | quadratic+ fit | precise candidates=N; top elsewhere at N=1; no fixpoint in 60s at N=4096 (0 rounds complete) | PT8/PT9/PT12 budget M; PT8/9 cause C |
+| Variadic formatter | 1,4,16,64,256,1024,4096 | constant (5) | quadratic | superlinear fit | slot atoms grow quadratically; top at N=1; no fixpoint in 60s at N=4096 (1 rounds complete) | PT6 budget M; PT6/8/9 cause C |
+| Memcpy/constant length | 1,4,16,64,256,1024 | constant tail (4) | linear | linear, noisy | top at N=1; no budget failure | PT6/8/11 C |
+| Memcpy/global length | 1,4,16,64,256,1024 | constant (3) | linear | linear, noisy | top at N=1; variable copy loses pointer image | PT8 C |
+| Memmove/constant length | 1,4,16,64,256,1024 | constant (3) | linear | linear, noisy | top at N=1; no budget failure | PT6/8/11 C |
+| Memmove/global length | 1,4,16,64,256,1024 | constant (3) | linear | linear, noisy | top at N=1; variable copy loses pointer image | PT8 C |
+| Pointer/int round trip | 1,4,16,64,256,1024,4096 | constant (3) | quadratic | quadratic fit | 2,101,514 atoms at N=1024; top at N=1; no fixpoint in 60s at N=4096 (2 rounds complete) | PT4/PT5 budget M; PT4/5/9 cause C |
+| Pointer subtraction | 1,4,16,64,256,1024,4096 | constant (3) | quadratic | quadratic fit | 2,112,536 atoms at N=1024; top at N=1 | PT4/5/9 C |
+| Exported pointer functions | 1,4,16,64,256,1024 | constant (3) | linear | linear, noisy | top at N=1; N root atoms in last round | PT11 C; root counters M |
+| Static pointer functions | 1,4,16,64,256,1024 | constant (3) | linear | linear, noisy | same top count as exported; no root atoms | PT11 host reachability C |
+| String-literal table | 1,4,16,64,256,1024 | constant (2) | linear over sample | constant floor | top at N=1; no budget failure | PT2/5/6 C |
