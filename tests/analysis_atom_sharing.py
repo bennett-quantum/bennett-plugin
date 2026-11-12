@@ -59,6 +59,37 @@ int main(int argc,char **argv) {
       " call void @pair_sink({ptr,ptr} %pair)\n ret ptr %call\n}\n";
   auto module=parseAssemblyString(ir,error,context);
   if(!module){error.print("sharing-probe",errs());return 1;}
+  if(mode=="merge") {
+    auto *object=module->getGlobalVariable("t0",true);
+    AV a;
+    a.atoms.insert({Atom::Ptr,object,4,0,APInt(1,0)});
+    a.atoms.insert({Atom::Ptr,object,7,1,APInt(1,0)});
+    a.atoms.insert({Atom::Root,object,0,0,APInt(1,0)});
+    a.atoms.insert(number(9));
+    if(a.atoms.isNormalized())return failTest("raw insert retained union proof");
+    AV b=a;b.top=true;
+    if(!a.merge(b) || !a.top || a.atoms.size()!=2)
+      return failTest("shared merge omitted canonicalisation or TOP absorption");
+    auto pointer=a.atoms.begin();
+    if(pointer->kind!=Atom::Ptr || pointer->offset || pointer->stride!=-1)
+      return failTest("shared noncanonical pointer was skipped");
+    if(b.atoms.size()!=4 || a.merge(b))
+      return failTest("shared merge changed its source or repeated growth");
+    AV normal;normal.merge(a);
+    if(!normal.atoms.isNormalized())return failTest("union lost its normalisation proof");
+    AV copied;copied.merge(normal);
+    if(!sameNodes(normal,copied))return failTest("normalised union rebuilt immutable nodes");
+    auto saved=normal;
+    normal.atoms.insert(number(11));
+    if(normal.atoms.isNormalized() || !saved.atoms.isNormalized())
+      return failTest("mutation did not revoke only the mutated view's proof");
+    AV singleton;singleton.merge(AV{{number(1)},false});
+    if(!singleton.atoms.isNormalized())return failTest("finite INT union not normalised");
+    singleton.top=true;
+    AV absorbed;absorbed.merge(singleton);
+    if(!absorbed.top || !absorbed.atoms.empty())return failTest("normalised TOP kept integers");
+    return 0;
+  }
   if(mode=="interner") {
     AnalysisAtomSetInterner<Atom> pool;
     Atom marker{Atom::Ptr,module->getGlobalVariable("t0",true),0,0,APInt(64,0)};
@@ -136,7 +167,7 @@ def main():
     built = run(argv)
     assert built.returncode == 0, built.stderr
     rows = []
-    for case in ('copy', 'values', 'parameters', 'fields', 'slots', 'interner'):
+    for case in ('copy', 'values', 'parameters', 'fields', 'slots', 'interner', 'merge'):
         result = run([executable.absolute(), case])
         rows.append(dict(case=case, exit=result.returncode, stderr=result.stderr))
     (directory / 'results.json').write_text(json.dumps(rows, indent=2) + '\n')

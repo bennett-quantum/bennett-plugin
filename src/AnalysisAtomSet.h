@@ -15,10 +15,14 @@ template <class T> class AnalysisAtomSetInterner;
 template <class T> class AnalysisAtomSet {
   using Set = std::set<T>;
   std::shared_ptr<Set> storage;
+  // AV's union has normalised this view. Raw mutations revoke the proof;
+  // copies and exact-content interning preserve it.
+  bool normalized = true;
   friend class AnalysisAtomSetInterner<T>;
   static const Set &none() { static const Set empty; return empty; }
   const Set &get() const { return storage ? *storage : none(); }
   Set &mutate() {
+    normalized = false;
     if (!storage) storage = std::make_shared<Set>();
     else if (!storage.unique()) storage = std::make_shared<Set>(*storage);
     return *storage;
@@ -37,12 +41,17 @@ public:
   using const_reverse_iterator = typename Set::const_reverse_iterator;
   AnalysisAtomSet() = default;
   AnalysisAtomSet(std::initializer_list<T> values) {
-    if (values.size()) storage = std::make_shared<Set>(values);
+    if (values.size()) { storage = std::make_shared<Set>(values); normalized = false; }
   }
   const_iterator begin() const { return get().begin(); }
   const_iterator end() const { return get().end(); }
   const_reverse_iterator rbegin() const { return get().rbegin(); }
   const_reverse_iterator rend() const { return get().rend(); }
+  // Shared storage is immutable until mutate() detaches it. Identity proves
+  // equality without traversing the same ordered atoms again.
+  bool sharesStorageWith(const AnalysisAtomSet &other) const {
+    return storage == other.storage;
+  }
   size_t size() const { return get().size(); }
   bool empty() const { return get().empty(); }
   size_t count(const T &value) const { return get().count(value); }
@@ -52,9 +61,11 @@ public:
   std::pair<const_iterator, bool> insert(T &&value) { return insertValue(std::move(value)); }
   const_iterator insert(const_iterator hint, const T &value) {
     if (!storage || !storage.unique()) return insert(value).first;
+    normalized = false;
     return storage->insert(hint, value);
   }
   const_iterator erase(const_iterator position) {
+    normalized = false;
     if (!storage.unique()) {
       T value = *position;
       auto &set = mutate();
@@ -66,7 +77,9 @@ public:
     if (!get().count(value)) return 0;
     return mutate().erase(value);
   }
-  void clear() { storage.reset(); }
+  void clear() { storage.reset(); normalized = true; }
+  bool isNormalized() const { return normalized; }
+  void markNormalized() { normalized = true; }
 };
 
 // Hashes select candidates only. The entire ordered set must match, including
