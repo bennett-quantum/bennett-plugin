@@ -1482,6 +1482,7 @@ static std::vector<Slot> byvalSnapshot(const AV &source, uint64_t size,
     }
   return snapshot;
 }
+bool isVaOperation(const Instruction &);
 #include "AnalysisVarargs.inc"
 void Analysis::bind(CallBase &c, Function *f) {
   if (!f) return;
@@ -2549,6 +2550,7 @@ void Analysis::step(Instruction &i) {
                               maximum(get(c->getArgOperand(0))));
       }
       if (extent) store(integer(APInt(8,0)), a, extent, true);
+      bindVaAllocation(*c,*f,[&] { bind(*c,f); });
       if (n == "posix_memalign") {
         store(a, get(c->getArgOperand(0)), M.getDataLayout().getPointerSize());
         a={};a.top = true;

@@ -16,6 +16,10 @@ pointers (PT9). The block is a private N23 alloca, stable for that call
 instruction across S2 rounds. Its initial zero image follows §5.2 / §17.3.
 Host-visible implicit block parameters also receive PT11's external pointer.
 For undefined callees, PT12 reaches the block and its stored pointer leaves.
+Defined allocator calls that are variadic or carry N23's argument block still
+bind PT9 parameters and body effects; the allocation-result summary does not
+replace that binding. N23 call metadata preserves the obligation after the
+variadic ABI has become a fixed block parameter.
 
 §14.3: “`llvm.va_start(ptr ap)` builds the target's `va_list` so that the
 front end's inline `va_arg` takes its memory path”. The same `writeVaList`

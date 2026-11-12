@@ -100,6 +100,23 @@ define ptr @top() {
       ("top", "%r", "PTR(@h,0,0)")], None,
 )
 
+CASES["attributed-allocator"] = (
+    VA + """@g = internal global i32 7
+@slot = internal global ptr null
+declare ptr @malloc(i64)
+define internal ptr @pass(i64 %n, ...) allocsize(0) {
+""" + READ + """ store ptr %p, ptr @slot
+ %allocated = call ptr @malloc(i64 %n)
+ ret ptr %allocated
+}
+define ptr @top() {
+ %r = call ptr (i64, ...) @pass(i64 16, ptr @g)
+ %saved = load ptr, ptr @slot
+ ret ptr %saved
+}
+""", [("pass", "%p", "PTR(@g,0,0)"), ("top", "%saved", "PTR(@g,0,0)")], None,
+)
+
 
 def analyse(major, plugin, source, directory, reversible):
     report = directory / "report.json"

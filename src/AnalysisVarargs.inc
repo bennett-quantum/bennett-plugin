@@ -30,11 +30,8 @@ void Analysis::seedVarargs(Function &f) {
   if(f.isVarArg())changed|=mergeFacts(vaBlocks[&f],atom(Atom::Ptr,nullptr,0,-1));
 }
 bool Analysis::stepVarargs(Instruction &i) {
-  if(isa<VAArgInst>(i) || (isa<IntrinsicInst>(i) &&
-      (cast<IntrinsicInst>(i).getIntrinsicID()==Intrinsic::vastart ||
-       cast<IntrinsicInst>(i).getIntrinsicID()==Intrinsic::vacopy ||
-       cast<IntrinsicInst>(i).getIntrinsicID()==Intrinsic::vaend ||
-       cast<IntrinsicInst>(i).getIntrinsicID()==Intrinsic::ptrmask))) {
+  if(isVaOperation(i) || (isa<IntrinsicInst>(i) &&
+      cast<IntrinsicInst>(i).getIntrinsicID()==Intrinsic::ptrmask)) {
     auto result=evaluateVarargs(i,false);
     auto &slice=vaTransfers.at(&i);
     auto *value=cast<ReturnInst>(slice->back().getTerminator())->getReturnValue();
@@ -43,4 +40,9 @@ bool Analysis::stepVarargs(Instruction &i) {
     return true;
   }
   return false;
+}
+// An allocation result summary does not replace N23/PT9 argument or body
+// effects. N23's call metadata retains this obligation after its ABI rewrite.
+static void bindVaAllocation(CallBase &c,Function &f,function_ref<void()> transfer) {
+  if(!f.isDeclaration() && (f.isVarArg() || c.getMetadata("bennett.varargs.fixed"))) { transfer(); }
 }
