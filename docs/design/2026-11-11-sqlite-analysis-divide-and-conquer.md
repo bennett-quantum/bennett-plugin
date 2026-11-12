@@ -1079,3 +1079,78 @@ What the table shows:
 - Measure the residual merge in the no-⊤-dispatch build: its route, and whether round 0 then completes.
 - Count how much of U survives each of the candidate refinements (a) and (b), once the maintainer says which are
   admissible.
+
+## Finding 15 — where the ⊤ callees come from: PT11 seeds on every host-reachable function; with seeds on true roots only, round 0 takes about 1 minute
+
+All numbers are on the rebuilt input (`3c51062…`, 1,487 functions; see finding 14). All switches below are
+**DIAGNOSTIC and possibly unsound**: they test which reading of PT11 matters, they are not proposals.
+
+**Without type-wide dispatch (finding 14's last row).**
+
+- Round 0 completes at pop 276,582.
+- Round 1 then stops at the 1,500 s allowance: `PT8/PT9/PT12 budget exhausted at AV(%74) in
+  @sqlite3CollapseDatabaseArray`, at 1,490 s user CPU and 1.33 GB peak RSS.
+
+**[measured]**
+
+**Who is seeded [source + measured].**
+
+- `Analysis::run` gives every function in `host` the PT11 seeds: (EXT, `*`) for pointer parameters and ⊤ for
+  integers. `host` grows by direct callees and by address uses of every host function.
+- In this program, every SQLite function is reachable from the non-local `rung4_*` functions.
+- §4.2 makes non-local functions host roots. §19.1 runs `lto<O3>` with no internalisation, so the gate input keeps
+  286 non-local functions, 260 of them `sqlite3_*`.
+- Internalising everything except `rung4_grover`, `rung4_tuple` and `rung4_oracle` (`opt -passes=internalize`; input
+  sha `590790a8…`) leaves 3 non-local functions, but `host` is still 1,234–1,240 functions.
+- 281–299 functions have their address used by host code.
+- `-bennett-entry` exists only with `--bennett-tier=reversible` (§19.2). Rung 4 runs in production mode, has no
+  `main`, and its roots are the launches plus the oracle region operand.
+
+**Attribution of the type-wide sites.** These are indirect sites whose callee AV is ⊤ or holds a pointer atom,
+counted up to pop 158,000 of round 0. **[measured]**
+
+| input | sentinel | PT11 seeds on | type-wide sites (callee had a data-pointer atom) | sets reaching ≥ 200 objects |
+|---|---|---|---|---|
+| gate input | as specified | every host function (main) | 342 (29) | 5,244 |
+| gate input | exact | every host function | 342 (29) | 5,251 |
+| internalised | as specified | every host function | 344 (29) | 5,238 |
+| internalised | exact | every host function | 341 (29) | 5,292 |
+| internalised | exact | non-local + address used by host code | 148 (29) | 8 |
+| internalised | exact | non-local only | **11 (11)** | **1** |
+
+**Whole round 0, PT11 seeds on non-local functions only.** **[measured]**
+
+| input | sentinel | round 0 | type-wide sites | sets ≥ 200 objects |
+|---|---|---|---|---|
+| internalised | as specified | **done at pop 276,582, about 1 min CPU** | 104 | 7 |
+| internalised | exact | done, under 3.4 min CPU (host busier) | 101 | 7 |
+| gate input (286 seeded) | as specified | **not done** after 9.7 min; U forms (400 objects) at pop 272,919 | 1,069 | 45,735 |
+
+**What the tables show.**
+
+1. The 313 ⊤-only type-wide sites of finding 14 come from **PT11 seeds on functions that are not roots**: direct
+   callees and address-used callbacks. They do not come from linkage or from the sentinel.
+   - Internalising alone changes nothing (342 → 344 sites).
+   - The exact sentinel changes nothing alone, and only 3 sites when seeds are restricted.
+2. Seeding only the true external roots, with SQLite internalised, removes U from round 0. Round 0 then takes about
+   1 minute, against "never in 1,500 s".
+   - Exported API functions (286 seeded) are enough to rebuild U.
+   - Seeding address-used callbacks too (148 sites) brings most of the spread back later in round 0: 806 sites by
+     13 min.
+3. **Round 1 is still slow, and a second collapse appears.** With non-local-only seeds, round 1 had reached pop
+   about 354k (round 1 spans 276,582–553,164) after 25 min CPU. Sets reach 745–749 objects with few offsets
+   (1–5k atoms, 28–40k events of 200 or more objects), and there are 169–249 new type-wide sites. Those come from
+   callees that hold an unknown (EXT, `*`) pointer atom, which §5.3 makes ⊤ for dispatch. Their origin is not yet
+   traced.
+
+**Spec status [source; maintainer decision].**
+
+- §4.2 defines host roots by linkage, and §19.1's pipeline does not internalise. Keeping the 286 API functions
+  non-local is therefore what the specified route produces; it is not a driver defect under the current text.
+- Whether PT11's "a function with a host caller" / "whose address host code uses" covers callers that the analysis
+  itself sees (H code inside the module, already bound by PT9), or only callers outside the analysed module, decides
+  which row above is the reference.
+- Internalisation in §19.1 is a separate question.
+
+**Next.** Trace the round-1 collapse: the first unknown-pointer callee and the 745-object sets, under internalised,
+non-local-only seeds.
