@@ -1,6 +1,7 @@
 #include "Bennett.h"
 #include "ByteOrder.h"
 #include "ComparisonLayout.h"
+#include "ProductionRelocations.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/PostOrderIterator.h"
@@ -28,6 +29,8 @@ std::string producerDialect();
 std::string producerISA();
 std::string producerMapping();
 namespace {
+cl::opt<bool> LinkWork("bennett-link-work", cl::Hidden,
+                       cl::desc("Report production relocation work"));
 #include "ProcessCallABI.inc"
 
 std::string coverageSource(StringRef rule) {
@@ -723,6 +726,7 @@ struct Entry {
     constexpr uint64_t FunctionSpacing=16; // Standalone module-order link convention.
     auto text=comparisonTextBase(regionsEnd);
     uint64_t index=0;
+    ProductionRelocations relocations;
     for(auto &fn:m) {
       auto resolved=comparisonFunctionAddress(fn);
       if(!hasComparisonLayout() && (text>limit || index>(limit-text)/FunctionSpacing))
@@ -735,12 +739,16 @@ struct Entry {
       if(addressedFunctions.count(&fn)) {
         fn.setMetadata("bennett.address",MDNode::get(m.getContext(),
             ConstantAsMetadata::get(ConstantInt::get(m.getDataLayout().getIntPtrType(m.getContext()),address))));
-        auto marker=std::regex("CCFUNCTION"+std::to_string(index)+"\\b");
-        for(auto &row:rows)row=std::regex_replace(row,marker,std::to_string(address));
-        for(auto &body:ccFunctions)body.second.second=std::regex_replace(body.second.second,marker,std::to_string(address));
+        relocations.values[std::to_string(index)] = std::to_string(address);
       }
       ++index;
     }
+    for (auto &row : rows) relocations.replace(row, "CCFUNCTION");
+    for (auto &body : ccFunctions) relocations.replace(body.second.second, "CCFUNCTION");
+    if (LinkWork) errs() << "bennett-link-work:"
+        << jcs(json::Object{{"stage", "function-addresses"},
+             {"input_bytes", int64_t(relocations.inputBytes)},
+             {"scanned_bytes", int64_t(relocations.scannedBytes)}}) << '\n';
   }
   AV intValue(uint64_t n, unsigned w=64) { Atom x; x.kind=Atom::Int;x.integer=APInt(w,n); AV v;v.atoms.insert(x);return v; }
   bool singletonInt(AV v) { return !v.top && v.atoms.size()==1 && v.atoms.begin()->kind==Atom::Int; }
@@ -1995,14 +2003,19 @@ std::string linkReferences(Entry &e) {
   // §19.5: data, heap and all oracle interfaces precede text. Resolve once,
   // before writing any function pointer image, constant or dispatch key.
   e.resolveFunctionAddresses(endAddress,deviceRanges);
+  ProductionRelocations relocations;
   for(auto &g:e.m.globals())if(e.ccGlobals.count(scalarGlobalKey(g))) {
     auto name=globalSymbols.at(scalarGlobalKey(g)),image=scalarGlobalImage(g,sourceBases);
     data[name]=image;dataSignatures[name]="{\"abi\":\""+producerISA()+"\",\"kind\":\"data\",\"size\":"+std::to_string(sizes.at(name))+",\"tier\":\"-\"}";
     globals[name]=json::Object{{"base",int64_t(bases.at(name))},{"size",int64_t(sizes.at(name))},{"image",name}};
-    auto marker="CCADDRESS"+std::to_string(std::distance(e.m.global_begin(),g.getIterator()));
-    for(auto &row:e.rows)row=std::regex_replace(row,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
-    for(auto &fn:e.ccFunctions)fn.second.second=std::regex_replace(fn.second.second,std::regex(marker+"\\b"),std::to_string(bases.at(name)));
+    relocations.values[std::to_string(std::distance(e.m.global_begin(),g.getIterator()))] = std::to_string(bases.at(name));
   }
+  for (auto &row : e.rows) relocations.replace(row, "CCADDRESS");
+  for (auto &fn : e.ccFunctions) relocations.replace(fn.second.second, "CCADDRESS");
+  if (LinkWork) errs() << "bennett-link-work:"
+      << jcs(json::Object{{"stage", "global-addresses"},
+           {"input_bytes", int64_t(relocations.inputBytes)},
+           {"scanned_bytes", int64_t(relocations.scannedBytes)}}) << '\n';
   for(unsigned i=0;i<parsed.size();++i) {
     auto &sec=parsed[i];auto syms=parse(sec.at("symbols"));auto suffix=i?std::to_string(i):"";
     std::map<std::string,std::string> rename;
@@ -2377,6 +2390,10 @@ json::Object completeCoverage(StringRef object,
   json::Array entries;
   auto body = object.split("section functions\n").second.split("\n\nsection ").first;
   SmallVector<StringRef> lines; body.split(lines, '\n');
+  // LLVM JSON values are copied when the vector grows. One entry per line is
+  // an upper bound, so reserve before constructing the large coverage tree.
+  entries.reserve(lines.size());
+  uint64_t relocatedEntries = 0;
   std::string symbol, block, rule; unsigned ordinal = 0;
   for (auto line : lines) {
     if (line.starts_with("fn cc @") || line.starts_with("fn r @") || line.starts_with("oracle @") ||
@@ -2387,11 +2404,16 @@ json::Object completeCoverage(StringRef object,
       block = line.drop_front().split('(').first.str(); ordinal = 0;
     } else if (!line.empty() && !line.starts_with("regs ")) {
       auto missing=trapped.find({symbol,block});bool fault=(line=="trap" || line=="fault 8") && missing!=trapped.end();
+      auto *storage = entries.data(); auto previous = entries.size();
       entries.push_back(json::Object{{"point", json::Array{hashes.at(symbol), block, ordinal++}},
         {"source", coverageSource(fault?std::string("4.5"):rule)}, {"classification", fault?"trapped":"lowered"},
         {"reason", fault?missing->second:"materialised scalar production instruction"}});
+      if (storage != entries.data()) relocatedEntries += previous;
     }
   }
+  if (LinkWork) errs() << "bennett-coverage-work:"
+      << jcs(json::Object{{"entries", int64_t(entries.size())},
+           {"relocated_entries", int64_t(relocatedEntries)}}) << '\n';
   return json::Object{{"entries", std::move(entries)}};
 }
 // Discover source state while every reachable entry still has its original body.

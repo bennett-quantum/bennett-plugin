@@ -73,6 +73,8 @@ DRIVERS = {
     "region_keys": (),
     "descriptors": (),
     "production": (),
+    "production_relocations": ("--plugin", "build/libbennett-plugin-{major}.so",
+                               "--artifacts", ".tmp/tests/production_relocations"),
     "production_multi_gates": (),
     "production_environments": tuple(
         argument
@@ -197,6 +199,7 @@ COMMAND_HANG_GUARDS_S = {
 }
 # The PT9 indexed-copy regression uses the existing exact-memory-work class.
 COMMAND_HANG_GUARDS_S["analysis_byval"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
+COMMAND_HANG_GUARDS_S["production_relocations"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
 SUITE_HANG_GUARD_S = 2655
 UNKNOWN_EXIT_STATUS = 124
 
