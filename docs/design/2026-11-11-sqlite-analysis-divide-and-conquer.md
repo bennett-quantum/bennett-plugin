@@ -1333,3 +1333,86 @@ out of one buffer]**
 
 Wrapper-sensitive heap naming is therefore a refinement of the reference, not already permitted for verdicts. It is
 permitted only as a lowering-side precision tool.
+
+## Finding 18 — the heap-to-heap memcpy stall is a 2^63-iteration loop over identical writes; heap cloning by wrapper call site does not change round 0
+
+All numbers are on the rebuilt input (`3c51062…`), internalised (`590790a8…`), with the diagnostic varargs model
+(finding 17).
+
+**How each switch used here is classified.**
+
+| switch | what it does | classification |
+|---|---|---|
+| VA | §14.3 N23 value effects in S2 | sound; it closes an unsound gap |
+| SEED=1 | PT11 seeds on non-local functions only | **unsound-diagnostic** under the plugin's current PT11 reading; spec question |
+| CFSKIP | collapses identical `copySlotFamily` iterations | **sound and exact**: the same set of writes |
+| HEAPCLONE | names heap objects per outermost allocator-wrapper call site | **unsound-diagnostic** (below) |
+
+**Loop 1: the `store` storm in `sqlite3_test_control` [measured].**
+
+- The 496-byte `memcpy` from (H, 24) to (H, 8) makes about 33.5M `store` calls per heartbeat (2^26 budget ticks).
+  Each call runs the family-coverage `any_of` over `otherSlots[H]`: `famCalls` ≈ `storeCalls`, about 170 slot visits
+  each. The zero-image loop stays at 14,554 calls, and the slot count stays at 87,444.
+- The calls come from `copySlotFamily`, applied to one slot of H: offset 0, stride −1 (`*`), **bytes 2^64 − 1**, not
+  filled.
+  - `first = begin − bytes + 1` clamps to INT64_MIN, so the loop has **9.22·10^18 iterations**
+    (`cfMaxIters = 9223372036854776328`).
+  - Every iteration with `offset < begin` and `offset + bytes ≥ end` writes the same partial ⊤ value to the same
+    target, (H, 8) with 496 bytes.
+- Collapsing those iterations to one is exact (CFSKIP). With it, round 0 completes in about 150–200 s CPU instead
+  of stopping at the 1,500 s allowance.
+- Where a non-filled 2^64 − 1-byte family slot of H comes from is not yet traced.
+
+**Loop 2: heap cloning (HEAPCLONE) [source for the rule, measured for the rest].**
+
+- **Wrappers, chosen mechanically.** Start from the §5.1 allocation functions. Iterate to a fixpoint: a defined,
+  pointer-returning function is a wrapper when one of its `ret` operands traces, through phi, select, GEP, casts and
+  freeze, to one of:
+  - a direct call of a wrapper;
+  - an indirect call whose function type equals that of an address-taken wrapper.
+- **Result: 106 defined wrappers.** Among them are `sqlite3Malloc`, `sqlite3DbMallocRawNN`, `dbMallocRawFinish`,
+  `sqlite3Realloc`, `sqlite3MPrintf`, `pcache1Alloc`, and object constructors such as `sqlite3ExprListDup` and
+  `sqlite3SelectNew`. Outermost sites (direct calls of a wrapper from a non-wrapper) number **945**. That is more
+  than finding 17's name-based 559 sites, because the constructors also return heap memory.
+- **Renaming.** At such a site, heap atoms (X = an allocation-site call) in the returned AV become (site, o). H's own
+  slots (size header, zero image) are copied into the clone.
+- **Why it is unsound-diagnostic.** It refines §5.1, which is a spec change. It also misses H pointers that leave a
+  wrapper other than through its return.
+
+**Results.** Both runs stop at the allowance in round 1, so neither reaches a fixpoint. **[measured]**
+
+| | no clone (CFSKIP) | heap clone (CFSKIP + HEAPCLONE) |
+|---|---|---|
+| round 0 | done, 187 s CPU | done, 150–202 s CPU (3 runs) |
+| round-0 type-wide sites (⊤-only / ⊤ + unknown pointer / data-pointer callee) | 444 (338 / 3 / 103) | 444 (342 / 3 / 99) |
+| round-0 sets ≥ 200 objects, largest | 8, 283 objects | 8, 283 objects |
+| round 1 at the 1,500 s allowance | not done (pop ≈ 300k of 553k) | not done (pop ≈ 306k) |
+| round-1 largest sets | 421–486 objects | 467–488 objects |
+| peak RSS while running | 374 MB | 407 MB |
+
+**Heap objects.**
+
+- After round 0, only 12 heap objects occur in any value. 807 of the 945 sites are empty, and 0 hold their own clone.
+- At pop 300k of round 1 there are 24 heap objects, and 8 sites hold their own clone (5 only their own).
+- The reason is round-robin order. `sqlite3Malloc`'s `xMalloc` load is still `{INT 0}` at the end of round 0, and
+  becomes ⊤ (type-wide) only in round 1, at pop 282,912. `memdbOpen` loads the same slot earlier and already sees ⊤.
+- The lookaside question cannot be measured until the heap has reached the sites. **Not measured.**
+
+**What drives round 0 now.**
+
+- 342 of 444 type-wide sites have a callee AV with only the ⊤ flag. Examples are `sqlite3Malloc`'s and
+  `memdbOpen`'s `xMalloc`, loaded from `sqlite3Config.m`.
+- That struct is filled by `memcpy` from a `va_arg` pointer. Under the N23 model, every `va_arg` value carries ⊤:
+  clang's inline `va_arg` keeps its register-save branch, and a flow-insensitive analysis reads it through
+  `reg_save_area = null`. **[measured on `va.c`; source for the mechanism]**
+- So, once varargs are modelled, the reference turns every function pointer that SQLite installs through
+  `sqlite3_config` into ⊤.
+- In round 1 the time goes into variable-length PT8 copies (`groupConcatStep`, `groupConcatInverse`, `unistrFunc`,
+  `enlargeAndAppend`, `minmaxStep`). Their source and destination are 552-atom sets of (X, `*`) over about 488 objects,
+  and the slot count is 187,098, of which `@sqlite3Config` has 7,757.
+
+**Questions this hands to the maintainer.**
+
+1. **Round 0:** whether the S2 model of N23 must keep the register-save branch's ⊤. N23 fixes `gp_offset` at 48, so
+   the branch is dead in every N23-normalised execution. A flow-insensitive analysis cannot see that.
+2. **Round 1:** the (X, `*`) blob. Heap cloning does not touch it.
