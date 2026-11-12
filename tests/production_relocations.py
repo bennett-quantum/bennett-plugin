@@ -47,14 +47,14 @@ define i32 @main(i32 %argc, ptr %argv) {
         assert {stage['stage'] for stage in work} == {'function-addresses', 'global-addresses'}
         receipts.append(dict(count=count, work=work))
         (directory / 'work.json').write_text(json.dumps(receipts, indent=2) + '\n')
+        obj = (output / 'main/launch.bennett').read_text()
         for stage in work:
             assert stage['input_bytes'] > 0, stage
-            assert stage['scanned_bytes'] <= stage['input_bytes'], stage
+            assert stage['scanned_bytes'] <= len(obj), stage
         coverage = [json.loads(line.split(':', 1)[1]) for line in result.stderr.splitlines()
                     if line.startswith('bennett-coverage-work:')]
         assert coverage and all(row['entries'] > 0 and row['relocated_entries'] == 0
                                 for row in coverage), coverage
-        obj = (output / 'main/launch.bennett').read_text()
         assert 'CCFUNCTION' not in obj and 'CCADDRESS' not in obj
         assert json.loads((output / 'main/blockers.json').read_text()) == []
         run_checked([f'/usr/lib/llvm-{args.major}/bin/opt', '-passes=verify',
