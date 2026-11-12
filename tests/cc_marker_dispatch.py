@@ -1,9 +1,39 @@
 #!/usr/bin/env python3
-"""Replay unchanged driver inputs through reversible call/marker dispatch."""
+"""Execute resolved classical calls and replay unchanged driver inputs."""
 
 import argparse,hashlib,json
 from pathlib import Path
 from contracts import ROOT,run,sibling
+
+
+def reduced_calls(major,plugin,directory):
+    source=ROOT/'tests/probes/cc-resolved-calls.ll'
+    tool=f'/usr/lib/llvm-{major}/bin/opt'
+    verified=run([tool,'-passes=verify','-disable-output',source])
+    assert verified.returncode==0,verified.stderr
+    lowered=run([tool,'-load-pass-plugin='+str(plugin),'-passes=bennett',
+                 '-bennett-dialect=0.3-r1','-bennett-isa=0.9',
+                 '--bennett-tier=reversible','--bennett-entry=main',
+                 '-bennett-out='+str(directory/'reduced'),'-disable-output',source])
+    assert lowered.returncode==0,(lowered.returncode,lowered.stderr)
+    obj=directory/'reduced/main/launch.bennett'
+    ref=sibling('bennett-isa-spec')/'reference-interpreter/target/release/bennett-isa-ref'
+    checked=run([ref,'check',obj])
+    assert checked.returncode==0,checked.stdout+checked.stderr
+    replies=directory/'replies.json'
+    replies.write_text(json.dumps([{'service':'bennett.argv','payload':'00'*20,'reply':'00'*20}]))
+    executions=[]
+    for reverse in (False,True):
+        result=run([ref,'run-program',obj,'main','--budget','100000,131072,4096,32',
+                    '--replies',replies,*(['--reverse'] if reverse else [])])
+        assert result.returncode==0,result.stdout+result.stderr
+        value=json.loads(result.stdout)
+        assert value['results']==[{'type':'i32','value':'42'}] and not value['faults'],value
+        assert value['status']==('REVERSED' if reverse else 'COMPLETED'),value
+        if reverse:
+            assert value['equals_entry'] and value['memory_equals_entry'],value
+        executions.append(value)
+    return executions
 
 
 def main():
@@ -25,7 +55,8 @@ def main():
              '-bennett-out='+str(directory/'out'),'--bennett-tier=reversible',
              '--bennett-entry=main','-disable-output',str(source)]
     lowered=run(command,timeout=600)
-    report={'major':args.major,'module_sha256':manifest['sha256'][str(args.major)],
+    report={'major':args.major,'reduced_calls':reduced_calls(args.major,plugin,directory),
+            'module_sha256':manifest['sha256'][str(args.major)],
             'module_verified':True,'lower_exit':lowered.returncode,'diagnostic':lowered.stderr}
     if lowered.returncode==0:
         obj=directory/'out/main/launch.bennett'
