@@ -20,6 +20,8 @@ DRIVERS = {
     "recognition": (),
     "analysis_edges": (),
     "analysis_pt6_residue": (),
+    "analysis_byval": ("--plugin", "build/libbennett-plugin-{major}.so",
+                       "--artifacts", ".tmp/tests/analysis_byval"),
     "analysis_additive_cycles": ("--plugin", "build/libbennett-plugin-{major}.so",
                                  "--artifacts", ".tmp/tests/analysis_additive_cycles"),
     "analysis_product_budget": ("--plugin", "build/libbennett-plugin-{major}.so",
@@ -193,6 +195,8 @@ COMMAND_HANG_GUARDS_S = {
     # orch-repro.log); 10x is below the 60 s floor.
     "native_transports": 60,
 }
+# The PT9 indexed-copy regression uses the existing exact-memory-work class.
+COMMAND_HANG_GUARDS_S["analysis_byval"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
 SUITE_HANG_GUARD_S = 2655
 UNKNOWN_EXIT_STATUS = 124
 

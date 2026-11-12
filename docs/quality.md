@@ -360,6 +360,7 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "tests/analysis_byval.py": {"complexity": 15, "functions": 1, "length_max": 118, "length_p50": 118, "length_p90": 118, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_additive_cycles.py": {"complexity": 47, "functions": 2, "length_max": 66, "length_p50": 12, "length_p90": 66, "over_300": 0, "trivial_wrappers": 0},
     "tests/cc_marker_dispatch.py": {"complexity": 5, "functions": 1, "length_max": 35, "length_p50": 35, "length_p90": 35, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_atom_sharing.py": {"complexity": 2, "functions": 1, "length_max": 32, "length_p50": 32, "length_p90": 32, "over_300": 0, "trivial_wrappers": 0},
