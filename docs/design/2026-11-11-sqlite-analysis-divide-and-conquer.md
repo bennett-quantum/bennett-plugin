@@ -1416,3 +1416,127 @@ All numbers are on the rebuilt input (`3c51062…`), internalised (`590790a8…`
 1. **Round 0:** whether the S2 model of N23 must keep the register-save branch's ⊤. N23 fixes `gp_offset` at 48, so
    the branch is dead in every N23-normalised execution. A flow-insensitive analysis cannot see that.
 2. **Round 1:** the (X, `*`) blob. Heap cloning does not touch it.
+
+## Finding 19 — the round-0 ⊤ and the round-1 blob both come from varargs merged across call sites; SVF is about as coarse in 3.5 minutes; what the lowering consumes
+
+All numbers are on the rebuilt input (`3c51062…`), internalised (`590790a8…`), with VA, SEED=1 and CFSKIP (finding 18).
+
+**New switches and their classification.**
+
+- **VANOREG**: `va_start` points `reg_save_area` at a slotless object, so reads through it yield bottom. This is
+  **sound-more-precise** for N23-normalised programs. N23's record fixes gp_offset 48 and fp_offset 176. Clang's
+  inline `va_arg` takes the register path only when gp_offset ≤ 40 (fp ≤ 160). The only stores to those fields are
+  the increments inside that path, and `va_copy` copies the record, so the path never executes. The argument does not
+  hold for a `va_list` built outside N23, which a whole-program build does not have.
+- **VACLAMP**: loads whose address includes a va-block atom drop (EXT, `*`) and ⊤. This is **unsound-diagnostic**
+  under the spec. It holds for UB-free C, because reading past the passed arguments is UB, but PT2 keeps out-of-block
+  alternatives.
+
+**Loop A: what removing the register-save ⊤ does [measured].**
+
+On `va.c`, VANOREG alone leaves ⊤ on every `va_arg` value. The ⊤ comes from the *overflow* cursor:
+
+- clang stores `cursor + 8` back into the `va_list`;
+- a flow-insensitive analysis therefore sees an additive cycle through memory, and the cursor becomes (block, 0 mod 8)
+  over the whole range;
+- that may leave the block, so PT2 adds (EXT, `*`) and ⊤.
+
+VANOREG plus VACLAMP make `va.c` exact (`PTR(@g)`, `FN(myMalloc)`, no ⊤).
+
+On SQLite, round 0 does not change:
+
+| configuration | type-wide sites | ⊤-only callees | sets ≥ 200 objects | largest | round 0 |
+|---|---|---|---|---|---|
+| previous build | 444 | 338 | 8 | 283 | done, 187 s CPU |
+| + VANOREG | 444 | 338 | 8 | 283 | done, 190 s CPU |
+| + VANOREG + VACLAMP | 444 | 338 | 8 | 283 | done, 181 s CPU |
+| + VANOREG + VACLAMP + HEAPCLONE | 444 | — | 8 | 283 | done, 210 s CPU |
+
+**The ⊤ on `xMalloc` [measured].**
+
+- At the end of round 0, `memdbOpen %58` (`sqlite3Config.m.xMalloc`) = `{FN(@sqlite3MemMalloc)}` plus ⊤.
+- `sqlite3Config` holds two slots at offset 32: the 8-byte one, `{FN(sqlite3MemMalloc), INT 0}`, and a **4-byte** one.
+  An 8-byte load overlaps the 4-byte slot partially, and PT6 makes that ⊤.
+- The 4-byte slot is created at pop 13,385 by `sqlite3_config`'s `memcpy(&sqlite3Config.m, va_arg pointer, 64)`.
+  That pointer is `{@sqlite3MemSetDefault.defaultMethods, @sqlite3PCacheSetDefault.defaultMethods}`.
+- The va-block pointer of `sqlite3_config` is the union over **all** its call sites (PT9 binding of N23's block
+  parameter), and the flow-insensitive `switch (op)` lets every case read every call's arguments. The pcache methods
+  struct starts with an `int iVersion`, which lands at `m.xMalloc`.
+- So the root is context-insensitive merging of variadic arguments across call sites. It is not the register-save
+  branch, and not the cursor.
+- With varargs dropped (main), this did not happen: the heap was simply absent.
+
+**Loop B: birth of the round-1 blob [measured].**
+
+- Under VANOREG + VACLAMP, round 1's first sets of 200 or more objects are `strlen`'s argument (262 objects, pop
+  277,717) and `sqlite3_str_vappendf`'s `%s` reads.
+- The site where most objects join is `sqlite3_str_vappendf: store ptr %22, ptr %20`. This is the inlined `va_arg`
+  advancing the overflow cursor of the `va_list` parameter. **289 objects** join there, written into the callers'
+  `va_list` allocas (`sqlite3_log %5`, `sqlite3_snprintf %4`, …).
+- `sqlite3_str_vappendf` is not variadic. Its `va_list` parameter is bound by PT9 to every printf-family caller's
+  `va_list`, and its cursor ranges over the union of all their va blocks.
+- Every `va_arg` in the formatter therefore reads every printf call site's arguments: all `%s` strings, `%T`
+  tokens, `%S` source items and integers. That union flows into `strlen`, `enlargeAndAppend`, `Mem.z` and the
+  `sqlite3VdbeMemSetStr` destructor calls.
+- This is the varargs analogue of finding 14's `xDel` merge: context-insensitive PT9 over a callback-heavy C idiom.
+
+**Origin of the 2^64 − 1-byte non-filled slot [source].**
+
+- PT8 copy, case "length not constant, or a non-exact source or destination atom":
+  `store(partial, atom(Ptr, d.object, d.offset, -1), s.bytes)`. It writes a partial ⊤ (plus ROOTs) at
+  (destination, `*`) with the *source* slot's width.
+- When the source slot is the zero-filled image of an allocation of ⊤ size (`extent = UINT64_MAX`,
+  `Analysis.cpp:2452`), the destination gets a non-filled (Z, `*`) slot 2^64 − 1 bytes wide.
+- This is not a negative-size bug, but the width carries no information. Any load already overlaps a (Z, `*`) slot,
+  and in `copySlotFamily` it produces finding 18's 2^63-iteration loop.
+
+**Loop C: outside baseline, SVF `wpa` (npm `svf-lib` 1.0.2857, LLVM 22 statically linked, reading the LLVM 18
+bitcode).** [measured]
+
+| SVF run | wall | user | peak RSS | avg points-to set | avg top-level set | max set | indirect edges |
+|---|---|---|---|---|---|---|---|
+| `-ander` (diff-wave), default limits | 1:44 | 100 s | 2.2 GB | 71 | 223 | 422 | **50,000 = the default `-ind-call-limit`, truncated** |
+| `-ander -ind-call-limit=1e8` | 3:30 | 202 s | 2.6 GB | 97–98 | 299–310 | 513–526 | 88,783 over 2,414 sites |
+
+With the limit lifted:
+
+- 2,334 sites print targets, with a mean of **38**, median 35, p90 36 and maximum 110;
+- type-mismatched targets appear too, e.g. `void(ptr)` sites list `memdbDeviceCharacteristics`;
+- SVF also has **1 heap object**.
+
+So an off-the-shelf, field-sensitive, context-insensitive Andersen analysis produces a result on SQLite that is about
+as coarse as Bennett's U: top-level pointers average about 300 objects of about 3,300, and indirect sites average 38
+targets. But it does so in minutes and 2.6 GB, with a worklist, difference propagation and cycle elimination.
+
+The coarseness is inherent to the analysis class on this program. The cost is not. The differences that remain are
+in Bennett's domain: exact (object, offset) atoms, retained out-of-bounds alternatives, PT6's partial-overlap ⊤, and
+⊤ → type-wide dispatch. Those turn coarse into ⊤ and add per-offset cost. **[measured for SVF; the attribution of
+Bennett's extra cost is conjecture]**
+
+**Loop D: what the lowering consumes (first answer from code and spec) [source].**
+
+- **Indirect-call candidates.**
+  - `Production.cpp:2426` (`appendStateDependencies`) puts every candidate in the device closure.
+  - `Scalar.cpp:308` builds the §14.2 compare tree, one `lift.call` leaf per candidate, sorted by comparison address.
+  - No candidate-count limit exists in the code or in §14.2. The only fault is no-match or zero candidates.
+  - Cost grows with k: tree size, plus the L variant of every candidate. If the callee value is classical at run
+    time, one leaf executes. If it depends on quantum data, every leaf runs under control.
+  - Needed: per-site k at the fixpoint, and whether any callee value in the oracle closure is quantum-dependent.
+- **INT domains.** Widths (`specialiseRegisterWidths`; ⊤ → `§25.1 BLK-1 dynamic widths`), op/cls/n dispatch (§3.4)
+  and descriptor shapes (§8.4) need finite INT sets. ⊤ there is a blocker, not slow code.
+- **ROOT provenance** (§6.2, §6.5) must be exact. It is independent of address precision.
+- **Address (object, offset) sets** are consumed only by:
+  - the oracle read set R (§8.5). The spec's own sound default is "If reachability is uncertain, include all live
+    caller heap/stack backing allocations", and rung 4 route A needs no transfer when byte and allocator
+    dependencies are absent;
+  - descriptor-object elision (`Production.cpp:1421`);
+  - arena placement and may-Co (§10), which is lowering-side precision, explicitly allowed to be more precise
+    (§5 preamble).
+- **First answer.** The lowering tolerates a points-to result as coarse as SVF's or U for addresses. It needs finite
+  INT domains and exact ROOTs. It can pay in compare-tree size for large callee sets. The precision that matters is in
+  the integer and handle parts, and in avoiding ⊤ on function pointers.
+- **What would have to be measured.** On a completed fixpoint:
+  - k per indirect site in the oracle's L closure;
+  - which of those sites have quantum-dependent callee values;
+  - how many width, op and cls operands are ⊤ (BLK-1);
+  - |R| against "all live allocations".
