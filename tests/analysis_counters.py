@@ -156,15 +156,15 @@ define i8 @top() {
 }""")
     work = check("external-import", imported)
     assert work["transfer_applications"] > 0 and work["rounds_completed"] > 0, work
-
-    vector = fixture("vector-vaarg", """define <2 x i32> @top(ptr %p) {
+    # Vector va_arg is supported; an ABI without a §14.3 row still diagnoses.
+    vector = fixture("vector-vaarg", 'target triple = "powerpc64le-unknown-linux-gnu"\n' + """define <2 x i32> @top(ptr %p) {
  %v = va_arg ptr %p, <2 x i32>
  ret <2 x i32> %v
 }""")
-    work = check("unimplemented-composite", vector, diagnostic="§5 PT10")
+    work = check("unimplemented-composite", vector, diagnostic="§14.3")
     assert work["transfer_applications"] == work["worklist_pops"] == 1, work
     assert work["rounds_completed"] == 0, work
-    check("stop-without-report", vector, diagnostic="§5 PT10", with_report=False)
+    check("stop-without-report", vector, diagnostic="§14.3", with_report=False)
     scalable = fixture("scalable-gep", """define ptr @top(ptr %p, i64 %n) {
  %v = getelementptr <vscale x 2 x i8>, ptr %p, i64 %n
  ret ptr %v
