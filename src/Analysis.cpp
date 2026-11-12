@@ -58,6 +58,7 @@ struct AnalysisWork {
     uint64_t pointerBinaryPairs = 0, pointerBinaryAtoms = 0, pointerBinarySkippedPairs = 0;
     uint64_t inputSnapshotCopiedAtoms = 0, inputSnapshotHits = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
+    uint64_t byvalSlotTests = 0, byvalCopiedSlots = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
       return json::Object{{"load_addresses", loadAddresses}, {"load_slot_tests", loadSlotTests},
@@ -73,7 +74,8 @@ struct AnalysisWork {
               {"input_snapshot_hits", inputSnapshotHits},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
-              {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits}};
+              {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits},
+              {"byval_slot_tests", byvalSlotTests}, {"byval_copied_slots", byvalCopiedSlots}};
     }
   } memory;
   struct FunctionVisits {
@@ -1418,6 +1420,38 @@ static std::vector<Leaf> leaves(Type *t, const DataLayout &dl) {
   walk(t, {}, 0);
   return result;
 }
+// Snapshot before any writes: the actual can alias the destination parameter
+// in a recursive call. PT9 copies whole exact source intervals, including
+// filled byte images. Indices exclude unrelated objects and offsets before
+// copying; no store can invalidate the selection or feed it destination facts.
+template <class ExactIndex, class OtherIndex>
+static std::vector<Slot> byvalSnapshot(const AV &source, uint64_t size,
+                                     const std::vector<Slot> &slots,
+                                     const ExactIndex &exact, const OtherIndex &other) {
+  std::vector<Slot> snapshot;
+  for (const auto &p : source.atoms)
+    if (p.kind == Atom::Ptr && !p.stride) {
+      __int128 end = (__int128)p.offset + size;
+      auto select = [&](size_t n) {
+        budgetTick();
+        memoryWork(&AnalysisWork::MemoryWork::byvalSlotTests);
+        const auto &slot = slots[n];
+        if (slot.stride || slot.offset < p.offset ||
+            (__int128)slot.offset + slot.bytes > end) return;
+        snapshot.push_back(slot);
+        snapshot.back().offset -= p.offset;
+        memoryWork(&AnalysisWork::MemoryWork::byvalCopiedSlots);
+      };
+      if (auto found = exact.find(p.object); found != exact.end())
+        for (auto it = found->second.lower_bound(p.offset);
+             it != found->second.end() && (__int128)it->first < end; ++it)
+          for (size_t n : it->second) select(n);
+      // Filled images and residue families share this secondary index.
+      if (auto found = other.find(p.object); found != other.end())
+        for (size_t n : found->second) select(n);
+    }
+  return snapshot;
+}
 void Analysis::bind(CallBase &c, Function *f) {
   if (!f) return;
   if(f->isDeclaration()) {
@@ -1446,27 +1480,21 @@ void Analysis::bind(CallBase &c, Function *f) {
     return;
   }
   edges[c.getFunction()].insert(f);
-  unsigned i = 0;
   for (Argument &a : f->args()) {
-    if (i < c.arg_size()) {
-      if (a.getType()->isAggregateType() || a.getType()->isVectorTy())
-        copyFields(&a, c.getArgOperand(i));
-      else if (a.hasByValAttr()) {
-        // PT9: the callee copy is a distinct abstract object, not an alias.
-        changed |= mergeFacts(values[&a], atom(Atom::Ptr, &a));
-        auto src = get(c.getArgOperand(i));
-        uint64_t size = M.getDataLayout().getTypeAllocSize(a.getParamByValType()).getKnownMinValue();
-        auto snapshot = slots;
-        for (auto &p : src.atoms)
-          if (p.kind == Atom::Ptr)
-            for (auto &slot : snapshot)
-              if (slot.object == p.object && slot.stride == 0 && p.stride == 0 &&
-                  slot.offset >= p.offset && slot.offset + slot.bytes <= p.offset + size)
-                store(slot.value, atom(Atom::Ptr, &a, slot.offset - p.offset), slot.bytes, slot.filled);
-      } else
-        changed |= mergeFacts(values[&a], get(c.getArgOperand(i)));
-    }
-    ++i;
+    if (a.getArgNo() >= c.arg_size()) continue;
+    Value *actual = c.getArgOperand(a.getArgNo());
+    if (a.getType()->isAggregateType() || a.getType()->isVectorTy())
+      copyFields(&a, actual);
+    else if (a.hasByValAttr()) {
+      // PT9: the callee copy is a distinct abstract object, not an alias.
+      changed |= mergeFacts(values[&a], atom(Atom::Ptr, &a));
+      auto src = get(actual);
+      uint64_t size = M.getDataLayout().getTypeAllocSize(a.getParamByValType()).getKnownMinValue();
+      auto snapshot = byvalSnapshot(src, size, slots, exactSlots, otherSlots);
+      for (const auto &copy : snapshot)
+        store(copy.value, atom(Atom::Ptr, &a, copy.offset), copy.bytes, copy.filled);
+    } else
+      changed |= mergeFacts(values[&a], get(actual));
   }
   for (BasicBlock &b : *f)
     if (auto *r = dyn_cast<ReturnInst>(b.getTerminator()))
