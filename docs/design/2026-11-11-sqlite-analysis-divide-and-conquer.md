@@ -1246,3 +1246,90 @@ measure the crawl here, not the program.
 1. Model `va_start`/`va_arg` (§14.3 va block) in a diagnostic build, so the heap exists, and re-measure U and the
    round-1 collapse with one heap object.
 2. Trace the source of the `(Parse alloca, *)` atoms in `db`. It may be a symptom of the missing heap.
+
+## Finding 17 — varargs: the gap is in the analysis on every route; with N23 modelled the heap appears as two objects, and round 0 stalls on one heap-to-heap memcpy
+
+**Minimal reproduction [measured].** `tests/analysis_varargs.py`, a candidate test on `job/sqsize` only, not registered
+in the gate. It has two hand-written x86-64 IR cases:
+
+- `pass(int, ...)` returns a pointer read with the inline `va_arg` memory path;
+- `config(int, ...)` installs a function pointer from a struct passed through `...`, which is the
+  `sqlite3_config(SQLITE_CONFIG_MALLOC, &defaultMethods)` shape.
+
+A clang-compiled C version (`va.c`, musl sysroot, `-O2 -flto`, then `lto<O3>`) shows the same.
+
+On main b120196, on **both majors**, analysis-only:
+
+- the `va_arg` result is empty;
+- `pass(&g)` is empty;
+- `cfg.xMalloc` is `{INT(0)}`;
+- the indirect call has **0 candidates**.
+
+**Route and ordering [source + measured].**
+
+- `Analysis::run` runs on the unnormalised module on every route. In `BennettPlugin.cpp`, `Analysis a(m, …); a.run()`
+  comes before any `normaliseWideABI`.
+- N23 (`normaliseVarargs`, `src/Varargs.inc`) runs only on later clones.
+- `step` gives intrinsic calls no transfer (`!f->isIntrinsic()`), so `llvm.va_start` writes nothing and every
+  inline `va_arg` reads bottom.
+- The reversible route (`-bennett-tier=reversible -bennett-entry=main`, as rung 3 uses) produces the same AVs. Run
+  without `-bennett-analysis-only`, it **emits a launch that contains no `myMalloc`**, the native target of the
+  indirect call.
+- This is a silent miscompile class, not only an analysis gap. Rung 3's `printf` passes because nothing it checks
+  depends on a varargs-carried pointer reaching a verdict. **[conjecture for that last point]**
+
+**Diagnostic model (probe only, `BENNETT_PROBE_VA=1`).**
+
+- Each variadic call site's actuals are spilled at N23's offsets into a per-call-site block object (the call stands
+  for N23's `nz.vb` alloca). The callee's block pointer is the union over its call sites.
+- `va_start` writes N23's x86-64 record: gp_offset 48, fp_offset 176, overflow = block, reg_save = null.
+- `va_copy` copies the 24 bytes.
+
+**[measured]**
+
+- Both test cases and `va.c` then give the native values: `PTR(@g)`, `FN(@myMalloc)`, candidates `{myMalloc}`.
+- Values read through `va_arg` also carry ⊤ in `va.c`. Flow-insensitively, clang's register-save branch is live too
+  and reads through `null + gp_offset`. N23's own `va_start` record gives the same, so the reference S2 model should
+  too. **[source]**
+
+**SQLite with the model** (rebuilt input `3c51062…`, internalised `590790a8…`; PT11 seeds non-local only, which is
+DIAGNOSTIC). **[measured]**
+
+- The heap now exists. The only heap objects anywhere in the log are `call:sqlite3MemMalloc:%4` (malloc) and
+  `call:sqlite3MemRealloc:%6` (realloc), plus 24 va-block objects.
+- Round 0 slows sharply: 442 type-wide sites against 101 without the model, and no round end within 1,500 s. It stops
+  at the allowance at one instruction: `PT8/PT9/PT12 budget exhausted at AV(%277) in @sqlite3_test_control`.
+  - That instruction is a 496-byte `llvm.memcpy` with dst (H, 8) and src (H, 24), both in the one malloc object H
+    (`sqlite3BitvecBuiltinTest` inlined).
+  - 41 or more consecutive heartbeats (each 2^26 budget ticks) sit on it.
+  - `perf`: 68–71% of samples are in `Analysis::store` called directly from `step`.
+  - The slot count stays flat at 87,444, so this is repeated work, not growth. Which loop inside `store` is not yet
+    measured.
+- With main's seeding (every host function), the run stops at the allowance in round 0 at a PT7 store in
+  `destroyRootPage`, with 3.5 GB peak RSS.
+
+**Heap abstraction: what the analysis sees vs SQLite's allocation structure [measured on the rebuilt input IR].**
+
+| | count |
+|---|---|
+| allocation-site calls (§5.1 list or allockind/allocsize) | **4**: `malloc` in `sqlite3MemMalloc`, `realloc` in `sqlite3MemRealloc`, `__bennett_rt_aligned_alloc` ×2 in the runtime |
+| SQLite-level allocation calls remaining after LTO | **559 call sites in 264 functions**: `sqlite3DbMallocRawNN` 329 (183 functions), `sqlite3MPrintf` 70, `sqlite3_mprintf` 35, `sqlite3Malloc` 32, `dbReallocFinish` 23, `sqlite3Realloc` 20, `dbMallocRawFinish` 17, `sqlite3DbMallocZero` 11, … |
+
+So the reference abstraction puts every SQLite heap structure into one object (two with realloc), with fields
+overlapping by offset. A wrapper-call-site-sensitive heap could separate up to 559 sites. **[conjecture on how much
+that would separate in practice: LTO has inlined some wrappers, and SQLite's lookaside allocator carves sub-objects
+out of one buffer]**
+
+**§5.1 text (dialect 0.2.14 in the sibling checkout; plugin pins 0.2.13) [source].**
+
+- "each **allocation site**: a call of a function that carries `allockind("alloc")` or `allocsize(...)`, or whose
+  name is one of `malloc`, …"
+- "Heap objects are context-insensitive: one object per allocation-site instruction of the variant in which it
+  occurs."
+- "Abstract-object and return propagation MUST cover attributed allocator calls and defined allocator wrappers
+  through their underlying allocation sites without requiring the wrapper's name in a whitelist."
+- §5 preamble: "A plugin MAY use a more precise analysis to shrink dispatch domains or arena placement in its
+  lowering, never to change a verdict."
+
+Wrapper-sensitive heap naming is therefore a refinement of the reference, not already permitted for verdicts. It is
+permitted only as a lowering-side precision tool.
