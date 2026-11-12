@@ -1618,3 +1618,94 @@ Where Bennett's problem is larger by construction:
 
 **[measured counts; the split of Bennett's per-step cost between "more atoms" and "slower per atom" is conjecture —
 round 1's 99%-new atoms say the domain grows, not that the solver repeats]**
+
+## Finding 21 — widening the address domain does not buy convergence; round 1 is 85% one linear scan in `store`
+
+Configuration: rebuilt input (`3c51062…`), internalised, sound switches VA, CFSKIP and VANOREG, diagnostic SEED=1. CPU
+times are thread CPU. After 11:58Z the host owner lowered these units' CPU weight, so wall times are not comparable.
+
+**Widening switches and their classification.**
+
+- **w1:** an exact offset outside the object's known extent (globals, constant-size allocas) becomes (X, `*`). This
+  applies in every AV after a changing merge, at slot creation, and to `store` slot keys. **Sound but coarser.**
+  - An out-of-bounds exact atom denotes the one modular address X + o (PT2/PT5). (X, `*`) denotes X + o for every o,
+    so the address set only grows.
+  - PT6 through (X, `*`) reads every slot of X, which is a superset of what (X, o) reads: in-object slots, plus
+    out-of-bounds slots, which become (X, `*`) slots under w1 as well. PT7 becomes a weak update of all of X.
+  - The (EXT, `*`) and ⊤ alternatives that PT2 attaches are separate atoms and are kept unchanged. ROOT, FN and INT
+    atoms are untouched.
+  - PT2's out-of-block alternatives do **not** make w1 unsound: they are addresses, and `*` contains them.
+  - It is not reference-exact. Verdicts computed from it can be more conservative (more candidates, more partial-overlap
+    ⊤).
+- **w2 (K):** more than K exact or residue atoms into one object in one AV collapse to (X, `*`). **Sound but coarser,**
+  by the same containment argument.
+- **w4 (N):** more than N INT atoms become ⊤. **Sound but coarser** relative to the normative K = 4096, and can turn
+  finite domains into BLK-1.
+- **w3** (SCC collapse of copy cycles, exact) is **not built**. Measurement 1 of finding 20 shows unchanged steps are
+  not where the big rounds spend time, so it is deferred.
+
+**Small inputs [measured].** Runs are 300–600 s each.
+
+| input | config | rounds | CPU | value atoms | FINAL (lowering-relevant) |
+|---|---|---|---|---|---|
+| hello | base / w1 / w1+w2(8) / w1+w2(64) | 5 / 7 / 7 / 7 | <0.2 s | — | identical: 4 sites, candidates 2/2/2, 3 type-wide, widths not ⊤, 20 distinct ROOTs; ROOT on 199 → 201 values |
+| printf (66 functions) | base / w1 / w1+w2(8) / w1+w2(64) | 506 / 528 / 575 / 575, **no fixpoint** | 262–280 s | 305k / 312k / 73k / 58k | — |
+| printf | w4(64) | **34, fixpoint** | 13.8 s | 298k | 3 sites, 3/3/3 candidates, 0 type-wide, 2 ROOTs |
+| printf | w1+w2(8)+w4(64) | **34, fixpoint** | **4.4 s** | 65k | identical to w4 |
+| SQLite BFS-25 | base / w1 / w1+w2(8) / w1+w2(64) / w4 / w1+w2(8)+w4 | 24 / 25 / 58 / 37 / 24 / 54, no fixpoint | about 270–290 s | 62k / 62k / 37k / 31k / 47k / 22k | — |
+| SQLite BFS-100 | base / w1 / w1+w2(8) / w4 / w1+w2(8)+w4 | 2 / 3 / 3 / 2 / 3, no fixpoint | — | 255k / **690k** / 621k / 207k / **547k** (by round 3) | — |
+
+Reading:
+
+- **The crawls in late rounds are integer-only.** In printf and BFS-25 from round 50 on, every pointer and FN count is
+  constant, and INT atoms grow by 18 and 3 per round. Address widening cannot end them. INT widening (w4) ends
+  printf's.
+- **On SQLite closures w1 can increase the work.** BFS-100's atoms grow 2.7× with w1, because (X, `*`) loads read every
+  slot of X and stores weakly update all of X.
+- **Lowering-relevant results did not get worse where a fixpoint exists:** candidates, type-wide sites, widths and
+  ROOTs are identical on hello and printf. On the full input, round 0 has 444 type-wide sites with and without
+  widening, so the partial-overlap ⊤ did not create more ⊤ function pointers by round 0.
+
+**Full input, round 0 [measured].**
+
+| config | CPU | value atoms | (X, `*`) atoms | INT atoms | unique sets | type-wide sites |
+|---|---|---|---|---|---|---|
+| base (`sqsize-fix`) | 177 s | 4.27M | 2.06M (values + slots) | 453k | 99,795 | 444 |
+| w1+w2(8) | 157 s | 3.46M | 2.32M | 452k | 100,027 | 444 |
+| w1+w2(64) | 152 s | 3.47M | 2.32M | 452k | 100,316 | 444 |
+| w4(64) | 227 s | 3.95M | — | — | 99,743 | 444 |
+| w1+w2(8)+w4(64) | 252 s | 3.14M | — | — | 99,985 | 444 |
+
+**Full input, round 1, trend [measured].** Round 1 spans pops 276,582–553,164.
+
+| config | CPU in round 1 | steps done | rate | slots |
+|---|---|---|---|---|
+| `sqsize-fix` (no widening) | ≈60 min | 29k | ≈480 steps per CPU-minute | 87,996 → 279,221 |
+| w1+w2(8)+w4(64) | ≈26 min | 21k | ≈810 steps per CPU-minute | 151k → 208k |
+
+- In the widened run, round-1 changed steps cost about 75 ms each, and 99% of their input atoms are new.
+- At these rates, round 1 alone needs several CPU-hours in both configurations. Widening the address domain does not
+  give SVF-like time.
+
+**Where round-1 CPU goes [measured].** `perf`, 10 s on the w1+w2(8)+w4 run:
+
+- **85.2% in `Analysis::store`**, and `perf annotate` puts almost all of it on the family-coverage
+  `any_of(otherSlots[a.object], …)` with `offsetContains` and `coversWrittenValue`.
+- Counters at the same point: 317M `store` calls, **77.6G family-slot visits** (about 245 per call). The largest
+  family list is the malloc object's, with 1,004 slots.
+- The heartbeats sit on PT8 `memcpy`/`memmove` steps (`sqlite3_str_vappendf`, `minmaxStep`, `groupConcatStep`,
+  `unistrFunc`, `memdbWrite`, `dbReallocFinish`). Each copies many slots, one `store` per slot and per offset, and each
+  `store` scans the whole family list of the destination object.
+- This is the same hot loop as finding 18's loop 1, at whole-program scale. It is a representation cost: a linear scan
+  of an object's family slots per written atom, needed to decide whether a narrower write is already covered. Indexing
+  the families by (bytes, numerical, stride, residue), or summarising coverage per object, would keep the same result.
+  **[conjecture on the fix]**
+- Note: main has since moved to 5a9d8a2 (r3cpu: "analysis selects indexed PT8 snapshot sources, … reuses normalised
+  unions"). These probes are based on b120196. Whether r3cpu changes this scan has not been measured.
+
+**What it suggests.** Coarsening addresses keeps the lowering-relevant results unchanged where a fixpoint is reached.
+But on its own it does not buy convergence:
+
+1. Integer crawls need integer acceleration or widening (w4 converges printf in 34 rounds, 4.4 s).
+2. On the full input, round-1 cost is dominated by an implementation scan in `store`. Widening multiplies family slots
+   ((X, `*`)), so it can even make this worse.
