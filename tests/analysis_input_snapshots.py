@@ -7,14 +7,24 @@ from pathlib import Path
 from contracts import run
 
 
+def make_directory(args):
+    directory = args.artifacts / str(args.major)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def value_map(data):
+    return {(v['function'], v['value']): (v['top'], sorted(v['atoms']))
+            for v in data['values']}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--major', type=int, choices=(18, 23), required=True)
     p.add_argument('--plugin', type=Path, required=True)
     p.add_argument('--artifacts', type=Path, required=True)
     args = p.parse_args()
-    directory = args.artifacts / str(args.major)
-    directory.mkdir(parents=True, exist_ok=True)
+    directory = make_directory(args)
     receipts = []
     for count in (16, 32, 64):
         globals_ = 'target datalayout = "e-p:64:64"\n@cell = internal global ptr null\n'
@@ -45,8 +55,7 @@ def main():
             source.with_suffix('.stderr').write_text(result.stderr)
             assert result.returncode == 0, result.stderr
             data = json.loads(report.read_text())
-            values = {(v['function'], v['value']): (v['top'], sorted(v['atoms']))
-                      for v in data['values']}
+            values = value_map(data)
             pointers = [f'PTR(@t{i},0,0)' for i in range(count)]
             assert values['top', '%set'] == (False, sorted(pointers)), values
             assert values['top', '%read'] == (False, sorted(['INT(0)', *pointers])), values
@@ -54,6 +63,9 @@ def main():
             work = data['analysis_work']['memory']
             receipts.append(dict(count=count, order=order, argv=list(map(str, argv)), work=work))
             (directory / 'work.json').write_text(json.dumps(receipts, indent=2) + '\n')
+            assert work['input_snapshot_hits'] <= 3 * count + 8, work
+            assert work['pure_input_leaves'] <= 3 * count + 8, work
+            assert work['equality_atom_tests'] <= 8 * count + 32, work
             assert work['input_snapshot_copied_atoms'] <= 8 * count + 32, work
         assert domains[0] == domains[1] == domains[2], (count, 'evaluation order')
     # The same aggregate operand has distinct leaf images; loop growth must
@@ -87,8 +99,7 @@ done:
     source.with_suffix('.stderr').write_text(result.stderr)
     assert result.returncode == 0, result.stderr
     data = json.loads(report.read_text())
-    values = {(v['function'], v['value']): (v['top'], sorted(v['atoms']))
-              for v in data['values']}
+    values = value_map(data)
     assert values['top', '%left'] == (False, ['PTR(@a,0,0)', 'PTR(@b,0,0)']), values
     assert values['top', '%read0'] == (False, ['INT(0)', 'PTR(@a,0,0)', 'PTR(@b,0,0)']), values
     assert values['top', '%read1'] == (False, ['INT(0)', 'PTR(@c,0,0)']), values

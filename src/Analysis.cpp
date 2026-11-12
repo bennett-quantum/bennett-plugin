@@ -1,6 +1,7 @@
 #include "Bennett.h"
 #include "AnalysisBudgetClock.h"
 #include "llvm/ADT/Hashing.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AssumptionCache.h"
@@ -35,11 +36,7 @@ namespace {
 cl::opt<unsigned> MaxAnalysisRounds("bennett-analysis-max-rounds",cl::init(16384));
 cl::opt<unsigned> AnalysisMilliseconds("bennett-analysis-budget-ms",cl::init(30000),
     cl::desc("S2 thread CPU allowance in milliseconds; source/ISA budgets are independent"));
-static bool sameAV(const AV &a, const AV &b) {
-  return a.top == b.top && a.atoms.size() == b.atoms.size() &&
-         std::equal(a.atoms.begin(), a.atoms.end(), b.atoms.begin(),
-                    [](const Atom &x, const Atom &y) { return !(x < y) && !(y < x); });
-}
+static bool sameAV(const AV &, const AV &);
 struct AnalysisWork {
   static constexpr size_t TopFunctionLimit = 10;
   uint64_t transferApplications = 0;
@@ -56,9 +53,11 @@ struct AnalysisWork {
     uint64_t loadImageInternHits = 0;
     uint64_t pointerContainmentTests = 0;
     uint64_t pointerBinaryPairs = 0, pointerBinaryAtoms = 0, pointerBinarySkippedPairs = 0;
-    uint64_t inputSnapshotCopiedAtoms = 0, inputSnapshotHits = 0;
+    uint64_t inputSnapshotCopiedAtoms = 0, inputSnapshotHits = 0, pureInputLeaves = 0;
     uint64_t compactions = 0, compactSlots = 0, compactCopies = 0, reindexedSlots = 0;
     uint64_t byvalSlotTests = 0, byvalCopiedSlots = 0;
+    uint64_t memtransferCopiedSlots = 0, equalityAtomTests = 0;
+    uint64_t mergeAtomLookups = 0, mergeSharedAtoms = 0, mergeAtomVisits = 0;
     uint64_t mergeFamilyVisits = 0, mergeTopVisits = 0;
     json::Object report() const {
       return json::Object{{"load_addresses", loadAddresses}, {"load_slot_tests", loadSlotTests},
@@ -71,10 +70,12 @@ struct AnalysisWork {
               {"pointer_binary_pairs", pointerBinaryPairs}, {"pointer_binary_atoms", pointerBinaryAtoms},
               {"pointer_binary_skipped_pairs", pointerBinarySkippedPairs},
               {"input_snapshot_copied_atoms", inputSnapshotCopiedAtoms},
-              {"input_snapshot_hits", inputSnapshotHits},
+              {"input_snapshot_hits", inputSnapshotHits}, {"pure_input_leaves", pureInputLeaves},
               {"compactions", compactions}, {"compact_slots", compactSlots},
               {"compact_copies", compactCopies}, {"reindexed_slots", reindexedSlots},
               {"merge_family_visits", mergeFamilyVisits}, {"merge_top_visits", mergeTopVisits},
+              {"memtransfer_copied_slots", memtransferCopiedSlots}, {"equality_atom_tests", equalityAtomTests},
+              {"merge_atom_visits", mergeAtomVisits}, {"merge_atom_lookups", mergeAtomLookups}, {"merge_shared_atoms", mergeSharedAtoms},
               {"byval_slot_tests", byvalSlotTests}, {"byval_copied_slots", byvalCopiedSlots}};
     }
   } memory;
@@ -157,8 +158,16 @@ struct AnalysisBudget {
   // image can serve every instruction that reads it; later growth gets a new
   // image while earlier transfer snapshots remain alive and exact.
   std::map<std::pair<const Value *, std::vector<unsigned>>, LoadImage> inputImages;
-  std::map<const Instruction *, std::vector<LoadImage>> pureInputImages;
-  LoadImage snapshotInput(const Value *, ArrayRef<unsigned>, const AV &);
+  struct PureInput {
+    const AV *current;
+    LoadImage *image;
+  };
+  struct PureTransfer {
+    std::vector<PureInput> readers;
+    std::vector<LoadImage> prior;
+  };
+  DenseMap<const Instruction *, PureTransfer> pureInputs;
+  LoadImage snapshotInput(LoadImage &, const AV &);
   void invalidateLoadImages(const Value *object) {
     loadImages.erase(object);
     loadSignatures.erase(object);
@@ -253,6 +262,11 @@ void memoryWork(uint64_t AnalysisWork::MemoryWork::*counter, uint64_t count = 1)
   activeBudget->work.memory.*counter += count;
   if (auto *f = activeBudget->work.currentFunction) f->memory.*counter += count;
 }
+static bool sameAV(const AV &a, const AV &b) {
+  return a.top == b.top && a.atoms.size() == b.atoms.size() &&
+         (a.atoms.sharesStorageWith(b.atoms) || std::equal(a.atoms.begin(), a.atoms.end(), b.atoms.begin(),
+                    [](const Atom &x, const Atom &y) { memoryWork(&AnalysisWork::MemoryWork::equalityAtomTests); return !(x < y) && !(y < x); }));
+}
 void AnalysisBudget::internAtoms(AnalysisAtomSet<Atom> &atoms) {
   // Small sets already copy cheaply; this threshold changes storage only.
   if (atoms.size() < 8) return;
@@ -293,8 +307,7 @@ AnalysisBudget::LoadImage AnalysisBudget::internLoadImage(AV image) {
   return result;
 }
 AnalysisBudget::LoadImage AnalysisBudget::snapshotInput(
-    const Value *value, ArrayRef<unsigned> path, const AV &current) {
-  auto &image = inputImages[{value, std::vector<unsigned>(path.begin(), path.end())}];
+    LoadImage &image, const AV &current) {
   if (image && sameAV(*image, current)) {
     memoryWork(&AnalysisWork::MemoryWork::inputSnapshotHits);
     return image;
@@ -430,19 +443,33 @@ bool AV::merge(const AV &v) {
   }
   budgetTick();
   bool change = false;
+  bool wasNormalized = atoms.isNormalized();
   if (v.top && !top) {
     top = true;
     change = true;
   }
   if(&v==this)return change;
+  bool absorbsIntegers = top && !v.atoms.empty() && v.atoms.rbegin()->kind == Atom::Int;
+  // Union-normalised immutable images can be shared without rebuilding their
+  // nodes or searching for atoms already present. TOP's integer suffix still
+  // takes the ordinary absorption path; raw sets still take normalisation.
+  if (!absorbsIntegers && v.atoms.isNormalized() &&
+      (atoms.empty() || atoms.sharesStorageWith(v.atoms))) {
+    memoryWork(&AnalysisWork::MemoryWork::mergeSharedAtoms, v.atoms.size());
+    change |= atoms.empty() && !v.atoms.empty();
+    atoms = v.atoms;
+    return change;
+  }
   bool insertedInteger=false;
   SmallVector<Atom, 4> families;
   bool indexedFamilies = false;
   const Value *familyObject = nullptr;
   for (auto a : v.atoms) {
+    memoryWork(&AnalysisWork::MemoryWork::mergeAtomVisits);
     if(top && a.kind==Atom::Int)continue;
     if(a.kind==Atom::Ptr) {
       canonicalOffset(a.offset, a.stride);
+      memoryWork(&AnalysisWork::MemoryWork::mergeAtomLookups);
       if (atoms.count(a)) continue;
       Atom first{Atom::Ptr,a.object,INT64_MIN,INT64_MIN,APInt(1,0)};
       // Only families of this object can contain this pointer. Incoming atoms
@@ -499,6 +526,7 @@ bool AV::merge(const AV &v) {
       if (i->kind != Atom::Int) break;
       atoms.erase(i);
     }
+  if (wasNormalized) atoms.markNormalized();
   return change;
 }
 bool AV::roots() const {
@@ -2195,6 +2223,81 @@ static AV binaryPointers(Instruction &i, const AV &left, const AV &right,
   image(right, left, true);
   return result;
 }
+// Operand/leaf shapes stay fixed throughout a run. Analysis map nodes keep
+// stable addresses as facts grow; constants retain an immutable input image.
+static void preparePureInputs(AnalysisBudget &budget, AnalysisBudget::PureTransfer &inputs,
+    Instruction &instruction, const DataLayout &dl,
+    function_ref<const AV *(Value *, const std::vector<unsigned> &, AnalysisBudget::LoadImage &)> resolve) {
+  for (Value *v : instruction.operands())
+    for (auto &leaf : leaves(v->getType(), dl)) {
+      auto &image = budget.inputImages[{v, leaf.path}];
+      inputs.readers.push_back({resolve(v, leaf.path, image), &image});
+      memoryWork(&AnalysisWork::MemoryWork::pureInputLeaves);
+    }
+  inputs.prior.resize(inputs.readers.size());
+}
+// PT8 reads a frozen source image, including when memmove aliases its
+// destination. Select only source objects, in original slot order, before any
+// writes can compact or reindex memory. No interval/value fact is discarded.
+template <class ExactIndex, class OtherIndex>
+static std::vector<Slot> memtransferSnapshot(const AV &source,
+    const std::vector<Slot> &slots, const ExactIndex &exact, const OtherIndex &other) {
+  std::set<const Value *> objects;
+  for (const auto &p : source.atoms)
+    if (p.kind == Atom::Ptr) objects.insert(p.object);
+  std::vector<size_t> selected;
+  for (auto *object : objects) {
+    if (auto found = exact.find(object); found != exact.end())
+      for (const auto &entry : found->second)
+        selected.insert(selected.end(), entry.second.begin(), entry.second.end());
+    if (auto found = other.find(object); found != other.end())
+      selected.insert(selected.end(), found->second.begin(), found->second.end());
+  }
+  llvm::sort(selected);
+  std::vector<Slot> snapshot;
+  snapshot.reserve(selected.size());
+  for (size_t n : selected) {
+    budgetTick();
+    snapshot.push_back(slots[n]);
+    memoryWork(&AnalysisWork::MemoryWork::memtransferCopiedSlots);
+  }
+  return snapshot;
+}
+static void transferMemory(ArrayRef<Slot> snapshot, const AV &src, const AV &dst,
+    ConstantInt *len, function_ref<void(const AV &, const AV &, uint64_t, bool)> write) {
+  for (const auto &s : snapshot)
+    for (auto &p : src.atoms)
+      if (p.kind == Atom::Ptr && p.object == s.object)
+        for (auto &d : dst.atoms)
+          if (d.kind == Atom::Ptr) {
+            if (s.stride && len && !p.stride && !d.stride) {
+              copySlotFamily(s, p, d, len->getZExtValue(), write);
+            } else if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
+              int64_t lo=std::max(p.offset,s.offset);
+              __int128 hi=std::min((__int128)p.offset+len->getZExtValue(),(__int128)s.offset+s.bytes);
+              if(hi>lo) write(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);
+            } else if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
+                s.offset >= p.offset &&
+                s.offset + (int64_t)s.bytes <=
+                    p.offset + (int64_t)len->getZExtValue())
+              write(
+                  s.value,
+                  atom(Atom::Ptr, d.object, d.offset + s.offset - p.offset),
+                  s.bytes, s.filled);
+            else if (!len || overlaps(p, s, len->getZExtValue())) {
+              AV partial;
+              partial.top = true;
+              for (auto &x : s.value.atoms)
+                if (x.kind == Atom::Root)
+                  partial.atoms.insert(x);
+              if(len && !p.stride && !d.stride && !s.stride) {
+                auto lo=std::max((__int128)p.offset,(__int128)s.offset);
+                auto hi=std::min((__int128)p.offset+len->getLimitedValue(),(__int128)s.offset+s.bytes);
+                write(partial,atom(Atom::Ptr,d.object,d.offset+(int64_t)(lo-p.offset)),hi-lo,false);
+              } else write(partial, atom(Atom::Ptr, d.object, d.offset, -1),s.bytes,false);
+            }
+          }
+}
 void Analysis::step(Instruction &i) {
   if(activeBudget) {
     ++activeBudget->work.worklistPops;
@@ -2212,21 +2315,24 @@ void Analysis::step(Instruction &i) {
   for(Value *v:i.operands())scalar &= v->getType()->isIntegerTy() || v->getType()->isPointerTy() || (isa<StoreInst>(i) && (v->getType()->isAggregateType() || v->getType()->isVectorTy()));
   if(scalar && pure) {
     assert(activeBudget && "pure transfer snapshots require the run's budget scope");
-    std::vector<AnalysisBudget::LoadImage> inputs;
-    for (Value *v : i.operands())
-      for (auto &leaf : leaves(v->getType(), M.getDataLayout())) {
-        if (isa<Constant>(v))
-          inputs.push_back(activeBudget->snapshotInput(v, leaf.path, field(v, leaf.path)));
-        else {
-          // Nonconstant leaves already reside in the analysis maps. Compare
-          // them before copying; get()/field() return an AV by value.
-          const AV &current = leaf.path.empty() ? values[v] : fields[{v, leaf.path}];
-          inputs.push_back(activeBudget->snapshotInput(v, leaf.path, current));
-        }
-      }
-    auto &old = activeBudget->pureInputImages[&i];
-    if (old == inputs) return;
-    old = std::move(inputs);
+    auto [entry, inserted] = activeBudget->pureInputs.try_emplace(&i);
+    auto &inputs = entry->second;
+    if (inserted)
+      preparePureInputs(*activeBudget, inputs, i, M.getDataLayout(),
+          [&](Value *v, const std::vector<unsigned> &path, AnalysisBudget::LoadImage &image) -> const AV * {
+            if (!isa<Constant>(v)) return path.empty() ? &values[v] : &fields[{v, path}];
+            if (!image) activeBudget->snapshotInput(image, field(v, path));
+            return nullptr;
+          });
+    bool same = true;
+    for (size_t n = 0; n < inputs.readers.size(); ++n) {
+      auto &reader = inputs.readers[n];
+      auto image = reader.current ? activeBudget->snapshotInput(*reader.image, *reader.current)
+                                  : *reader.image;
+      same &= inputs.prior[n] == image;
+      inputs.prior[n] = std::move(image);
+    }
+    if (same) return;
   }
   if (activeBudget) {
     ++activeBudget->work.transferApplications;
@@ -2389,42 +2495,11 @@ void Analysis::step(Instruction &i) {
     else if (isa<MemTransferInst>(c) || n=="__bennett_rt_memmove") {
       AV src = get(c->getArgOperand(1)), dst = get(c->getArgOperand(0));
       auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
-      auto snapshot = slots;
-      for (auto s : snapshot)
-        for (auto &p : src.atoms)
-          if (p.kind == Atom::Ptr && p.object == s.object)
-            for (auto &d : dst.atoms)
-              if (d.kind == Atom::Ptr) {
-                if (s.stride && len && !p.stride && !d.stride) {
-                  copySlotFamily(s, p, d, len->getZExtValue(),
-                      [&](const AV &value, const AV &address, uint64_t bytes, bool filled) {
-                        store(value, address, bytes, filled);
-                      });
-                } else if (s.filled && len && p.stride==0 && d.stride==0 && s.stride==0 && overlaps(p,s,len->getZExtValue())) {
-                  int64_t lo=std::max(p.offset,s.offset);
-                  __int128 hi=std::min((__int128)p.offset+len->getZExtValue(),(__int128)s.offset+s.bytes);
-                  if(hi>lo) store(s.value,atom(Atom::Ptr,d.object,d.offset+lo-p.offset),hi-lo,true);
-                } else if (len && p.stride == 0 && d.stride == 0 && s.stride == 0 &&
-                    s.offset >= p.offset &&
-                    s.offset + (int64_t)s.bytes <=
-                        p.offset + (int64_t)len->getZExtValue())
-                  store(
-                      s.value,
-                      atom(Atom::Ptr, d.object, d.offset + s.offset - p.offset),
-                      s.bytes, s.filled);
-                else if (!len || overlaps(p, s, len->getZExtValue())) {
-                  AV partial;
-                  partial.top = true;
-                  for (auto &x : s.value.atoms)
-                    if (x.kind == Atom::Root)
-                      partial.atoms.insert(x);
-                  if(len && !p.stride && !d.stride && !s.stride) {
-                    auto lo=std::max((__int128)p.offset,(__int128)s.offset);
-                    auto hi=std::min((__int128)p.offset+len->getLimitedValue(),(__int128)s.offset+s.bytes);
-                    store(partial,atom(Atom::Ptr,d.object,d.offset+(int64_t)(lo-p.offset)),hi-lo);
-                  } else store(partial, atom(Atom::Ptr, d.object, d.offset, -1),s.bytes);
-                }
-              }
+      auto snapshot = memtransferSnapshot(src, slots, exactSlots, otherSlots);
+      transferMemory(snapshot, src, dst, len,
+          [&](const AV &value, const AV &address, uint64_t bytes, bool filled) {
+            store(value, address, bytes, filled);
+          });
     } else if (isa<MemSetInst>(c) || n=="__bennett_rt_memset") {
       auto *len = dyn_cast<ConstantInt>(c->getArgOperand(2));
       auto p = get(c->getArgOperand(0));
