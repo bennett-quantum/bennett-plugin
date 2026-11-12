@@ -364,6 +364,9 @@ The source keeps configured classes available; no replacement executor or privat
 ```json
 {
   "files": {
+    "src/AnalysisVarargs.inc": {"functions": 5, "length_p50": 9, "length_p90": 15, "length_max": 15, "over_300": 0, "complexity": 57, "trivial_wrappers": 1},
+    "src/VarargsAnalysis.inc": {"functions": 3, "length_p50": 21, "length_p90": 30, "length_max": 30, "over_300": 0, "complexity": 52, "trivial_wrappers": 0},
+    "tests/analysis_varargs.py": {"functions": 7, "length_p50": 18, "length_p90": 28, "length_max": 28, "over_300": 0, "complexity": 12, "trivial_wrappers": 0},
     "tests/analysis_memtransfer.py": {"complexity": 11, "functions": 1, "length_max": 54, "length_p50": 54, "length_p90": 54, "over_300": 0, "trivial_wrappers": 0},
     "tests/analysis_union_work.py": {"complexity": 7, "functions": 1, "length_max": 47, "length_p50": 47, "length_p90": 47, "over_300": 0, "trivial_wrappers": 0},
     "src/ProductionRelocations.h": {"complexity": 42, "functions": 1, "length_max": 23, "length_p50": 23, "length_p90": 23, "over_300": 0, "trivial_wrappers": 0},

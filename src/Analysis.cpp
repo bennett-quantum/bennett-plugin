@@ -823,6 +823,8 @@ std::string regionKey(Function *f) {
 void Analysis::releaseTransferGraphs() {
   for(auto &entry:fpTransfers)entry.second->dropAllReferences();
   fpTransfers.clear();
+  for(auto &entry:vaTransfers)entry.second->dropAllReferences();
+  vaTransfers.clear();
 }
 // PT2 is the same finite-width address image for scalar and vector lanes.
 // Callers bind source operands (and source-keyed bounds), never joined vectors
@@ -1480,14 +1482,18 @@ static std::vector<Slot> byvalSnapshot(const AV &source, uint64_t size,
     }
   return snapshot;
 }
+bool isVaOperation(const Instruction &);
+#include "AnalysisVarargs.inc"
 void Analysis::bind(CallBase &c, Function *f) {
   if (!f) return;
+  bindVarargs(c,*f);
   if(f->isDeclaration()) {
     AV unknown;unknown.top=true;
     if(c.getType()->isAggregateType() || c.getType()->isVectorTy())
       for(auto &leaf:leaves(c.getType(),M.getDataLayout()))setField(&c,leaf.path,unknown);
     else changed|=mergeFacts(values[&c], unknown);
     std::set<const Value *> reachable;bool opaque=false;
+    varargsReachable(c,reachable);
     for(Value *v:c.args())if(v->getType()->isPointerTy()) {
       auto address=get(v);opaque|=address.top;
       for(auto &p:address.atoms)if(p.kind==Atom::Ptr) {
@@ -2338,6 +2344,7 @@ void Analysis::step(Instruction &i) {
     ++activeBudget->work.transferApplications;
     if (auto *f = activeBudget->work.currentFunction) ++f->transfers;
   }
+  if(stepVarargs(i))return;
   // S2 evaluates precisely the same N9/N32/N33 graph on private instructions.
   // Operands retain source identities; host IR and its attributes stay untouched.
   bool fp=false;
@@ -2543,6 +2550,7 @@ void Analysis::step(Instruction &i) {
                               maximum(get(c->getArgOperand(0))));
       }
       if (extent) store(integer(APInt(8,0)), a, extent, true);
+      bindVaAllocation(*c,*f,[&] { bind(*c,f); });
       if (n == "posix_memalign") {
         store(a, get(c->getArgOperand(0)), M.getDataLayout().getPointerSize());
         a={};a.top = true;
@@ -2790,6 +2798,7 @@ void Analysis::run() {
   if(Entry)entries.insert(Entry);
   auto seedParameters=[&](Function *f,bool boundary) {
     if(!f || f->isDeclaration())return;
+    seedVarargs(*f);
     for(Argument &arg:f->args())for(auto &leaf:leaves(arg.getType(),M.getDataLayout())) {
       AV value;
       if(leaf.type->isPointerTy()) {

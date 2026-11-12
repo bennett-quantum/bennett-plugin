@@ -24,6 +24,8 @@ DRIVERS = {
                        "--artifacts", ".tmp/tests/analysis_memtransfer"),
     "analysis_union_work": ("--plugin", "build/libbennett-plugin-{major}.so",
                        "--artifacts", ".tmp/tests/analysis_union_work"),
+    "analysis_varargs": ("--plugin", "build/libbennett-plugin-{major}.so",
+                         "--artifacts", ".tmp/tests/analysis_varargs"),
     "analysis_byval": ("--plugin", "build/libbennett-plugin-{major}.so",
                        "--artifacts", ".tmp/tests/analysis_byval"),
     "analysis_additive_cycles": ("--plugin", "build/libbennett-plugin-{major}.so",
@@ -202,6 +204,7 @@ COMMAND_HANG_GUARDS_S = {
     "native_transports": 60,
 }
 # The PT9 indexed-copy regression uses the existing exact-memory-work class.
+COMMAND_HANG_GUARDS_S["analysis_varargs"] = COMMAND_HANG_GUARDS_S["varargs"]
 COMMAND_HANG_GUARDS_S["analysis_byval"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
 COMMAND_HANG_GUARDS_S["production_relocations"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
 COMMAND_HANG_GUARDS_S["analysis_memtransfer"] = COMMAND_HANG_GUARDS_S["analysis_slot_compaction"]
