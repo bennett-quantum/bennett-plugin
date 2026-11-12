@@ -1154,3 +1154,95 @@ counted up to pop 158,000 of round 0. **[measured]**
 
 **Next.** Trace the round-1 collapse: the first unknown-pointer callee and the 745-object sets, under internalised,
 non-local-only seeds.
+
+## Finding 16 — the round-1 collapse is a store through `(X, *)` addresses; underneath it, `va_start` is not modelled and SQLite's heap is absent
+
+Rebuilt input as before (`3c51062…`, 1,487 functions), internalised (`590790a8…`). **DIAGNOSTIC** setting: PT11
+seeds on non-local functions only. Probe 6 logs every value and slot the first time it holds both FN and data
+pointer atoms ("mixed"), and each type-wide site with its callee atoms. Probe 7 dumps chosen AVs at each round end.
+
+**Round-1 type-wide sites [measured].**
+
+- 116 new sites appear in round 1. Their callees hold the ⊤ flag, an unknown (EXT, `*`) atom and string-literal
+  pointers.
+- The first is `sqlite3_step %74 = call i32 %71(...)`, where `%71` is `pVfs->xCurrentTimeInt64`. It is
+  type-wide because `%0`, the `Vdbe *` parameter, is mixed: 97 atoms of FN, (EXT, `*`), and string literals at
+  offset `*`. It became mixed at pop 224,815, when `pragmaVtabNext` passed such a pointer.
+- The first *data* store that mixes FN into memory is at pop 124,213, round 0:
+  `sqlite3Pragma: store ptr %4116, ptr %4118`, which is `db->xWalCallback = sqlite3WalDefaultHook`.
+  - `%4118` is `&db->field57`, and `db` (`%32`) is 8 atoms with offset `*`: (EXT, `*`), the `Parse` allocas of
+    `sqlite3_declare_vtab`, `renameTableFunc`, `renameTableTest`, `renameQuotefixFunc`, `renameColumnFunc` and
+    `dropColumnFunc`, and the string literal `@.str.544`.
+  - The store writes the FN atom into every slot of those objects. Their later loads, read as `Vdbe`, `sqlite3` or
+    `sqlite3_vfs`, are mixed, and dispatch becomes type-wide.
+- The `sentinel` path (`inttoptr (i64 -1)` → (EXT, `*`) mixed with FN in `xDel` parameters) is the very first mixed
+  value, at pop 24,553. It matters little here: 3 type-wide sites (finding 15).
+
+**Why a `sqlite3 *` points at `Parse` allocas and string literals: SQLite's heap is missing [measured + source].**
+The AV dumps after round 0 show:
+
+| value | AV |
+|---|---|
+| `sqlite3_config %29`, the `va_arg` pointer to the `sqlite3_mem_methods` | empty |
+| `sqlite3Malloc %9`, `xMalloc` loaded from `@sqlite3Config` | `{INT 0}` only, no FN |
+| `sqlite3Malloc %10`, the allocation result | empty |
+| `sqlite3MemMalloc %4`, the only `malloc` allocation site | (`call:sqlite3MemMalloc:%4`, 0), but `sqlite3MemMalloc` is never a candidate |
+
+The cause, as read from the source:
+
+- `Analysis.cpp` has no case for `llvm.va_start`, so the `va_list` save areas are never written and every `va_arg`
+  load reads bottom.
+- `sqlite3_config(SQLITE_CONFIG_MALLOC, &defaultMethods)` therefore installs nothing, and every `sqlite3Malloc` in
+  the program returns bottom.
+- No heap object appears in any probe log (0 `call:` objects).
+- `sqlite3 *`, `Vdbe *` and `Parse *` values are thus not "the heap object". They are whatever else reaches them:
+  stack `Parse` objects, host (EXT, `*`) and literals.
+- §14.3 normalises variadics to explicit va blocks, and §5.2 says S2 "models the value effects of the specified
+  normalisation". Dropping varargs is an **unsound under-approximation**, not a precision choice.
+
+**Consequences.**
+
+1. Every SQLite measurement in this log, and every full-cell run on this route, analysed a program without its heap.
+   They are not measurements of the reference fixpoint.
+2. With varargs modelled, every SQLite allocation goes through one `malloc` call in `sqlite3MemMalloc`. §5.1 gives one
+   object per allocation-site instruction, and allocator wrappers propagate to the underlying site, so the reference
+   heap is **one abstract object** holding every `sqlite3`, `Vdbe`, `Parse`, `Mem` array and string, with their
+   fields overlapping by offset. **[conjecture]** That puts FN and data pointers in shared slots by construction, and
+   so gives type-wide dispatch again.
+
+**Rounds to fixpoint (requested handle): not obtained [measured].** BFS sub-closures from `rung4_oracle` (25, 50,
+100, 200 and 400 functions, internalised; seeds as main and as non-local-only) all hit the 600 s allowance:
+
+| closure | rounds completed at 600 s |
+|---|---|
+| 25 functions | 54–58 |
+| 50 | 16 |
+| 100 | 6 |
+| 200 | 4 |
+| 400 | 2 |
+
+The 25-function closure runs about 11 s per round on 6,960 instructions and keeps going: the counter-crawl pattern of
+mechanism A. Main has only the narrow additive-cycle acceleration, not finding 9's extended closure. Rounds therefore
+measure the crawl here, not the program.
+
+**Spec text for the PT11 decision (dialect 0.2.14 text in the sibling checkout; plugin pins 0.2.13) [source].**
+
+- §5.2 PT11: "a parameter of a function with a host caller, a device entry, or a function whose address host code
+  uses | AV ⊇ {(EXT, `*`)} for `ptr` parameters, ⊤ for integer parameters, plus the atoms of the device-side
+  arguments by PT9".
+- §4.2: "The **host roots** are the functions with non-local linkage and the functions whose address host code uses;
+  the **device roots** are the region candidates and the whole-program entry of §19.2." And: "**H**: every other
+  function reachable from a host root, and every function reachable from a host root through host code only."
+  Non-normative: "SQLite in the rung-4 program is H (the host builds and serialises the database) and L (the oracle
+  runs the query)".
+- §5 preamble: the analysis is over "every device variant and every host function that exchanges data with one".
+- §19.1: the driver "runs the post-link pipeline (`lto<O3>` by default …), then runs the plugin on the whole
+  program". No internalisation step is named.
+- Neither "host caller" nor "host code" has its own definition. The plugin reads "host caller" as any function in
+  the host set: transitive direct callees plus address uses, seeding 1,234–1,386 functions.
+
+**Next.**
+
+1. Model `va_start`/`va_arg` (§14.3 va block) in a diagnostic build, so the heap exists, and re-measure U and the
+   round-1 collapse with one heap object.
+2. Trace the source of the `(Parse alloca, *)` atoms in `db`. It may be a symptom of the missing heap.
